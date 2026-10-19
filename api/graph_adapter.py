@@ -23,6 +23,7 @@ import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractContextManager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Protocol
 
 from sqlalchemy import select
@@ -280,7 +281,8 @@ class RealGraphAdapter:
     State에 assessment_id, approval.decisions({customer_id: 결정})가 있다고 가정.
     """
 
-    def __init__(self):
+    def __init__(self, checkpoint_path: str | os.PathLike | None = None):
+        self.checkpoint_path = checkpoint_path or ROOT_DIR / get_settings().CHECKPOINT_DB
         self._graph = None
         self._saver_cm = None
 
@@ -290,12 +292,18 @@ class RealGraphAdapter:
 
             from agent.graph import build_graph
 
-            db_path = ROOT_DIR / get_settings().CHECKPOINT_DB
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._saver_cm = AsyncSqliteSaver.from_conn_string(str(db_path))
+            Path(self.checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+            self._saver_cm = AsyncSqliteSaver.from_conn_string(str(self.checkpoint_path))
             saver = await self._saver_cm.__aenter__()
             self._graph = build_graph(saver)
         return self._graph
+
+    async def aclose(self) -> None:
+        """체크포인트 DB 연결을 닫는다. 서버 종료 시 lifespan에서 부른다."""
+        if self._saver_cm is not None:
+            await self._saver_cm.__aexit__(None, None, None)
+        self._graph = None
+        self._saver_cm = None
 
     @staticmethod
     def _config(rcept_no: str) -> dict:
@@ -389,3 +397,10 @@ def get_graph_adapter() -> GraphAdapter:
         kind = os.getenv("GRAPH_ADAPTER", "fake").lower()
         _adapter = RealGraphAdapter() if kind == "real" else FakeGraphAdapter()
     return _adapter
+
+
+async def close_graph_adapter() -> None:
+    global _adapter
+    if _adapter is not None and hasattr(_adapter, "aclose"):
+        await _adapter.aclose()
+    _adapter = None

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import auth
+from api.graph_adapter import close_graph_adapter
 from api.routes import alerts, approvals, events, runs, tasks
 from shared.db import init_db
 
@@ -13,6 +14,7 @@ from shared.db import init_db
 async def lifespan(app: FastAPI):
     init_db()  # 테이블이 없으면 만든다. 데이터 적재는 scripts/seed_db.py (D)
     yield
+    await close_graph_adapter()  # 체크포인트 DB 연결 정리
 
 
 app = FastAPI(title="공시 조기경보 PB API", lifespan=lifespan)
