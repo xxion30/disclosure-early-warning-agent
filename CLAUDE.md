@@ -447,18 +447,27 @@ url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=...
 - PB는 자기 담당 고객의 안내문만 승인할 수 있다 (토큰의 pb_id와 customers.pb_id 비교).
 - SSE 이벤트 이름: `node_started`, `node_finished`, `waiting_approval`, `done`, `failed`.
 
-API 주요 경로 (C 담당이 확정 후 이 표를 갱신):
+API 주요 경로 (C 확정). `/auth/login` 외에는 모두 `Authorization: Bearer <JWT>` 필요:
 
 | 메서드 | 경로 | 하는 일 |
 | --- | --- | --- |
-| POST | /auth/login | 로그인 |
-| POST | /runs | 공시 1건 처리 시작 (body: rcept_no) |
-| GET | /runs/{rcept_no}/events | SSE 진행 이벤트 |
-| GET | /alerts | 경보 목록 |
-| GET | /alerts/{assessment_id} | 경보 상세 |
-| POST | /alerts/{assessment_id}/decision | PB 결정 → Graph 재개 |
-| GET | /tasks | 연락 업무 목록 |
-| PATCH | /tasks/{task_id} | 상태 변경 |
+| POST | /auth/login | 로그인 (body: email, password) → access_token, pb |
+| GET | /auth/me | 토큰 확인, 현재 PB |
+| POST | /runs | 공시 1건 처리 시작 (body: rcept_no 14자리) → 202. 이미 실행·처리된 공시는 409 |
+| GET | /runs/{rcept_no} | 현재 실행 구간의 진행 이벤트 기록 (SSE가 끊겼을 때) |
+| GET | /runs/{rcept_no}/events | SSE 진행 이벤트. EventSource용으로 `?token=<JWT>`도 받음. waiting_approval·done·failed 뒤 닫힘 |
+| GET | /alerts | 경보 목록. `?level=High&level=Critical`, `?status=`, `?date=YYYY-MM-DD`(일일 요약) |
+| GET | /alerts/{assessment_id} | 경보 상세. 다른 PB 고객 이름은 `고객 C002`로 가림 |
+| GET | /alerts/{assessment_id}/drafts | 내 담당 고객 안내문 초안 (`{고객명}` 자리표시 + 실명 미리보기) |
+| POST | /alerts/{assessment_id}/decision | PB 결정 1묶음 → Graph 재개. 다른 PB 고객 403, 반려 사유 필수 422 |
+| GET | /tasks | 내 연락 업무 목록 (`?status=`) |
+| PATCH | /tasks/{task_id} | 연락완료·보류 처리 (body: status, note). 승인·보류 상태에서만 |
+
+결정 body: `{"decisions": [{"customer_id", "action": "approve"|"reject"|"rewrite", "edited_draft"?, "reject_reason"?}]}`
+→ Graph resume 값: `{"pb_id", "decided_at", "decisions": [...]}`. API가 기대하는 Graph 모양은 `tests/api/contract_graph.py` 참고.
+
+Graph 선택: `GRAPH_ADAPTER=fake`(기본, agent/ 없이 시나리오 A 흉내) | `real`(agent.graph.build_graph).
+점검: 서버를 켠 뒤 `uv run python -m api.smoke --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
 
 ---
 
