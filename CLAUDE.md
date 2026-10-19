@@ -277,6 +277,50 @@ receive → classify ─(해당없음)→ END
 | pb_approval | 사람 | `interrupt()`로 멈춤 → PB 결정 받아 재개 |
 | create_tasks | 코드 | 승인된 고객마다 create_contact_task |
 
+### 4-7. API ↔ Graph 연결 약속 (C 제안 — 담당자 확인 필요)
+
+API(`api/graph_adapter.py`의 `RealGraphAdapter`)가 Graph를 부르는 방식이다.
+**아직 확정이 아니다.** 각 담당자가 확인하고 체크(`[x]`)하거나, 다르게 하고 싶으면 이 절을 고쳐 PR로 올리고 C에게 알린다.
+LLM에게: 이 절의 항목을 구현할 때는 4-5·4-6장보다 이 절을 따르고, 체크되지 않은 항목은 담당자에게 확인이 필요하다고 사용자에게 알려라.
+참고 구현: `tests/api/contract_graph.py` (아래 약속을 그대로 따르는 테스트용 LangGraph. `tests/api/test_real_adapter.py`가 이걸로 API를 검증한다)
+
+**API가 Graph를 부르는 방법 (C 구현 완료)**
+- 그래프 생성: `from agent.graph import build_graph` → `build_graph(checkpointer)`가 **컴파일된 graph**를 돌려준다. checkpointer는 API가 만든 `AsyncSqliteSaver(data/checkpoints.db)`다.
+- 실행: `graph.astream({"disclosure": {"rcept_no": "..."}}, {"configurable": {"thread_id": rcept_no}}, stream_mode="tasks")`. 나머지 disclosure 항목은 receive가 채운다.
+- 진행 이벤트는 노드 이름(4-6장)을 그대로 쓴다. 노드 예외는 `failed` 이벤트, State.error가 있으면 `failed`, interrupt면 `waiting_approval`, 그 외 끝나면 `done`.
+- 재개: `graph.astream(Command(resume=결정 묶음), 같은 config, ...)`. 서버를 재시작한 뒤에도 같은 thread_id로 이어서 실행된다.
+- API는 `graph.aget_state(config).values`에서 `assessment_id, disclosure, risk_level, total_score, ai_explanation, evidence, affected_customers, drafts, guardrail_flags, approval.decisions, task_ids, error`를 읽어 화면에 보여준다.
+
+**A (Agent) 확인 항목**
+- [ ] `agent/graph.py`에 `build_graph(checkpointer)`를 둔다.
+- [ ] State에 `assessment_id: int`를 추가한다. High·Critical 경로에서 **interrupt 전에** `save_assessment`를 호출해 채운다. 화면 주소가 `/alerts/{assessment_id}`이기 때문이다. pb_approval 직전 status는 `WAITING_APPROVAL`, 모든 결정이 끝나면 `DONE`이다.
+- [ ] **PB 결정은 PB 1명씩 묶음으로 들어온다.** 시나리오 10단계에서 P01 승인 직후(P02 결정 전) 업무 4건이 생겨야 하기 때문이다.
+  ```
+  pb_approval [interrupt] → create_tasks(이번 묶음의 approve 고객만)
+    → rewrite 고객이 있으면 draft_messages → guardrail_check → pb_approval
+    → 결정 안 된 P1·P2 고객이 남았으면 pb_approval [interrupt], 없으면 END
+  ```
+- [ ] resume 값(결정 묶음) 모양:
+  `{"pb_id": "P01", "decided_at": "2026-10-20T10:00:00+09:00", "decisions": [{"customer_id": "C001", "action": "approve"|"reject"|"rewrite", "edited_draft": str|None, "reject_reason": str|None}]}`
+  - API가 미리 검사한다: 담당 PB 고객만 들어온다(아니면 403), reject는 사유가 있다, 이미 결정한 고객은 다시 오지 않는다.
+  - `edited_draft`는 `{고객명}` 자리표시 형태다. PB가 실명을 쓰면 API가 자리표시로 바꿔서 넘긴다. 있으면 초안 대신 이 문장으로 업무를 만든다.
+  - `rewrite`는 결정이 아니다. 그 고객은 초안을 다시 쓰고 계속 승인 대기로 남는다.
+- [ ] 결정 누적: `State.approval = {"decisions": {customer_id: {...결정, "pb_id", "decided_at"}}}`. API는 여기서 "남은 고객"(P1·P2 중 decisions에 없는 고객)을 계산한다. 4-5장의 approval 모양(`{status, pb_id, edited_drafts, ...}`)을 이렇게 바꾸자는 제안이다.
+- [ ] 반려 고객은 contact_task를 만들지 않는다(12단계 "2건 추가"). 반려 사유는 API가 audit_logs에 남기고 State.approval에도 남는다.
+- [ ] `interrupt()`가 있는 노드는 재개할 때 **처음부터 다시 실행된다.** interrupt 앞에 있는 DB 쓰기는 여러 번 실행돼도 결과가 같아야 한다(예: status 갱신은 괜찮고, INSERT는 안 된다). 새 행을 만드는 일은 별도 노드에서 한다.
+
+**B (MCP·shared) 확인 항목**
+- [ ] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
+- [ ] `save_assessment`로 기존 assessment의 status를 바꿀 방법을 정한다(WAITING_APPROVAL → DONE). rcept_no 기준 upsert든, assessment_id를 받든 상관없다.
+- [ ] `PATCH /tasks`는 지금 API가 DB를 직접 고친다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
+- [ ] `calculate_risk_score`의 점수 내역 항목에 근거 인용(quote)을 넣으면 화면이 그대로 표로 보여준다. 키 이름은 자유다.
+
+**D (데이터·Harness·문서) 확인 항목**
+- [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
+- [ ] `.env.example`에 `GRAPH_ADAPTER=fake`, `FAKE_GRAPH_DELAY=0.4`를 추가하고, `JWT_SECRET`은 32자 이상을 권장한다고 적는다.
+- [ ] README 실행 방법: API `uv run uvicorn api.main:app --reload --port 8000`, 화면 `cd web && npm install && npm run dev`, 점검 `uv run python -m api.smoke --rcept-no <접수번호>`
+- [ ] (선택) `harness/guardrails.py`에 `check_message(text) -> list[str]`를 열어 주면, PB가 직접 고친 안내문도 API에서 금지 표현을 검사한다.
+
 ---
 
 ## 5. 위험도 규칙 (`mcp_servers/business/rules/rules.yaml`에 그대로 옮긴다)
