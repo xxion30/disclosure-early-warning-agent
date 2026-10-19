@@ -1,0 +1,32 @@
+[project]
+name = "disclosure-early-warning"
+version = "0.1.0"
+description = "공시 조기경보 에이전트 (SKALA AI Agent Capstone)"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
+    "pyyaml>=6.0",
+    "fastmcp>=2.0",
+    "langgraph>=0.2",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-mcp-adapters>=0.1",
+    "langsmith>=0.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pyjwt>=2.8",
+    "bcrypt>=4.1",
+    "chromadb>=0.5",
+    "aio-pika>=9.4",
+    "requests>=2.32",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

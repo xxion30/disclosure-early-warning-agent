@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+data/app.db
+data/checkpoints.db
+data/chroma/
+node_modules/
+web/dist/
+.pytest_cache/

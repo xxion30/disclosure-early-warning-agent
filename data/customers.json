@@ -1,0 +1,540 @@
+{
+  "_note": "가짜 데이터. 실제 사람·계좌와 무관. password는 seed_db.py가 bcrypt로 해시해서 저장한다.",
+  "stocks": [
+    {
+      "stock_code": "001570",
+      "name": "금양"
+    },
+    {
+      "stock_code": "071460",
+      "name": "위니아"
+    },
+    {
+      "stock_code": "048260",
+      "name": "오스템임플란트"
+    },
+    {
+      "stock_code": "079160",
+      "name": "CJ CGV"
+    },
+    {
+      "stock_code": "034730",
+      "name": "SK"
+    },
+    {
+      "stock_code": "005930",
+      "name": "삼성전자"
+    },
+    {
+      "stock_code": "000660",
+      "name": "SK하이닉스"
+    },
+    {
+      "stock_code": "069500",
+      "name": "KODEX 200"
+    }
+  ],
+  "pbs": [
+    {
+      "pb_id": "P01",
+      "name": "김하늘",
+      "email": "p01@demo.local",
+      "password": "demo1234"
+    },
+    {
+      "pb_id": "P02",
+      "name": "박서준",
+      "email": "p02@demo.local",
+      "password": "demo1234"
+    }
+  ],
+  "customers": [
+    {
+      "customer_id": "C001",
+      "pb_id": "P01",
+      "name": "한지우",
+      "risk_profile": "안정형",
+      "total_assets": 300000000
+    },
+    {
+      "customer_id": "C002",
+      "pb_id": "P02",
+      "name": "오민재",
+      "risk_profile": "공격투자형",
+      "total_assets": 500000000
+    },
+    {
+      "customer_id": "C003",
+      "pb_id": "P01",
+      "name": "정유나",
+      "risk_profile": "적극투자형",
+      "total_assets": 120000000
+    },
+    {
+      "customer_id": "C004",
+      "pb_id": "P02",
+      "name": "강도윤",
+      "risk_profile": "안정추구형",
+      "total_assets": 80000000
+    },
+    {
+      "customer_id": "C005",
+      "pb_id": "P01",
+      "name": "윤서아",
+      "risk_profile": "위험중립형",
+      "total_assets": 1000000000
+    },
+    {
+      "customer_id": "C006",
+      "pb_id": "P02",
+      "name": "임태경",
+      "risk_profile": "공격투자형",
+      "total_assets": 60000000
+    },
+    {
+      "customer_id": "C007",
+      "pb_id": "P01",
+      "name": "신하린",
+      "risk_profile": "안정형",
+      "total_assets": 200000000
+    },
+    {
+      "customer_id": "C008",
+      "pb_id": "P02",
+      "name": "조은호",
+      "risk_profile": "안정추구형",
+      "total_assets": 150000000
+    },
+    {
+      "customer_id": "C009",
+      "pb_id": "P01",
+      "name": "배수빈",
+      "risk_profile": "공격투자형",
+      "total_assets": 40000000
+    },
+    {
+      "customer_id": "C010",
+      "pb_id": "P02",
+      "name": "황민서",
+      "risk_profile": "위험중립형",
+      "total_assets": 300000000
+    },
+    {
+      "customer_id": "C011",
+      "pb_id": "P01",
+      "name": "문지호",
+      "risk_profile": "안정형",
+      "total_assets": 400000000
+    },
+    {
+      "customer_id": "C012",
+      "pb_id": "P02",
+      "name": "서예린",
+      "risk_profile": "적극투자형",
+      "total_assets": 250000000
+    },
+    {
+      "customer_id": "C013",
+      "pb_id": "P01",
+      "name": "권도현",
+      "risk_profile": "안정추구형",
+      "total_assets": 180000000
+    },
+    {
+      "customer_id": "C014",
+      "pb_id": "P02",
+      "name": "남궁율",
+      "risk_profile": "공격투자형",
+      "total_assets": 90000000
+    },
+    {
+      "customer_id": "C015",
+      "pb_id": "P01",
+      "name": "류채원",
+      "risk_profile": "위험중립형",
+      "total_assets": 600000000
+    },
+    {
+      "customer_id": "C016",
+      "pb_id": "P02",
+      "name": "노승우",
+      "risk_profile": "안정형",
+      "total_assets": 220000000
+    },
+    {
+      "customer_id": "C017",
+      "pb_id": "P01",
+      "name": "장다은",
+      "risk_profile": "적극투자형",
+      "total_assets": 130000000
+    },
+    {
+      "customer_id": "C018",
+      "pb_id": "P02",
+      "name": "홍지안",
+      "risk_profile": "안정형",
+      "total_assets": 70000000
+    },
+    {
+      "customer_id": "C019",
+      "pb_id": "P01",
+      "name": "백현우",
+      "risk_profile": "공격투자형",
+      "total_assets": 350000000
+    },
+    {
+      "customer_id": "C020",
+      "pb_id": "P02",
+      "name": "송유진",
+      "risk_profile": "위험중립형",
+      "total_assets": 160000000
+    }
+  ],
+  "holdings": [
+    {
+      "customer_id": "C001",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 90000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C001",
+      "stock_code": "034730",
+      "stock_name": "SK",
+      "eval_amount": 30000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C001",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 60000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C002",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 10000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C002",
+      "stock_code": "079160",
+      "stock_name": "CJ CGV",
+      "eval_amount": 40000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C002",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 150000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C003",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 30000000,
+      "on_credit": true
+    },
+    {
+      "customer_id": "C003",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 20000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C004",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 8000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C004",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 30000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C005",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 250000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C005",
+      "stock_code": "048260",
+      "stock_name": "오스템임플란트",
+      "eval_amount": 30000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C005",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 300000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C006",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 20000000,
+      "on_credit": true
+    },
+    {
+      "customer_id": "C006",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 10000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C007",
+      "stock_code": "001570",
+      "stock_name": "금양",
+      "eval_amount": 12000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C007",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 80000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C008",
+      "stock_code": "071460",
+      "stock_name": "위니아",
+      "eval_amount": 45000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C008",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 40000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C009",
+      "stock_code": "071460",
+      "stock_name": "위니아",
+      "eval_amount": 15000000,
+      "on_credit": true
+    },
+    {
+      "customer_id": "C009",
+      "stock_code": "000660",
+      "stock_name": "SK하이닉스",
+      "eval_amount": 10000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C010",
+      "stock_code": "071460",
+      "stock_name": "위니아",
+      "eval_amount": 9000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C010",
+      "stock_code": "000660",
+      "stock_name": "SK하이닉스",
+      "eval_amount": 100000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C011",
+      "stock_code": "048260",
+      "stock_name": "오스템임플란트",
+      "eval_amount": 100000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C011",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 150000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C012",
+      "stock_code": "048260",
+      "stock_name": "오스템임플란트",
+      "eval_amount": 20000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C012",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 60000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C013",
+      "stock_code": "079160",
+      "stock_name": "CJ CGV",
+      "eval_amount": 50000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C013",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 60000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C014",
+      "stock_code": "079160",
+      "stock_name": "CJ CGV",
+      "eval_amount": 30000000,
+      "on_credit": true
+    },
+    {
+      "customer_id": "C014",
+      "stock_code": "000660",
+      "stock_name": "SK하이닉스",
+      "eval_amount": 20000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C015",
+      "stock_code": "034730",
+      "stock_name": "SK",
+      "eval_amount": 150000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C015",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 200000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C016",
+      "stock_code": "034730",
+      "stock_name": "SK",
+      "eval_amount": 40000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C016",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 100000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C017",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 50000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C017",
+      "stock_code": "000660",
+      "stock_name": "SK하이닉스",
+      "eval_amount": 40000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C018",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 50000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C019",
+      "stock_code": "000660",
+      "stock_name": "SK하이닉스",
+      "eval_amount": 200000000,
+      "on_credit": true
+    },
+    {
+      "customer_id": "C019",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 50000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C020",
+      "stock_code": "005930",
+      "stock_name": "삼성전자",
+      "eval_amount": 60000000,
+      "on_credit": false
+    },
+    {
+      "customer_id": "C020",
+      "stock_code": "069500",
+      "stock_name": "KODEX 200",
+      "eval_amount": 40000000,
+      "on_credit": false
+    }
+  ],
+  "expected_impact_001570_critical": [
+    {
+      "customer_id": "C001",
+      "weight_pct": 30.0,
+      "impact_score": 8,
+      "impact_level": "높음",
+      "priority": "P1"
+    },
+    {
+      "customer_id": "C002",
+      "weight_pct": 2.0,
+      "impact_score": 1,
+      "impact_level": "낮음",
+      "priority": "P2"
+    },
+    {
+      "customer_id": "C003",
+      "weight_pct": 25.0,
+      "impact_score": 7,
+      "impact_level": "높음",
+      "priority": "P1"
+    },
+    {
+      "customer_id": "C004",
+      "weight_pct": 10.0,
+      "impact_score": 3,
+      "impact_level": "낮음",
+      "priority": "P2"
+    },
+    {
+      "customer_id": "C005",
+      "weight_pct": 25.0,
+      "impact_score": 6,
+      "impact_level": "보통",
+      "priority": "P1"
+    },
+    {
+      "customer_id": "C006",
+      "weight_pct": 33.3,
+      "impact_score": 7,
+      "impact_level": "높음",
+      "priority": "P1"
+    },
+    {
+      "customer_id": "C007",
+      "weight_pct": 6.0,
+      "impact_score": 5,
+      "impact_level": "보통",
+      "priority": "P1"
+    }
+  ]
+}
