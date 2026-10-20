@@ -145,12 +145,22 @@ def main() -> None:
 
     say(f"준비됨 ({'진짜' if real else '가짜'} 모드). Ctrl+C로 모두 끕니다.")
     say("화면 http://localhost:5173 | API 문서 http://localhost:8000/docs | 로그인 p01@demo.local / p02@demo.local, 비밀번호 demo1234")
+    web_restarts = 0
     try:
         while True:
-            for name, p in procs:
-                if p.poll() is not None:
-                    say(f"{name}가 종료되었습니다 (코드 {p.returncode}). 전체를 끕니다.")
-                    raise KeyboardInterrupt
+            for name, p in list(procs):
+                if p.poll() is None:
+                    continue
+                if name == "web" and web_restarts < 3:
+                    # 화면 서버(Vite)는 보조라서, 죽어도 API·MCP는 그대로 두고 화면만 다시 띄운다
+                    web_restarts += 1
+                    say(f"web(화면 서버)가 종료되었습니다 (코드 {p.returncode}). API·MCP는 유지하고 화면만 다시 시작합니다 ({web_restarts}/3).")
+                    procs.remove((name, p))
+                    start("web", [shutil.which("npm"), "run", "dev"], env, cwd=ROOT / "web")
+                    wait_port(5173, "web", 30)
+                    continue
+                say(f"{name}가 종료되었습니다 (코드 {p.returncode}). 전체를 끕니다.")
+                raise KeyboardInterrupt
             time.sleep(1)
     except KeyboardInterrupt:
         pass
