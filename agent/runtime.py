@@ -82,9 +82,15 @@ class AgentRuntime:
         if not isinstance(rcept_no, str) or not rcept_no.strip():
             raise ValueError("접수번호가 필요합니다")
         async with self._lock(rcept_no):
-            existing = await self.get_state(rcept_no)
+            snapshot = await self.graph.aget_state(self.config(rcept_no))
+            existing = dict(snapshot.values)
             if existing:
-                # An existing completed or interrupted run is never restarted implicitly.
+                # 노드 실행 중에 프로세스가 죽은 실행: 다음 노드가 남아 있는데 승인 대기(interrupt)도 아니다.
+                # 큐가 같은 공시를 다시 넘겨 줬을 때 조용히 "끝난 것"으로 돌려주면 공시가 사라지므로, 마지막 체크포인트부터 이어서 실행한다.
+                crashed = bool(snapshot.next) and not any(t.interrupts for t in snapshot.tasks)
+                if crashed:
+                    return await self._invoke(rcept_no, None, existing["trace_id"])
+                # 끝났거나 승인 대기인 실행은 암묵적으로 다시 시작하지 않는다.
                 return existing
             state = initial_state(rcept_no, str(uuid4()))
             return await self._invoke(rcept_no, state, state["trace_id"])
