@@ -14,12 +14,17 @@ export const NODE_LABELS = {
   pb_approval: 'PB 승인',
   create_tasks: '업무 생성',
   save_rejection: '반려 저장',
+  prepare_approval: '승인 준비',
+  finalize: '결정 반영',
+  completed: '완료 처리',
+  handle_failure: '실패 기록',
 }
 
 // High·Critical 경로의 기본 순서 (진행 단계 표시)
 export const MAIN_PATH = [
   'receive', 'classify', 'extract_facts', 'score_risk', 'explain_risk', 'route_by_level',
-  'find_customers', 'draft_messages', 'guardrail_check', 'pb_approval', 'create_tasks',
+  'find_customers', 'draft_messages', 'guardrail_check', 'prepare_approval', 'pb_approval',
+  'save_rejection', 'create_tasks', 'finalize',
 ]
 
 export const ASSESSMENT_STATUS = {

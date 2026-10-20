@@ -83,12 +83,28 @@ async def decide(
             # PB가 실명을 직접 써도 저장·Graph에는 자리표시로 넘긴다 (LLM은 실명을 보지 않는다)
             item["edited_draft"] = d.edited_draft.strip().replace(customers[d.customer_id].name, NAME_PLACEHOLDER)
         decisions.append(item)
-        action = "decision.approve_edited" if item["edited_draft"] else f"decision.{d.action}"
-        write_audit(db, pb.pb_id, action, f"assessment:{assessment_id}/customer:{d.customer_id}",
+
+    # PBContext.allowed_customer_ids: 토큰의 PB가 DB에서 담당하는 고객 (요청 값을 그대로 쓰지 않는다)
+    allowed = sorted(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id)))
+    payload = {"pb_id": pb.pb_id, "decided_at": decided_at, "allowed_customer_ids": allowed, "decisions": decisions}
+
+    # 진짜 Graph는 202 전에 같은 검사(권한, 상태, 수정안 가드레일)를 먼저 한다
+    precheck = getattr(adapter, "precheck", None)
+    if precheck is not None:
+        try:
+            await precheck(a.rcept_no, payload)
+        except PermissionError as exc:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+
+    for item in decisions:
+        action = "decision.approve_edited" if item["edited_draft"] else f"decision.{item['action']}"
+        write_audit(db, pb.pb_id, action, f"assessment:{assessment_id}/customer:{item['customer_id']}",
                     {"rcept_no": a.rcept_no, **item, "decided_at": decided_at})
 
     try:
-        manager.resume(a.rcept_no, {"pb_id": pb.pb_id, "decided_at": decided_at, "decisions": decisions})
+        manager.resume(a.rcept_no, payload)
     except RunConflict as exc:
         db.rollback()  # 재개를 못 했으면 결정 기록도 남기지 않는다
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
