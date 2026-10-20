@@ -34,11 +34,15 @@ group_a:
     kind: map
     key: opinion
     levels: {거절: Critical, 부적정: Critical, 한정: High}
-  TRADING_HALT:                  # detail: {lifted: true면 거래정지 해제 공시 → 무시, quote}
+    # 자회사·종속회사의 감사의견(제목 "감사보고서제출(자회사의 주요경영사항)")은 이 회사의 확정 악재가 아니다.
+    ignore_if_text_contains: ["종속회사", "자회사"]
+  TRADING_HALT:                  # detail: {lifted: true면 거래정지 해제 공시 → 무시, reason: 정지 사유 문구, quote}
     label: 거래정지
     kind: fixed
     level: Critical
     ignore_if_flag: lifted
+    # 회사분할·합병·액면분할 같은 행정적 정지는 위험 신호가 아니다. 정지 사유(reason)나 공시 제목에 아래 말이 있으면 무시한다.
+    ignore_if_text_contains: ["분할", "합병", "액면", "병합"]
   ADMIN_ISSUE:                   # detail: {quote}
     label: 관리종목 지정
     kind: fixed
@@ -86,12 +90,16 @@ group_b:
   CB_BW:                         # detail: {refixing}
     label: CB·BW 발행
     base: 2
+    # 종속회사·자회사가 발행하는 CB·BW는 이 회사 주식을 희석시키지 않으므로 점수를 주지 않는다 (제목 "(자회사의 주요경영사항)").
+    ignore_if_text_contains: ["종속회사", "자회사"]
     extras:
       - {name: 리픽싱 조항, add: 1, any: [{flag: refixing}]}
       - {name: 12개월 내 2회 이상, add: 1, any: [{repeat_min: 2}]}
   RIGHTS_OFFERING:               # detail: {ratio_pct: 발행 주식 수 ÷ 증자 전 주식 수 × 100, third_party}
     label: 유상증자
     base: 2
+    # 종속회사·자회사의 유상증자는 이 회사의 주식을 희석시키지 않으므로 점수를 주지 않는다 (공시 제목 "유상증자결정(종속회사의 …)", "(자회사의 …)").
+    ignore_if_text_contains: ["종속회사", "자회사"]
     apply_if: {key: ratio_pct, gte: 20}
     extras:
       - name: 50% 이상 또는 제3자배정
@@ -100,11 +108,24 @@ group_b:
   PLEDGE:                        # detail: {pledge_ratio_pct: 담보 주식 ÷ 최대주주 보유 주식 × 100}
     label: 최대주주 주식 담보
     base: 2
+    # 담보가 새로 더해질 때만 신호다. 근거 인용에 아래 말이 하나도 없으면(예: "주식담보계약 변경·갱신·연장") 0점.
+    # AI가 변경·갱신까지 신호로 세는 일이 있어, 이 판단은 코드가 한다.
+    evidence_keywords_any: ["설정", "체결", "신규", "제공"]
     extras:
       - {name: 보유 주식 50% 이상 담보, add: 1, any: [{gte: {key: pledge_ratio_pct, value: 50}}]}
   REPEATED_CORRECTION:           # 같은 공시 3회 이상 정정
     label: 같은 공시 3회 이상 정정
     base: 2
+
+# ---------------------------------------------------------------- 정정 공시
+# 제목이 아래로 시작하는 공시는 정정이다 (도구가 DB의 공시 제목으로 판단하며 AI가 정하지 않는다).
+# B그룹 신호의 정정은, 같은 유형의 신호가 12개월 안에 이미 있으면 점수를 다시 더하지 않는다(같은 사건의 정정이라 중복).
+# 이전 신호가 없으면 원 공시를 못 본 것이므로 일반 신호로 평가한다.
+# 같은 유형의 정정이 12개월 안에 repeated_min_count번 이상이면 REPEATED_CORRECTION(같은 공시 3회 이상 정정)을 한 번 더한다.
+corrections:
+  title_prefixes: ["[기재정정]", "[첨부정정]"]
+  repeated_signal: REPEATED_CORRECTION
+  repeated_min_count: 3
 
 # ---------------------------------------------------------------- 5-3 사업보고서 기본 점수
 # companies.base_score 계산용 표(D의 seed_db / 회계 담당 참고). 최대 6점.
@@ -172,6 +193,9 @@ classification:
   - {type: OWNERSHIP, keywords: ["주식등의대량보유", "최대주주등소유주식변동"]}
   # 정기보고서(사업·반기·분기)는 분류하지 않는다: 점수가 되는 신호는 제목 키워드(제출지연 등)로 따로 잡고,
   # 사업보고서 기본 점수는 companies.base_score로 이미 반영한다. 분류하지 않으면 "해당 없음"으로 조용히 끝난다.
+
+# 첨부 파일만 다시 올리는 공시는 본문이 없어 읽을 수 없고, 원 공시를 이미 처리했으므로 "해당 없음"으로 넘긴다.
+skip_title_prefixes: ["[첨부정정]", "[첨부추가]"]
 
 # 분류는 됐지만 신호가 없는 것이 정상인 유형. 이 유형에서 AI가 찾은 사실이 없으면 MANUAL_CHECK가 아니라
 # "신호 없음"으로 조용히 끝낸다(평가·경보를 만들지 않는다). 예: 대량보유보고서 대부분은 주식 담보 내용이 없다.

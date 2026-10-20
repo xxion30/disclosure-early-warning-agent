@@ -186,7 +186,32 @@
         ],
         "max_level": "Low",
         "alert": false
-      }
+      },
+      "base_reasons": [
+        {
+          "reason": "영업이익 3년 연속 감소 (4.79조 → 2.40조 → 1.82조 원)",
+          "item": "operating_profit_decline_3y",
+          "points": 1,
+          "evidence": {
+            "source": "SK 사업보고서 2025사업연도 재무제표(CFS)",
+            "quote": "영업이익(손실) 2025: 1,818,476,000,000원, 2024: 2,396,002,000,000원, 2023: 4,788,536,000,000원",
+            "rcept_no": "20260318001157",
+            "location": "DART fnlttSinglAcntAll"
+          }
+        },
+        {
+          "reason": "순이익 중 일회성 이익 약 34% (중단영업 등 약 1.2조 원 / 3.56조 원)",
+          "item": "one_off_profit_30pct",
+          "points": 1,
+          "evidence": {
+            "source": "SK 사업보고서 2025사업연도 재무제표(CFS)",
+            "quote": "중단영업이익 1,199,423,000,000원 ÷ 당기순이익 3,555,246,000,000원 = 33.7%",
+            "rcept_no": "20260318001157",
+            "location": "DART fnlttSinglAcntAll"
+          }
+        }
+      ],
+      "base_score": 2
     }
   ]
 }

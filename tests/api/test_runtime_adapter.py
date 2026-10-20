@@ -250,7 +250,14 @@ def test_rewrite_keeps_customer_pending(session_factory, kit, tmp_path):
         assert events[-1][0] == "waiting_approval" and "C003" in events[-1][1]["pending"]
 
 
-def test_missing_dependencies_is_failed_event(session_factory, tmp_path):
+def test_missing_dependencies_is_failed_event(session_factory, tmp_path, monkeypatch, request):
+    # 이 노트북에서 MCP 서버(8001·8002)가 돌고 있어도 "서버가 없을 때"를 시험하도록 안 쓰는 포트로 고정한다
+    from shared.config import get_settings
+
+    monkeypatch.setenv("BUSINESS_MCP_URL", "http://127.0.0.1:9/mcp")
+    monkeypatch.setenv("RAG_MCP_URL", "http://127.0.0.1:9/mcp")
+    get_settings.cache_clear()
+    request.addfinalizer(get_settings.cache_clear)  # 다른 테스트에 바뀐 설정이 남지 않게
     with server(session_factory, None, tmp_path / "cp.db") as c:
         h1 = headers(c)
         name, data = start(c, h1)[-1]

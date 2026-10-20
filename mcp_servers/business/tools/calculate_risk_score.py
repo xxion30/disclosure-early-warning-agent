@@ -1,10 +1,13 @@
 from datetime import date
 
+from sqlalchemy import select
+
 from mcp_servers.business.rules import risk_rules
 from mcp_servers.business.rules.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, require_company
 from mcp_servers.business.tools.get_signal_history import history_rows
 from shared.db import get_session
+from shared.models import Disclosure
 from shared.schemas import ok
 
 
@@ -32,6 +35,14 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
         new_signals = [
             {**sig, "detail": {"market": company.market, **(sig.get("detail") or {})}} for sig in new_signals
         ]
+        # 정정 공시 여부는 공시 제목으로 코드가 정한다 (rules.yaml corrections). AI가 넘긴 값은 쓰지 않는다.
+        prefixes = tuple((rules.get("corrections") or {}).get("title_prefixes", []))
+        rcepts = [sig.get("rcept_no") for sig in new_signals if sig.get("rcept_no")]
+        if prefixes and rcepts:
+            titles = dict(s.execute(select(Disclosure.rcept_no, Disclosure.title).where(Disclosure.rcept_no.in_(rcepts))).all())
+            for sig in new_signals:
+                title = titles.get(sig.get("rcept_no")) or ""
+                sig["detail"] = {**sig["detail"], "is_correction": title.lstrip().startswith(prefixes), "title": title}
         history = history_rows(s, corp_code, rules["history_months"], as_of_d)
         result = risk_rules.calculate(
             base_score=company.base_score or 0,

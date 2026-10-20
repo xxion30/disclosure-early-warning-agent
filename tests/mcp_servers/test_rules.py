@@ -213,3 +213,99 @@ def test_agent_classifier_reads_rules_yaml():
     assert classify("유상증자결정") == "RIGHTS_OFFERING"
     assert classify("[기재정정]전환사채권발행결정") == "CB_BW"
     assert classify("주주총회소집공고") is None
+
+
+# ---------------------------------------------------------------- 정정 공시
+def corr(t, filed, detail=None, rcept="C"):
+    return sig(t, {**(detail or {}), "is_correction": True}, filed=filed, rcept=rcept)
+
+
+def test_correction_after_original_adds_no_points():
+    h = [hist("CB_BW", "2025-01-10", 2, rcept="O1")]
+    r = calc([corr("CB_BW", AS_OF, rcept="C1")], history=h)
+    assert r["total_score"] == 2.0  # 과거 원 신호 2점뿐. 정정은 0점
+    new = next(b for b in r["breakdown"] if not b.get("from_history"))
+    assert new["points"] == 0 and "정정 공시" in new["note"]
+    assert r["signals"][0]["points"] == 0 and r["signals"][0]["detail"]["is_correction"] is True
+
+
+def test_first_seen_correction_counts_as_a_normal_signal():
+    r = calc([corr("CB_BW", AS_OF)])  # 이전 신호가 없다 = 원 공시를 못 봤다
+    assert r["total_score"] == 2.0
+    assert "이전 신호가 없어" in r["breakdown"][0]["note"]
+
+
+def test_three_corrections_add_repeated_correction_once():
+    # 원 신호 1건 + 정정 2건이 이미 있고, 세 번째 정정이 들어오면 REPEATED_CORRECTION +2
+    h = [hist("RIGHTS_OFFERING", "2025-01-02", 3, rcept="O"),
+         hist("RIGHTS_OFFERING", "2025-01-20", 0, detail={"is_correction": True}, rcept="C1"),
+         hist("RIGHTS_OFFERING", "2025-02-01", 0, detail={"is_correction": True}, rcept="C2")]
+    r = calc([corr("RIGHTS_OFFERING", AS_OF, {"ratio_pct": 60}, rcept="C3")], history=h)
+    types = [s["signal_type"] for s in r["signals"]]
+    assert types == ["RIGHTS_OFFERING", "REPEATED_CORRECTION"]
+    assert r["signals"][1]["points"] == 2 and r["signals"][1]["detail"]["for_type"] == "RIGHTS_OFFERING"
+    assert r["total_score"] == 3 + 2  # 원 신호 3(과거) + 반복 정정 2
+    # 이미 반복 정정이 기록돼 있으면 네 번째 정정은 또 더하지 않는다
+    h2 = h + [hist("REPEATED_CORRECTION", "2025-02-20", 2, detail={"for_type": "RIGHTS_OFFERING"}, rcept="R")]
+    r2 = calc([corr("RIGHTS_OFFERING", AS_OF, rcept="C4")], history=h2)
+    assert [s["signal_type"] for s in r2["signals"]] == ["RIGHTS_OFFERING"]
+
+
+def test_two_corrections_are_not_enough():
+    h = [hist("CB_BW", "2025-01-02", 2, rcept="O"), hist("CB_BW", "2025-01-20", 0, detail={"is_correction": True}, rcept="C1")]
+    r = calc([corr("CB_BW", AS_OF, rcept="C2")], history=h)
+    assert [s["signal_type"] for s in r["signals"]] == ["CB_BW"]
+
+
+def test_group_a_events_are_not_softened_by_correction():
+    r = calc([corr("AUDIT_OPINION", AS_OF, {"opinion": "거절"})])
+    assert r["level"] == "Critical"
+
+
+def test_administrative_trading_halts_are_ignored():
+    # 회사분할 등 행정적 정지는 Critical이 아니다. 상장적격성 실질심사 대상 정지는 Critical이다
+    assert calc([sig("TRADING_HALT", {"title": "주권매매거래정지(분할)"})])["level"] == "Low"
+    assert calc([sig("TRADING_HALT", {"reason": "분할"})])["level"] == "Low"
+    r = calc([sig("TRADING_HALT", {"title": "주권매매거래정지(상장적격성 실질심사 대상 (사유발생))", "reason": "상장적격성 실질심사 대상"})])
+    assert r["level"] == "Critical"
+    assert "행정적 정지" in calc([sig("TRADING_HALT", {"reason": "액면분할"})])["breakdown"][0]["note"]
+
+
+def _ev(q):
+    return [{"source": "s", "quote": q, "rcept_no": "1", "location": "chunk-0"}]
+
+
+def test_pledge_counts_only_when_a_new_pledge_is_added():
+    def pledge(q):
+        return calc([{**sig("PLEDGE", {}, rcept="P"), "evidence": _ev(q)}])["total_score"]
+
+    assert pledge("변경사유 최대주주 주식담보계약 추가 설정") == 2
+    assert pledge("최대주주 주식담보대출 계약 체결(11/13)") == 2
+    assert pledge("보유주식 주식담보계약 변경") == 0   # 기존 계약의 변경
+    assert pledge("보유주식 주식담보계약 갱신") == 0
+    assert pledge("대구은행 주식담보대출 기간연장") == 0
+    r = calc([{**sig("PLEDGE", {}, rcept="P"), "evidence": _ev("주식담보계약 변경")}])
+    assert "신규·추가 설정 표현이 없어" in r["breakdown"][0]["note"]
+
+
+def test_subsidiary_rights_offering_is_not_scored():
+    r = calc([sig("RIGHTS_OFFERING", {"ratio_pct": 33.5, "title": "유상증자결정(종속회사의 주요경영사항)"})])
+    assert r["total_score"] == 0 and "종속회사" in r["breakdown"][0]["note"]
+    assert calc([sig("RIGHTS_OFFERING", {"ratio_pct": 33.5, "title": "주요사항보고서(유상증자결정)"})])["total_score"] == 3 - 1  # 기본 2 (50% 미만)
+
+
+def test_affiliate_rights_offering_by_either_wording_is_not_scored():
+    for title in ("유상증자결정(종속회사의 주요경영사항)", "주요사항보고서(유상증자결정)(자회사의 주요경영사항)"):
+        assert calc([sig("RIGHTS_OFFERING", {"ratio_pct": 80, "title": title})])["total_score"] == 0
+
+
+def test_affiliate_cb_issuance_is_not_scored():
+    t = "주요사항보고서(전환사채권발행결정)(자회사의 주요경영사항)"
+    assert calc([sig("CB_BW", {"title": t, "refixing": True})])["total_score"] == 0
+    assert calc([sig("CB_BW", {"title": "주요사항보고서(전환사채권발행결정)"})])["total_score"] == 2
+
+
+def test_affiliate_audit_opinion_does_not_fix_the_parents_level():
+    t = "감사보고서제출(자회사의 주요경영사항)"
+    assert calc([sig("AUDIT_OPINION", {"opinion": "거절", "title": t})])["level"] == "Low"
+    assert calc([sig("AUDIT_OPINION", {"opinion": "거절", "title": "감사보고서제출"})])["level"] == "Critical"

@@ -97,6 +97,12 @@ def evaluate_group_a(signal_type: str, detail: dict, rules: dict) -> dict:
     flag = spec.get("ignore_if_flag")
     if flag and _truthy(detail, flag):
         return {"fixed_level": None, "note": f"{spec['label']} 해제·취소 공시라 등급에 반영하지 않음"}
+    words = spec.get("ignore_if_text_contains")
+    if words:
+        text = f"{detail.get('reason') or ''} {detail.get('title') or ''}"
+        hit = next((w for w in words if w in text), None)
+        if hit:
+            return {"fixed_level": None, "note": f"{spec['label']}: 정지 사유가 '{hit}'(행정적 정지)라 등급에 반영하지 않음"}
     kind = spec["kind"]
     if kind == "fixed":
         return {"fixed_level": spec["level"], "note": None}
@@ -156,6 +162,16 @@ def evaluate_group_b(signal_type: str, detail: dict, repeat_count: int, rules: d
     flag = spec.get("zero_if_flag")
     if flag and _truthy(detail, flag):
         return {"base": 0, "extra": 0, "extras": [], "note": f"{spec['label']}: 예외 사유({flag})라 0점"}
+    words = spec.get("ignore_if_text_contains")
+    if words:
+        text = f"{detail.get('reason') or ''} {detail.get('title') or ''}"
+        hit = next((w for w in words if w in text), None)
+        if hit:
+            return {"base": 0, "extra": 0, "extras": [], "note": f"{spec['label']}: 공시 제목·사유에 '{hit}'가 있어 점수를 주지 않음"}
+    need = spec.get("evidence_keywords_any")
+    if need and not any(k in (detail.get("_evidence_text") or "") for k in need):
+        return {"base": 0, "extra": 0, "extras": [],
+                "note": f"{spec['label']}: 근거 인용에 {'·'.join(need)} 같은 신규·추가 설정 표현이 없어(기존 계약의 변경·갱신 등) 점수를 주지 않음"}
     extras, extra = [], 0.0
     for e in spec.get("extras", []):
         if any(_cond_met(c, detail, repeat_count) for c in e["any"]):
@@ -215,6 +231,30 @@ def calculate(
                 n += 1
         return n
 
+    # 정정 공시가 같은 유형으로 repeated_min_count번 이상이면 REPEATED_CORRECTION을 한 번 더한다.
+    corr_cfg = rules.get("corrections") or {}
+    rep_type = corr_cfg.get("repeated_signal")
+    if rep_type in group_b:
+        for st in sorted({s["signal_type"] for s in normalized if s["signal_type"] in group_b and _truthy(s["detail"], "is_correction")}):
+            in_past = sum(
+                1 for h in past
+                if h["signal_type"] == st and (h.get("detail") or {}).get("is_correction")
+                and window_start <= parse_date(h["filed_at"]) <= as_of_d
+            )
+            mine = [s for s in normalized if s["signal_type"] == st and _truthy(s["detail"], "is_correction")]
+            already = any(
+                h["signal_type"] == rep_type and (h.get("detail") or {}).get("for_type") == st
+                and window_start <= parse_date(h["filed_at"]) <= as_of_d
+                for h in past
+            )
+            if in_past + len(mine) >= corr_cfg.get("repeated_min_count", 3) and not already:
+                last = mine[-1]
+                normalized.append({
+                    "signal_type": rep_type, "evidence": last["evidence"], "filed_at": last["filed_at"],
+                    "rcept_no": last["rcept_no"],
+                    "detail": {"for_type": st, "count": in_past + len(mine), "synthetic": True, "quote": last["detail"].get("quote")},
+                })
+
     breakdown: list[dict] = []
     floors: list[str] = []  # A그룹 등급 하한
     seen_new_b: dict[str, int] = {}
@@ -267,8 +307,14 @@ def calculate(
                 }
             )
             continue
-        repeat = count_in_window(st, filed_d) + seen_new_b.get(st, 0) + 1
-        res = evaluate_group_b(st, detail, repeat, rules)
+        earlier = count_in_window(st, filed_d) + seen_new_b.get(st, 0)  # 같은 유형의 이전 신호(정정 제외)
+        is_corr = _truthy(detail, "is_correction")
+        if is_corr and earlier > 0:
+            res = {"base": 0, "extra": 0, "extras": [], "note": "정정 공시 — 같은 유형의 신호가 이미 있어 점수를 다시 더하지 않음"}
+        else:
+            res = evaluate_group_b(st, {**detail, "_evidence_text": " ".join(e["quote"] for e in sig["evidence"])}, earlier + 1, rules)
+            if is_corr:
+                res["note"] = (f"{res['note']} / " if res["note"] else "") + "정정 공시지만 같은 유형의 이전 신호가 없어 이 공시로 평가"
         raw = float(res["base"] + res["extra"])
         weight = time_weight(filed_d, as_of_d, rules)
         if raw > 0:
@@ -325,6 +371,8 @@ def calculate(
             )
             continue
         raw = float(h.get("points") or 0)
+        if raw == 0:
+            continue  # 정정 공시 기록 등 점수가 없는 과거 신호는 내역에 올리지 않는다
         breakdown.append(
             with_source_chunks({
                 "group": "B",

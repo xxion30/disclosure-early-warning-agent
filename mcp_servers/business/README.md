@@ -35,6 +35,15 @@ uv run pytest tests/mcp_servers -q               # 테스트 (임시 DB, 네트�
 disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `OTHER`는 해당 없음, `OWNERSHIP`·`PERIODIC_REPORT`·`AUDIT_REPORT`는 원문을 읽어
 위 signal_type 중 무엇인지 정해야 한다 (예: AUDIT_REPORT → AUDIT_OPINION, OWNERSHIP → 담보면 PLEDGE).
 
+## 점수에서 빼는 경우 (모두 `rules.yaml`, AI가 아니라 코드가 판단)
+
+- **정정 공시**: 제목이 `[기재정정]`·`[첨부정정]`으로 시작하면 정정이다 (도구가 DB의 공시 제목으로 판단). 같은 유형의 신호가 12개월 안에 이미 있으면 0점,
+  없으면 일반 신호로 평가한다. 같은 유형 정정이 3번 이상이면 `REPEATED_CORRECTION`(+2)을 한 번 더한다. 첨부만 올리는 정정(`skip_title_prefixes`)은 분류 단계에서 건너뛴다.
+- **자회사·종속회사**: 공시 제목에 `자회사`·`종속회사`가 있으면 RIGHTS_OFFERING, CB_BW, AUDIT_OPINION을 점수·등급에 반영하지 않는다.
+- **PLEDGE**: 근거 인용에 `설정`·`체결`·`신규`·`제공`이 없으면(기존 담보의 변경·갱신·연장) 0점.
+- **TRADING_HALT**: 정지 사유(`reason`)나 제목에 `분할`·`합병`·`액면`·`병합`이 있으면 무시, `lifted: true`(해제)도 무시.
+- 점수 내역 항목마다 `note`에 이유가 적힌다. `detail`에는 도구가 `title`·`is_correction`·`market`을 넣는다.
+
 ## 돌려주는 값
 
 `{ok, data}` / `{ok: false, error: {code, message}}`. `calculate_risk_score`의 `data`:

@@ -9,6 +9,7 @@ API(`api/graph_adapter.default_dependencies`)는 여기서 만든 deps를 받기
 from __future__ import annotations
 
 import asyncio
+import difflib
 import json
 import logging
 import os
@@ -240,10 +241,38 @@ def build_model(harness, settings):
     return StructuredLLM(primary, fallback, harness, settings.FAKE_LLM_ERROR)
 
 
+def snap_quote(quote: str, text: str) -> str | None:
+    """AI 인용을 원문에서 한 글자도 바뀌지 않은 연속 구간으로 맞춘다.
+
+    인용이 이미 원문 안에 있으면 그대로 둔다. AI가 떨어진 문장을 이어 붙이거나 일부를 바꿔 쓴 경우에는,
+    원문과 가장 길게 겹치는 연속 구간(원문 그대로)을 인용으로 쓴다. 겹침이 너무 짧으면 None(보정하지 않음).
+    """
+    if quote in text:
+        return quote
+    m = difflib.SequenceMatcher(None, quote, text, autojunk=False).find_longest_match(0, len(quote), 0, len(text))
+    if m.size >= max(15, len(quote) // 2):
+        return text[m.b : m.b + m.size].strip() or None
+    return None
+
+
+def best_chunk(evidence: dict, chunks: list[dict]) -> tuple[dict | None, str | None]:
+    """인용이 가장 잘 들어맞는 검색 조각과, 그 조각에서 원문 그대로로 맞춘 인용을 찾는다."""
+    # 이미 위치가 맞는 조각을 먼저 본다 (대부분 여기서 끝난다)
+    same = [c for c in chunks if c.get("location") == evidence["location"] and c.get("source") == evidence["source"]]
+    best: tuple[dict | None, str | None, int] = (None, None, 0)
+    for c in same + [c for c in chunks if c not in same]:
+        snapped = snap_quote(evidence["quote"], c["text"])
+        if snapped and len(snapped) > best[2]:
+            best = (c, snapped, len(snapped))
+        if snapped == evidence["quote"]:
+            return c, snapped
+    return best[0], best[1]
+
+
 class KnownSignalsModel:
     """모델 출력을 코드가 보증하는 값으로 맞춘다.
 
-    - extract_facts: 규칙표에 없는 signal_type을 걸러낸다 (AI가 신호 이름을 지어낼 수 없게).
+    - extract_facts: 규칙표에 없는 signal_type을 걸러내고(AI가 신호 이름을 지어낼 수 없게), 인용을 원문 그대로의 연속 구간으로 맞춘다.
     - explain_risk: 인용(evidence)은 점수 내역에 B 도구가 담아 준 원문 그대로를 붙인다. AI는 설명 문장만 쓴다.
       (AI가 긴 인용문을 한 글자씩 똑같이 베끼지 못해 검증에서 멈추는 일을 막는다.)
     """
@@ -258,6 +287,9 @@ class KnownSignalsModel:
         result = await self.inner.generate(prompt, schema, payload)
         if prompt == "explain_risk":
             breakdown = payload.get("score_result", {}).get("breakdown", [])
+            if any(not row.get("evidence") for row in breakdown):
+                # 근거 인용이 없는 점수 항목이 있다. 지어내지 않고 그대로 넘겨 A의 검증이 "근거 출처 누락"으로 수동 확인 처리하게 한다.
+                return result
             by_index: dict[int, dict] = {}
             for item in result.items:  # 같은 항목을 두 번 설명했으면 첫 번째만 쓴다
                 if 0 <= item.breakdown_index < len(breakdown) and item.breakdown_index not in by_index:
@@ -283,7 +315,18 @@ class KnownSignalsModel:
         if len(kept) != len(result.facts):
             log.info("규칙표에 없는 signal_type 제외: %s",
                      [f.signal_type for f in result.facts if f not in kept])
-        return schema.model_validate({"facts": [f.model_dump() for f in kept]})
+        chunks = payload.get("chunks") or []
+        facts = []
+        for f in kept:
+            data = f.model_dump()
+            for e in data["evidence"]:
+                chunk, snapped = best_chunk(e, chunks)
+                if chunk is not None:
+                    # source·rcept_no·location은 검색 도구가 준 값이다. AI가 베끼다 틀리면(예: 마스킹된 접수번호) 코드가 바로잡는다.
+                    e["source"], e["rcept_no"], e["location"] = chunk["source"], chunk["rcept_no"], chunk["location"]
+                    e["quote"] = snapped
+            facts.append(data)
+        return schema.model_validate({"facts": facts})
 
 
 # ------------------------------------------------------------------ 관측 (LangSmith)
@@ -296,6 +339,19 @@ def enable_langsmith(settings) -> bool:
     os.environ.setdefault("LANGSMITH_API_KEY", settings.LANGSMITH_API_KEY)
     os.environ.setdefault("LANGSMITH_PROJECT", settings.LANGSMITH_PROJECT)
     return True
+
+
+def make_classifier():
+    """rules.yaml 제목 키워드 표 + 첨부만 올리는 정정 공시([첨부정정]·[첨부추가])는 해당 없음."""
+    base = load_classifier(DEFAULT_PATH)
+    skip = tuple(load_rules().get("skip_title_prefixes", []))
+
+    def classify(title: str):
+        if skip and title.lstrip().startswith(skip):
+            return None
+        return base(title)
+
+    return classify
 
 
 # ------------------------------------------------------------------ 조립
@@ -315,7 +371,7 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
         model=KnownSignalsModel(model),
         harness=harness,
         persistence=AssessmentStore(tools, audit, harness, upsert_confirmed=True),
-        classify=load_classifier(DEFAULT_PATH),
+        classify=make_classifier(),
         signal_input=signal_input,
         create_task=ToolTaskCreator(tools, harness, authorize_task, idempotency_confirmed=True),
         quiet_types=frozenset(load_rules().get("no_signal_ok_types", [])),
