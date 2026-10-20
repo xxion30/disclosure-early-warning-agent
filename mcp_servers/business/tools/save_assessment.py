@@ -8,6 +8,8 @@ from shared.schemas import ok
 
 # 이 상태가 되면 공시를 "처리됨"으로 본다 (list_new_disclosures에서 빠진다).
 PROCESSED_STATUSES = {"WAITING_APPROVAL", "DONE", "MANUAL_CHECK"}
+# 점수 계산 전에 멈춘 평가는 점수 없이도 이 상태로 저장할 수 있다 (한도 초과·오류 → MANUAL_CHECK/FAILED).
+NO_SCORE_STATUSES = {"RUNNING", "FAILED", "MANUAL_CHECK"}
 
 
 @guarded
@@ -23,7 +25,8 @@ def save_assessment(
 
     rcept_no당 평가는 1건이다. 이미 있으면 갱신한다(upsert). 그래서 같은 공시를 다시 저장하거나
     상태만 바꿔도(WAITING_APPROVAL → DONE) 행이 늘지 않는다. 이때 signals·score_result·ai_explanation을
-    비우면 기존 값을 그대로 둔다. 처음 저장할 때는 signals와 score_result가 필요하다.
+    비우면 기존 값을 그대로 둔다. 처음 저장할 때는 signals와 score_result가 필요하다
+    (RUNNING·FAILED·MANUAL_CHECK는 점수 계산 전에 멈춘 경우라 없이도 저장된다).
 
     Args:
         corp_code: DART 고유번호
@@ -52,9 +55,12 @@ def save_assessment(
         ).first()
         created = row is None
         if created:
-            if score_result is None or signals is None:
-                raise invalid("처음 저장할 때는 signals와 score_result가 필요합니다.")
-            row = RiskAssessment(corp_code=corp_code, rcept_no=rcept_no, created_at=now_iso())
+            if (score_result is None or signals is None) and status not in NO_SCORE_STATUSES:
+                raise invalid(
+                    f"처음 저장할 때는 signals와 score_result가 필요합니다 (점수 없이 저장할 수 있는 상태: {', '.join(sorted(NO_SCORE_STATUSES))})."
+                )
+            # 점수 없이 저장하면 total_score=0, level=Low(기본값), reasons=[]. 점수 계산이 끝난 평가가 아니다.
+            row = RiskAssessment(corp_code=corp_code, rcept_no=rcept_no, created_at=now_iso(), reasons=[])
             s.add(row)
 
         if score_result is not None:

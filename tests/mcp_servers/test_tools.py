@@ -135,7 +135,7 @@ def test_save_assessment_upsert_and_validation():
 
 
 def test_save_assessment_first_save_requires_score():
-    assert_err(save_assessment(KY_CORP, KY_AUDIT, status="RUNNING"), "INVALID_INPUT")
+    assert_err(save_assessment(KY_CORP, KY_AUDIT, status="WAITING_APPROVAL"), "INVALID_INPUT")
 
 
 def test_create_task_and_status_flow():
@@ -185,3 +185,21 @@ def test_server_registers_all_ten_tools():
         "save_assessment", "create_contact_task", "update_task_status",
     }
     assert data["ok"] is True and data["data"]["count"] == 7
+
+
+def test_market_comes_from_company_profile_for_embezzlement():
+    # 오스템임플란트(KOSDAQ): 자기자본 대비 3.5%는 코스닥 기준(3%) 이상 → Critical
+    res = calculate_risk_score("00341916", [{"signal_type": "EMBEZZLEMENT", "detail": {"ratio_to_equity_pct": 3.5}}], "2022-01-03")
+    assert res["data"]["level"] == "Critical"
+    # 금양(KOSPI): 같은 3.5%는 5% 미만 → High
+    res = calculate_risk_score(KY_CORP, [{"signal_type": "EMBEZZLEMENT", "detail": {"ratio_to_equity_pct": 3.5}}], "2025-03-21")
+    assert res["data"]["level"] == "High"
+
+
+def test_failure_can_be_saved_before_scoring():
+    res = save_assessment(KY_CORP, KY_AUDIT, status="MANUAL_CHECK")
+    assert res["ok"] and res["data"]["created"] is True
+    # 같은 공시를 이후 정상 저장하면 같은 행을 갱신한다
+    sc = calculate_risk_score(KY_CORP, [{"signal_type": "AUDIT_OPINION", "detail": {"opinion": "의견거절"}}], "2025-03-21")["data"]
+    again = save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "x", "WAITING_APPROVAL")
+    assert again["data"]["assessment_id"] == res["data"]["assessment_id"] and again["data"]["level"] == "Critical"

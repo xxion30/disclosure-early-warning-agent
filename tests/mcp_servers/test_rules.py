@@ -173,3 +173,43 @@ def test_impact_rejects_low_levels():
         impact_rules.customer_impact(
             eval_amount=1, total_assets=1, risk_profile="안정형", on_credit=False, company_level="Medium"
         )
+
+
+# ---------------------------------------------------------------- A(Agent)와 맞춘 계약
+EV = {"source": "금양_감사보고서제출", "quote": "감사의견 의견거절", "rcept_no": "20250321802001", "location": "chunk-0"}
+
+
+def test_breakdown_carries_evidence_for_agent():
+    r = calc([{**sig("AUDIT_OPINION", {"opinion": "의견거절"}), "evidence": [EV, {"quote": "모양이 틀린 근거"}]}])
+    item = r["breakdown"][0]
+    assert item["evidence"] == [EV]  # 모양이 틀린 근거는 버린다
+    assert r["signals"][0]["evidence"] == [EV] and r["signals"][0]["detail"]["evidence"] == [EV]
+
+
+def test_history_evidence_gets_verifiable_source_chunks():
+    h = [hist("FILING_DELAY", "2025-01-10", 4, detail={"evidence": [EV]})]
+    item = calc([], history=h)["breakdown"][0]
+    assert item["evidence"] == [EV]
+    assert item["source_chunks"] == [{**EV, "text": EV["quote"]}]
+
+
+def test_base_score_item_evidence_only_when_given():
+    no_ev = calc([], base=2)["breakdown"][0]
+    assert no_ev["evidence"] == [] and "근거" in no_ev["note"]
+    reasons = [{"reason": "영업이익 3년 연속 감소", "evidence": EV}]
+    with_ev = risk_rules.calculate(
+        base_score=2, base_reasons=reasons, history=[], new_signals=[], as_of=AS_OF
+    )["breakdown"][0]
+    assert with_ev["evidence"] == [EV] and with_ev["source_chunks"][0]["text"] == EV["quote"]
+
+
+def test_agent_classifier_reads_rules_yaml():
+    from agent.rules import load_classifier
+    from mcp_servers.business.rules.loader import DEFAULT_PATH
+
+    classify = load_classifier(DEFAULT_PATH)
+    assert classify("감사보고서제출") == "AUDIT_REPORT"
+    assert classify("횡령ㆍ배임혐의발생") == "EMBEZZLEMENT"
+    assert classify("유상증자결정") == "RIGHTS_OFFERING"
+    assert classify("[기재정정]전환사채권발행결정") == "CB_BW"
+    assert classify("주주총회소집공고") is None

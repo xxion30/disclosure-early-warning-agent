@@ -28,6 +28,10 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
     rules = load_rules()
     with get_session() as s:
         company = require_company(s, corp_code)
+        # 시장(KOSPI/KOSDAQ)은 공시가 아니라 회사 정보에서 온다 (횡령·배임 기준 5% / 3% 구분).
+        new_signals = [
+            {**sig, "detail": {"market": company.market, **(sig.get("detail") or {})}} for sig in new_signals
+        ]
         history = history_rows(s, corp_code, rules["history_months"], as_of_d)
         result = risk_rules.calculate(
             base_score=company.base_score or 0,

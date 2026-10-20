@@ -155,18 +155,19 @@ task_transitions:                # update_task_status: 현재 상태 → 바꿀 
   보류: [연락완료, 보류]
 
 # ---------------------------------------------------------------- classify 노드용 제목 키워드 표
-# 위에서부터 먼저 맞는 것이 disclosure_type. scripts/fetch_dart.py의 TITLE_RULES와 같다.
-# "A(Agent)의 classify 노드는 이 표를 읽는다" (CLAUDE.md 4-6장). 해당 없음은 OTHER.
-title_rules:
-  - {pattern: '횡령[ㆍ·]?배임', type: EMBEZZLEMENT}
-  - {pattern: '매매거래정지|거래정지', type: TRADING_HALT}
-  - {pattern: '상장폐지', type: DELISTING}
-  - {pattern: '관리종목', type: ADMIN_ISSUE}
-  - {pattern: '감사보고서', type: AUDIT_REPORT}
-  - {pattern: '(외부)?감사인.*(선임|변경|해임)', type: AUDITOR_CHANGE}
-  - {pattern: '제출기한.*연장|미제출|제출지연', type: FILING_DELAY}
-  - {pattern: '전환사채권발행결정|신주인수권부사채권발행결정', type: CB_BW}
-  - {pattern: '유상증자결정', type: RIGHTS_OFFERING}
-  - {pattern: '단일판매[ㆍ·]?공급계약.*(해지|정정)', type: GOOD_NEWS_CANCEL}
-  - {pattern: '주식등의대량보유|최대주주등소유주식변동', type: OWNERSHIP}
-  - {pattern: '사업보고서|반기보고서|분기보고서', type: PERIODIC_REPORT}
+# agent/rules.py의 load_classifier(path)가 읽는 모양이다. 위에서부터 제목에 keywords 중 하나가 들어 있는
+# 첫 항목의 type이 disclosure_type이 된다. 맞는 것이 없으면 None → 해당 없음으로 종료.
+# 순서와 type 이름은 scripts/fetch_dart.py의 TITLE_RULES와 같다(DART 제목의 가운뎃점은 'ㆍ').
+classification:
+  - {type: EMBEZZLEMENT, keywords: ["횡령ㆍ배임", "횡령·배임", "횡령배임"]}
+  - {type: TRADING_HALT, keywords: ["매매거래정지", "거래정지"]}
+  - {type: DELISTING, keywords: ["상장폐지"]}
+  - {type: ADMIN_ISSUE, keywords: ["관리종목"]}
+  - {type: AUDIT_REPORT, keywords: ["감사보고서"]}
+  - {type: AUDITOR_CHANGE, keywords: ["감사인선임", "감사인변경", "감사인해임", "외부감사인선임", "외부감사인변경", "외부감사인해임"]}
+  - {type: FILING_DELAY, keywords: ["제출기한연장", "미제출", "제출지연"]}
+  - {type: CB_BW, keywords: ["전환사채권발행결정", "신주인수권부사채권발행결정"]}
+  - {type: RIGHTS_OFFERING, keywords: ["유상증자결정"]}
+  - {type: GOOD_NEWS_CANCEL, keywords: ["단일판매ㆍ공급계약해지", "단일판매ㆍ공급계약정정", "단일판매·공급계약해지", "단일판매·공급계약정정"]}
+  - {type: OWNERSHIP, keywords: ["주식등의대량보유", "최대주주등소유주식변동"]}
+  - {type: PERIODIC_REPORT, keywords: ["사업보고서", "반기보고서", "분기보고서"]}

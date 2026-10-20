@@ -56,6 +56,25 @@ def time_weight(filed: date, as_of: date, rules: dict) -> float:
     return 0.0
 
 
+EVIDENCE_KEYS = ("source", "quote", "rcept_no", "location")
+
+
+def clean_evidence(items) -> list[dict]:
+    """근거 {source, quote, rcept_no, location}만 남긴다. 모양이 틀린 항목은 버린다(지어내지 않는다)."""
+    out = []
+    for e in items or []:
+        if isinstance(e, dict) and all(isinstance(e.get(k), str) and e[k].strip() for k in EVIDENCE_KEYS):
+            out.append({k: e[k] for k in EVIDENCE_KEYS})
+    return out
+
+
+def with_source_chunks(item: dict) -> dict:
+    """과거 근거는 저장된 인용문 자체를 조각으로 삼아 검증할 수 있게 한다 (agent/INTEGRATION.md)."""
+    if item.get("evidence"):
+        item["source_chunks"] = [{**e, "text": e["quote"]} for e in item["evidence"]]
+    return item
+
+
 def _truthy(detail: dict, key: str) -> bool:
     v = detail.get(key)
     return v is True or (isinstance(v, str) and v.strip().lower() in ("true", "yes", "y", "예", "해당"))
@@ -173,10 +192,15 @@ def calculate(
             raise RuleInputError(f"알 수 없는 signal_type: {st!r}. 허용: {allowed}")
         filed = str(s.get("filed_at") or as_of)[:10]
         parse_date(filed)
+        detail = dict(s.get("detail") or {})
+        evidence = clean_evidence(s.get("evidence") or detail.pop("evidence", None))
+        if evidence and not detail.get("quote"):
+            detail["quote"] = evidence[0]["quote"]
         normalized.append(
             {
                 "signal_type": st,
-                "detail": dict(s.get("detail") or {}),
+                "detail": detail,
+                "evidence": evidence,
                 "filed_at": filed,
                 "rcept_no": s.get("rcept_no"),
             }
@@ -197,8 +221,11 @@ def calculate(
 
     # 1) 기본 점수 (사업보고서)
     if base_score:
+        base_evidence = clean_evidence(
+            e for r in base_reasons or [] if isinstance(r, dict) for e in ([r.get("evidence")] if isinstance(r.get("evidence"), dict) else r.get("evidence") or [])
+        )
         breakdown.append(
-            {
+            with_source_chunks({
                 "group": "BASE",
                 "item": "사업보고서 기본 점수",
                 "signal_type": "BASE_SCORE",
@@ -206,9 +233,10 @@ def calculate(
                 "weight": 1.0,
                 "points": float(base_score),
                 "reasons": base_reasons,
+                "evidence": base_evidence,
                 "quote": None,
-                "note": None,
-            }
+                "note": None if base_evidence else "근거 인용 없음 — 사업보고서 원문 근거 확인 필요",
+            })
         )
 
     # 2) 새 신호
@@ -219,7 +247,7 @@ def calculate(
         if st in group_a:
             res = evaluate_group_a(st, detail, rules)
             sig["points"] = 0.0
-            sig["detail"] = {**detail, "fixed_level": res["fixed_level"]}
+            sig["detail"] = {**detail, "fixed_level": res["fixed_level"], "evidence": sig["evidence"]}
             if res["fixed_level"]:
                 floors.append(res["fixed_level"])
             breakdown.append(
@@ -233,6 +261,7 @@ def calculate(
                     "weight": 1.0,
                     "points": 0.0,
                     "fixed_level": res["fixed_level"],
+                    "evidence": sig["evidence"],
                     "quote": quote,
                     "note": res["note"],
                 }
@@ -245,7 +274,7 @@ def calculate(
         if raw > 0:
             seen_new_b[st] = seen_new_b.get(st, 0) + 1
         sig["points"] = raw
-        sig["detail"] = {**detail, "extras": res["extras"]}
+        sig["detail"] = {**detail, "extras": res["extras"], "evidence": sig["evidence"]}
         breakdown.append(
             {
                 "group": "B",
@@ -259,6 +288,7 @@ def calculate(
                 "raw_points": raw,
                 "weight": weight,
                 "points": raw * weight,
+                "evidence": sig["evidence"],
                 "quote": quote,
                 "note": res["note"],
             }
@@ -277,7 +307,7 @@ def calculate(
             if fixed:
                 floors.append(fixed)
             breakdown.append(
-                {
+                with_source_chunks({
                     "group": "A",
                     "item": group_a[st]["label"] if st in group_a else st,
                     "signal_type": st,
@@ -287,15 +317,16 @@ def calculate(
                     "weight": 1.0,
                     "points": 0.0,
                     "fixed_level": fixed,
+                    "evidence": clean_evidence(detail.get("evidence")),
                     "quote": detail.get("quote"),
                     "note": "과거 확정 악재",
                     "from_history": True,
-                }
+                })
             )
             continue
         raw = float(h.get("points") or 0)
         breakdown.append(
-            {
+            with_source_chunks({
                 "group": "B",
                 "item": group_b.get(st, {}).get("label", st),
                 "signal_type": st,
@@ -305,10 +336,11 @@ def calculate(
                 "raw_points": raw,
                 "weight": weight,
                 "points": raw * weight,
+                "evidence": clean_evidence(detail.get("evidence")),
                 "quote": detail.get("quote"),
                 "note": "과거 신호",
                 "from_history": True,
-            }
+            })
         )
 
     total = round(sum(b["points"] for b in breakdown), 2)
@@ -345,6 +377,7 @@ def calculate(
                 "detail": s["detail"],
                 "filed_at": s["filed_at"],
                 "rcept_no": s["rcept_no"],
+                "evidence": s["evidence"],
             }
             for s in normalized
         ],
