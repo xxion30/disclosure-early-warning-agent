@@ -430,3 +430,79 @@ def test_langsmith_env_is_exported_only_outside_pytest(monkeypatch):
 
     assert os.environ["LANGSMITH_TRACING"] == "true" and os.environ["LANGSMITH_PROJECT"] == "p"
     assert enable_langsmith(SimpleNamespace(LANGSMITH_TRACING=True, LANGSMITH_API_KEY="", LANGSMITH_PROJECT="p")) is False
+
+
+# ---------------------------------------------------------------- 인용 보정
+def test_snap_quote_keeps_exact_and_repairs_stitched_quotes():
+    from agent.assembly import snap_quote
+
+    text = "1. 신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 2. 1주당 액면가액 (원) 5,000 3. 증자전 발행주식총수 (주) 47,728,537"
+    assert snap_quote("1주당 액면가액 (원) 5,000", text) == "1주당 액면가액 (원) 5,000"  # 이미 원문 그대로
+    stitched = "신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 3. 증자전 발행주식총수 (주) 47,728,537"  # 가운데를 건너뛰고 이어 붙임
+    snapped = snap_quote(stitched, text)
+    assert snapped and snapped in text and "74,700,000" in snapped  # 원문 그대로의 연속 구간으로 보정됨
+    assert snap_quote("전혀 관련 없는 문장입니다 정말로 아무 상관이 없습니다", text) is None
+
+
+def test_extract_facts_evidence_is_snapped_to_verbatim_text():
+    from agent.assembly import KnownSignalsModel
+    from agent.state import FactsOutput
+
+    text = "신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 2. 1주당 액면가액 (원) 5,000 3. 증자전 발행주식총수 (주) 47,728,537"
+    chunk = {"source": "s", "rcept_no": "1", "location": "chunk-0", "text": text}
+    bad = {"source": "s", "rcept_no": "1", "location": "chunk-0",
+           "quote": "신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 3. 증자전 발행주식총수 (주) 47,728,537"}
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            return schema.model_validate({"facts": [{"signal_type": "RIGHTS_OFFERING", "values": {"ratio_pct": 156.4}, "evidence": [bad]}]})
+
+    out = asyncio.run(KnownSignalsModel(Inner()).generate("extract_facts", FactsOutput, {"chunks": [chunk]}))
+    quote = out.facts[0].evidence[0].quote
+    assert quote in text and "74,700,000" in quote  # A의 validate_evidence(quote in text)를 통과하는 형태
+
+
+def test_attachment_only_corrections_are_not_analyzed():
+    from agent.assembly import make_classifier
+
+    classify = make_classifier()
+    assert classify("[첨부정정]감사보고서제출") is None and classify("[첨부추가]감사보고서제출") is None
+    assert classify("감사보고서제출") == "AUDIT_REPORT" and classify("[기재정정]감사보고서제출") == "AUDIT_REPORT"
+
+
+def test_evidence_metadata_is_repaired_from_the_search_chunk():
+    """AI가 접수번호·출처·위치를 잘못 베껴도(마스킹된 값 등) 검색 조각의 값으로 바로잡힌다."""
+    from agent.assembly import KnownSignalsModel
+    from agent.state import FactsOutput
+
+    text = "횡령 등 금액 발생금액(원) 188,000,000,000 자기자본(원) 204,760,579,444 자기자본대비(%) 91.81"
+    chunk = {"source": "오스템 횡령ㆍ배임혐의발생 (2022-01-03)", "rcept_no": "20220103900001", "location": "chunk-0 (0-602자)", "text": text}
+    bad = {"source": "오스템 횡령ㆍ배임혐의발생 (2022-01-03)", "rcept_no": "2022***", "location": "chunk-0 (0-602자)", "quote": text}
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            return schema.model_validate({"facts": [{"signal_type": "EMBEZZLEMENT", "values": {"ratio_to_equity_pct": 91.81}, "evidence": [bad]}]})
+
+    out = asyncio.run(KnownSignalsModel(Inner()).generate("extract_facts", FactsOutput, {"chunks": [chunk]}))
+    e = out.facts[0].evidence[0]
+    assert (e.rcept_no, e.source, e.location) == (chunk["rcept_no"], chunk["source"], chunk["location"])
+    from agent.evidence import validate_evidence
+
+    validate_evidence([e.model_dump()], [chunk])  # A의 검증을 통과한다
+
+
+def test_explain_risk_passes_through_when_a_breakdown_item_has_no_evidence():
+    """근거가 없는 점수 항목이 있으면 지어내지 않고 그대로 넘겨 A의 검증이 수동 확인으로 처리하게 한다."""
+    from agent.assembly import KnownSignalsModel
+    from agent.state import ExplanationOutput
+
+    ev = {"source": "s", "quote": "q", "rcept_no": "1", "location": "l"}
+    ai = {"items": [{"breakdown_index": 0, "explanation": "설명", "evidence": [ev]}, {"breakdown_index": 1, "explanation": "설명", "evidence": [ev]}]}
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            return schema.model_validate(ai)
+
+    bd = [{"item": "a", "evidence": [ev]}, {"item": "근거 없는 항목", "evidence": []}]
+    out = asyncio.run(KnownSignalsModel(Inner()).generate("explain_risk", ExplanationOutput, {"score_result": {"breakdown": bd}}))
+    assert len(out.items) == 2 and out.items[1].explanation == "설명"  # 보정하지 않고 AI 결과 그대로

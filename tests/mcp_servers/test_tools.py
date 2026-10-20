@@ -110,7 +110,8 @@ def test_signals_feed_history_and_combo_across_calls():
         for rcept, filed, *_ in seq:
             s.add(Disclosure(rcept_no=rcept, corp_code=OS_CORP, title="t", filed_at=filed, processed=False))
     for rcept, filed, st, detail in seq:
-        sc = calculate_risk_score(OS_CORP, [{"signal_type": st, "detail": detail, "rcept_no": rcept, "filed_at": filed}], filed)["data"]
+        ev = [{"source": "s", "quote": "최대주주 주식담보 추가 설정", "rcept_no": rcept, "location": "chunk-0"}]  # 담보는 신규·추가 설정 표현이 있어야 점수가 붙는다
+        sc = calculate_risk_score(OS_CORP, [{"signal_type": st, "detail": detail, "rcept_no": rcept, "filed_at": filed, "evidence": ev}], filed)["data"]
         assert save_assessment(OS_CORP, rcept, sc["signals"], sc, None, "DONE")["ok"]
     hist = get_signal_history(OS_CORP, 12, "2024-07-01")["data"]["signals"]
     assert [h["signal_type"] for h in hist] == ["FILING_DELAY", "PLEDGE"]
@@ -204,3 +205,23 @@ def test_failure_can_be_saved_before_scoring():
     sc = calculate_risk_score(KY_CORP, [{"signal_type": "AUDIT_OPINION", "detail": {"opinion": "의견거절"}}], "2025-03-21")["data"]
     again = save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "x", "WAITING_APPROVAL")
     assert again["data"]["assessment_id"] == res["data"]["assessment_id"] and again["data"]["level"] == "Critical"
+
+
+CGV_CORP = "00303873"
+CGV_CB_FIRST, CGV_CB_SECOND = "20220616000004", "20220708000007"  # 둘 다 [기재정정]주요사항보고서(전환사채권발행결정)
+
+
+def test_correction_is_detected_from_disclosure_title_not_from_ai():
+    def score(rcept, filed):
+        # AI가 is_correction=false라고 주장해도 제목으로 판단한다
+        return calculate_risk_score(CGV_CORP, [{"signal_type": "CB_BW", "detail": {"is_correction": False}, "rcept_no": rcept, "filed_at": filed}], filed)["data"]
+
+    first = score(CGV_CB_FIRST, "2022-06-16")
+    assert first["signals"][0]["detail"]["is_correction"] is True
+    assert first["total_score"] == 2 + 2  # 기본 2 + 이전 신호가 없는 정정 = 일반 신호 2
+    save_assessment(CGV_CORP, CGV_CB_FIRST, first["signals"], first, None, "DONE")
+
+    second = score(CGV_CB_SECOND, "2022-07-08")
+    assert second["total_score"] == 2 + 2  # 같은 유형 정정은 점수를 다시 더하지 않는다 (이전: 8점 High였다)
+    assert second["level"] == "Medium"
+    assert next(b for b in second["breakdown"] if not b.get("from_history") and b["group"] == "B")["points"] == 0

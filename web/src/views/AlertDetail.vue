@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api, errorMessage } from '../api/client'
 import LevelBadge from '../components/LevelBadge.vue'
 import RunProgress from '../components/RunProgress.vue'
+import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
 import { formatTime, MAIN_PATH } from '../labels'
@@ -50,13 +51,6 @@ onMounted(load)
 watch(() => props.assessmentId, load)
 
 const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
-
-// 점수 내역 항목은 B의 calculate_risk_score 결과 형태를 그대로 보여준다 (키를 미리 정하지 않음)
-const reasonColumns = computed(() => {
-  const keys = new Set()
-  for (const r of alert.value?.reasons || []) Object.keys(r).forEach((k) => keys.add(k))
-  return [...keys]
-})
 </script>
 
 <template>
@@ -90,36 +84,19 @@ const reasonColumns = computed(() => {
       <RunProgress :state="runState" />
     </div>
 
-    <div class="grid-2">
-      <div class="card">
-        <h2>
-          점수 내역
-          <small>총점 {{ alert.total_score ?? '-' }}<template v-if="alert.combo_upgraded"> · 조합 규칙으로 한 단계 상향</template></small>
-        </h2>
-        <table v-if="alert.reasons?.length">
-          <thead>
-            <tr><th v-for="k in reasonColumns" :key="k">{{ k }}</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="(r, i) in alert.reasons" :key="i">
-              <td v-for="k in reasonColumns" :key="k">
-                {{ typeof r[k] === 'object' && r[k] !== null ? JSON.stringify(r[k]) : r[k] ?? '-' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else class="muted">점수 내역이 없습니다.</p>
-      </div>
+    <div class="card">
+      <h2>점수 내역 <small>항목별 점수의 합이 총점</small></h2>
+      <ScoreBreakdown :reasons="alert.reasons" :total-score="alert.total_score" :combo-upgraded="alert.combo_upgraded" />
+    </div>
 
-      <div class="card">
-        <h2>AI 설명과 원문 근거</h2>
-        <p style="white-space: pre-wrap">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
-        <div v-for="(e, i) in alert.evidence" :key="i">
-          <blockquote>{{ e.quote }}</blockquote>
-          <small>출처: {{ e.source }}<template v-if="e.rcept_no"> · {{ e.rcept_no }}</template></small>
-        </div>
-        <p v-if="!alert.evidence?.length" class="notice">원문 인용이 없습니다. 수동 확인이 필요합니다.</p>
+    <div class="card">
+      <h2>AI 설명과 원문 근거</h2>
+      <p style="white-space: pre-wrap">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
+      <div v-for="(e, i) in alert.evidence" :key="i">
+        <blockquote>{{ e.quote }}</blockquote>
+        <small>출처: {{ e.source }}<template v-if="e.rcept_no"> · {{ e.rcept_no }}</template></small>
       </div>
+      <p v-if="!alert.evidence?.length" class="notice">원문 인용이 없습니다. 수동 확인이 필요합니다.</p>
     </div>
 
     <div class="card">

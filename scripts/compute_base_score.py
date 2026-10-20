@@ -76,6 +76,7 @@ def statements(corp_code: str, year: int) -> dict[str, list[int | None]]:
         "operating_income": pick(("IS", "CIS"), ("영업이익", "영업손실")),
         "net_income": pick(("IS", "CIS"), ("당기순이익", "당기순손실", "연결당기순이익")),
         "operating_cf": pick(("CF",), ("영업활동현금흐름", "영업활동으로 인한 현금흐름", "영업활동 현금흐름")),
+        "discontinued": pick(("IS", "CIS"), ("중단영업",)),
     }
 
 
@@ -113,13 +114,56 @@ def evaluate(st: dict, points: dict, year: int, rcept: tuple[str, str] | None, c
     return min(score, points["_max"]), reasons, notes
 
 
+def enrich_confirmed(data: dict, points: dict) -> None:
+    """D가 확정한 기본 점수(base_score_source가 있는 회사)의 사유에 DART 수치 근거(evidence)를 붙인다.
+
+    점수는 바꾸지 않는다. 사유 문장의 키워드로 어떤 항목인지 찾고, DART 수치가 그 항목을 뒷받침할 때만 근거를 붙인다.
+    근거가 없는 점수 항목은 AI 설명 단계에서 수동 확인으로 멈추기 때문에(A의 검증) 필요하다.
+    """
+    for c in data["companies"]:
+        source = c.get("base_score_source") or ""
+        exp = c.get("expected") or {}
+        if not source or not exp.get("base_reasons") or c.get("base_reasons"):
+            continue
+        year = int(source[:4])
+        rcept = annual_report_rcept(c["corp_code"], year)
+        st = statements(c["corp_code"], year)
+        oi, ni, dc = st["operating_income"], st["net_income"], st["discontinued"]
+        series = ", ".join(f"{year - i}: {won(v)}" for i, v in enumerate(oi))
+        reasons = []
+        for text in exp["base_reasons"]:
+            item = {"reason": text}
+            quote = None
+            if "3년 연속 감소" in text and None not in oi and oi[0] < oi[1] < oi[2]:
+                item.update(item="operating_profit_decline_3y", points=points["operating_profit_decline_3y"])
+                quote = f"영업이익(손실) {series}"
+            elif "일회성" in text and ni[0] and dc[0] is not None and dc[0] / ni[0] >= 0.3:
+                item.update(item="one_off_profit_30pct", points=points["one_off_profit_30pct"])
+                quote = f"중단영업이익 {won(dc[0])} ÷ 당기순이익 {won(ni[0])} = {dc[0] / ni[0]:.1%}"
+            if rcept and quote:
+                item["evidence"] = {"source": f"{c['name']} 사업보고서 {year}사업연도 재무제표({st['fs']})", "quote": quote,
+                                    "rcept_no": rcept[0], "location": "DART fnlttSinglAcntAll"}
+            else:
+                print(f"  ! {c['name']}: '{text[:30]}…' 근거를 DART 수치로 확인하지 못함 — 근거 없이 둠")
+            reasons.append(item)
+        c["base_reasons"], c["base_score"] = reasons, exp["base_score"]
+        print(f"{c['name']}: 확정 기본 점수 {exp['base_score']}점의 사유 {len(reasons)}개에 DART 근거 {sum(1 for r in reasons if r.get('evidence'))}개 첨부")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--write", action="store_true", help="data/demo_companies.json에 기록")
+    ap.add_argument("--enrich-confirmed", action="store_true", help="D가 확정한 값(SK)의 사유에 DART 수치 근거를 붙인다 (점수는 그대로)")
     args = ap.parse_args()
     cfg = yaml.safe_load(RULES.read_text(encoding="utf-8"))["base_score"]
     points = {**cfg["items"], "_max": cfg["max"]}
     data = json.loads(COMPANIES.read_text(encoding="utf-8"))
+    if args.enrich_confirmed:
+        enrich_confirmed(data, points)
+        if args.write:
+            COMPANIES.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print("기록: data/demo_companies.json")
+        return
     for c in data["companies"]:
         if c.get("base_score_source") or (c.get("expected") or {}).get("base_score") is not None:
             print(f"{c['name']}: 이미 확정된 값이 있어 건너뜀")

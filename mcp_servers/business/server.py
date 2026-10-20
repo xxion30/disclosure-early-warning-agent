@@ -15,7 +15,7 @@ from mcp_servers.business.tools.list_new_disclosures import list_new_disclosures
 from mcp_servers.business.tools.save_assessment import save_assessment
 from mcp_servers.business.tools.update_task_status import update_task_status
 
-PORT = 8001
+PORT = 8001  # 기본값. BUSINESS_MCP_URL의 포트가 다르면 그 포트로 뜬다 (한 노트북에 시험용 서버를 따로 띄울 때)
 
 mcp = FastMCP("business-mcp")
 
@@ -37,4 +37,9 @@ if __name__ == "__main__":
     from shared.db import init_db
 
     init_db()
-    mcp.run(transport="streamable-http", host="127.0.0.1", port=PORT, path="/mcp")
+    from urllib.parse import urlparse
+
+    from shared.config import get_settings
+
+    port = urlparse(get_settings().BUSINESS_MCP_URL).port or PORT
+    mcp.run(transport="streamable-http", host="127.0.0.1", port=port, path="/mcp")

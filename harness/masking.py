@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 # 계좌번호(하이픈 포함 10자리 이상 숫자 묶음)를 전화번호보다 먼저 처리한다.
-_PHONE = re.compile(r"01[016789][-\s]?\d{3,4}[-\s]?\d{4}")
+_PHONE = re.compile(r"(?<!\d)01[016789][-\s]?\d{3,4}[-\s]?\d{4}(?!\d)")  # 접수번호(14자리) 속 숫자는 가리지 않는다
 _ACCOUNT = re.compile(r"\b\d{2,6}(?:-\d{2,8}){1,3}\b")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 

@@ -154,3 +154,11 @@ def test_mask_text_keeps_iso_dates():
     assert masking.mask_text("접수일 2025-03-21") == "접수일 2025-03-21"
     assert masking.mask_text("계좌 110-123-456789") == "계좌 ***"
     assert masking.mask_obj({"filed_at": "2025-03-21"}) == {"filed_at": "2025-03-21"}
+
+
+def test_mask_text_does_not_mask_rcept_numbers_but_masks_phones():
+    # DART 접수번호 14자리 안에 전화번호 모양(010 + 7~8자리)이 들어 있어도 가리지 않는다
+    for rcept in ("20220103900001", "20250321802001", "20201010101234"):
+        assert masking.mask_text(f"접수번호 {rcept}") == f"접수번호 {rcept}"
+    assert masking.mask_text("연락처 010-1234-5678") == "연락처 ***"
+    assert masking.mask_text("연락처 01012345678 입니다") == "연락처 *** 입니다"

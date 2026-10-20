@@ -9,3 +9,5 @@ data/chroma/
 node_modules/
 web/dist/
 .pytest_cache/
+data/checkpoints.db-wal
+data/checkpoints.db-shm

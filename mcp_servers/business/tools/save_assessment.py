@@ -85,8 +85,9 @@ def save_assessment(
                 points = float(sig.get("points") or 0)
                 if not st:
                     raise invalid("signals 항목에는 signal_type이 필요합니다.")
-                if points <= 0 and st not in group_a:
-                    continue  # 0점 B그룹 신호는 이력에 남기지 않는다 (조합 규칙 계산이 흐려지지 않게)
+                is_correction = bool((sig.get("detail") or {}).get("is_correction"))
+                if points <= 0 and st not in group_a and not is_correction:
+                    continue  # 0점 B그룹 신호는 이력에 남기지 않는다. 단 정정 공시는 반복 횟수를 세려고 남긴다
                 s.add(
                     Signal(
                         corp_code=corp_code,
