@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     FAKE_LLM_ERROR: str = ""  # 예: "503" — 실패 시나리오용
 
+    GRAPH_ADAPTER: str = "fake"  # fake | real — API가 쓰는 Graph (C 제안, CLAUDE.md 4-7장)
+    FAKE_GRAPH_DELAY: float = 0.4
+
 
 @lru_cache
 def get_settings() -> Settings:
