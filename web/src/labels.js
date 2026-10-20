@@ -22,7 +22,7 @@ export const NODE_LABELS = {
 
 // High·Critical 경로의 기본 순서 (진행 단계 표시)
 export const MAIN_PATH = [
-  'receive', 'classify', 'extract_facts', 'score_risk', 'explain_risk', 'route_by_level',
+  'receive', 'classify', 'extract_facts', 'score_risk', 'explain_risk',
   'find_customers', 'draft_messages', 'guardrail_check', 'prepare_approval', 'pb_approval',
   'save_rejection', 'create_tasks', 'finalize',
 ]
