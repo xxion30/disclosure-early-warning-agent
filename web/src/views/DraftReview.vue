@@ -131,13 +131,16 @@ async function submit() {
       <small>{{ d.customer_id }} · {{ d.risk_profile }} · 영향 {{ d.impact_level }} ({{ d.impact_score }}점)</small>
     </div>
 
+    <p v-if="d.manual" class="notice">
+      가드레일을 3번 통과하지 못해 초안이 비었습니다. "수정 후 승인"으로 직접 작성하거나 "다시 작성"을 눌러 주세요.
+    </p>
     <template v-if="form[d.customer_id].choice === 'edit'">
       <label>안내문 수정 — <code>{고객명}</code> 자리표시는 그대로 두세요</label>
       <textarea v-model="form[d.customer_id].text" rows="5" />
       <label style="margin-top: 8px">미리보기</label>
       <div class="message">{{ fillName(form[d.customer_id].text, d.name) }}</div>
     </template>
-    <div v-else class="message">{{ d.preview }}</div>
+    <div v-else-if="!d.manual" class="message">{{ d.preview }}</div>
 
     <div v-if="form[d.customer_id].choice === 'reject'" style="margin-top: 8px">
       <label>반려 사유 (필수)</label>

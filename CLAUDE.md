@@ -277,37 +277,28 @@ receive → classify ─(해당없음)→ END
 | pb_approval | 사람 | `interrupt()`로 멈춤 → PB 결정 받아 재개 |
 | create_tasks | 코드 | 승인된 고객마다 create_contact_task |
 
-### 4-7. API ↔ Graph 연결 약속 (C 제안 — 담당자 확인 필요)
+### 4-7. API ↔ Graph 연결 약속 (A 구현 기준으로 C가 맞춤)
 
-API(`api/graph_adapter.py`의 `RealGraphAdapter`)가 Graph를 부르는 방식이다.
-**아직 확정이 아니다.** 각 담당자가 확인하고 체크(`[x]`)하거나, 다르게 하고 싶으면 이 절을 고쳐 PR로 올리고 C에게 알린다.
-LLM에게: 이 절의 항목을 구현할 때는 4-5·4-6장보다 이 절을 따르고, 체크되지 않은 항목은 담당자에게 확인이 필요하다고 사용자에게 알려라.
-참고 구현: `tests/api/contract_graph.py` (아래 약속을 그대로 따르는 테스트용 LangGraph. `tests/api/test_real_adapter.py`가 이걸로 API를 검증한다)
+API(`api/graph_adapter.py`의 `RealGraphAdapter`)는 A의 **`agent.AgentRuntime`**으로 Graph를 부른다. 자세한 경계는 `agent/INTEGRATION.md`.
+LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 맞다. 체크되지 않은 항목은 담당자 확인이 필요하다고 사용자에게 알려라.
+검증: `tests/api/test_runtime_adapter.py` (A의 가짜 deps로 API → AgentRuntime → 승인·재개·재시작을 확인).
 
 **API가 Graph를 부르는 방법 (C 구현 완료)**
-- 그래프 생성: `from agent.graph import build_graph` → `build_graph(checkpointer)`가 **컴파일된 graph**를 돌려준다. checkpointer는 API가 만든 `AsyncSqliteSaver(data/checkpoints.db)`다.
-- 실행: `graph.astream({"disclosure": {"rcept_no": "..."}}, {"configurable": {"thread_id": rcept_no}}, stream_mode="tasks")`. 나머지 disclosure 항목은 receive가 채운다.
-- 진행 이벤트는 노드 이름(4-6장)을 그대로 쓴다. 노드 예외는 `failed` 이벤트, State.error가 있으면 `failed`, interrupt면 `waiting_approval`, 그 외 끝나면 `done`.
-- 재개: `graph.astream(Command(resume=결정 묶음), 같은 config, ...)`. 서버를 재시작한 뒤에도 같은 thread_id로 이어서 실행된다.
-- API는 `graph.aget_state(config).values`에서 `assessment_id, disclosure, risk_level, total_score, ai_explanation, evidence, affected_customers, drafts, guardrail_flags, approval.decisions, task_ids, error`를 읽어 화면에 보여준다.
+- `open_runtime(deps, data/checkpoints.db)`를 한 번 열고 서버 종료 시 닫는다. `thread_id = rcept_no`.
+- 시작 `runtime.start(rcept_no)`, 재개 `runtime.resume(rcept_no, ApprovalBatch, PBContext)`.
+  - C 형식 `{action: approve|reject|rewrite, edited_draft}` → A 형식 `{status: approved|rejected|rewrite, edited_message}`로 바꾼다.
+  - `PBContext.allowed_customer_ids`는 토큰의 PB가 DB에서 담당하는 고객으로 C가 만든다.
+  - 결정 API는 202 전에 `validate_batch`로 먼저 검사한다: PermissionError → 403, ValueError(가드레일 실패한 수정안 등) → 422.
+- 진행 이벤트: `deps.harness.event`의 `node_started`·`node_finished`를 SSE로 보낸다. `waiting_approval`·`done`·`failed`는 실행이 끝난 뒤 State(`status`)로 C가 만든다.
+- 화면 데이터: `runtime.get_state` → `assessment_id, status, disclosure, risk_level, score_result, ai_explanation, evidence, affected_customers, drafts, guardrail_flags, manual_drafts, decisions, task_ids, error`. PB별 필터는 API 라우트가 한다.
 
-**A (Agent) 확인 항목**
-- [ ] `agent/graph.py`에 `build_graph(checkpointer)`를 둔다.
-- [ ] State에 `assessment_id: int`를 추가한다. High·Critical 경로에서 **interrupt 전에** `save_assessment`를 호출해 채운다. 화면 주소가 `/alerts/{assessment_id}`이기 때문이다. pb_approval 직전 status는 `WAITING_APPROVAL`, 모든 결정이 끝나면 `DONE`이다.
-- [ ] **PB 결정은 PB 1명씩 묶음으로 들어온다.** 시나리오 10단계에서 P01 승인 직후(P02 결정 전) 업무 4건이 생겨야 하기 때문이다.
-  ```
-  pb_approval [interrupt] → create_tasks(이번 묶음의 approve 고객만)
-    → rewrite 고객이 있으면 draft_messages → guardrail_check → pb_approval
-    → 결정 안 된 P1·P2 고객이 남았으면 pb_approval [interrupt], 없으면 END
-  ```
-- [ ] resume 값(결정 묶음) 모양:
-  `{"pb_id": "P01", "decided_at": "2026-10-20T10:00:00+09:00", "decisions": [{"customer_id": "C001", "action": "approve"|"reject"|"rewrite", "edited_draft": str|None, "reject_reason": str|None}]}`
-  - API가 미리 검사한다: 담당 PB 고객만 들어온다(아니면 403), reject는 사유가 있다, 이미 결정한 고객은 다시 오지 않는다.
-  - `edited_draft`는 `{고객명}` 자리표시 형태다. PB가 실명을 쓰면 API가 자리표시로 바꿔서 넘긴다. 있으면 초안 대신 이 문장으로 업무를 만든다.
-  - `rewrite`는 결정이 아니다. 그 고객은 초안을 다시 쓰고 계속 승인 대기로 남는다.
-- [ ] 결정 누적: `State.approval = {"decisions": {customer_id: {...결정, "pb_id", "decided_at"}}}`. API는 여기서 "남은 고객"(P1·P2 중 decisions에 없는 고객)을 계산한다. 4-5장의 approval 모양(`{status, pb_id, edited_drafts, ...}`)을 이렇게 바꾸자는 제안이다.
-- [ ] 반려 고객은 contact_task를 만들지 않는다(12단계 "2건 추가"). 반려 사유는 API가 audit_logs에 남기고 State.approval에도 남는다.
-- [ ] `interrupt()`가 있는 노드는 재개할 때 **처음부터 다시 실행된다.** interrupt 앞에 있는 DB 쓰기는 여러 번 실행돼도 결과가 같아야 한다(예: status 갱신은 괜찮고, INSERT는 안 된다). 새 행을 만드는 일은 별도 노드에서 한다.
+**A (Agent) — 구현으로 확인됨**
+- [x] PB 1명씩 결정 묶음, `create_tasks` 후 남은 고객이 있으면 다시 승인 대기 (`finalize` → `prepare_approval`)
+- [x] interrupt 전에 `persistence.save(state, "WAITING_APPROVAL")` → `State.assessment_id`, 끝나면 `DONE`
+- [x] 결정 누적은 `State.decisions = {customer_id: {status, edited_message, reject_reason, pb_id, decided_at}}`
+- [x] 반려 고객은 업무 없음(`save_rejection`이 감사 기록), interrupt 노드 앞 DB 쓰기 없음
+- [ ] **`agent.Dependencies` 조립을 누가 할지** (tools=B MCP, model=A llm, harness=D, persistence·create_task=B 도구). 지금 `api/graph_adapter.default_dependencies()`는 TODO로 실패한다. API는 조립된 deps를 받기만 하면 된다.
+- [ ] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0`에서 `MultiServerMCPClient` import 오류 (INTEGRATION.md "현재 외부 의존성 제한"). pyproject·uv.lock 담당이 호환 버전으로 고정해야 진짜 MCP를 쓸 수 있다.
 
 **B (MCP·shared) 확인 항목**
 - [ ] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
@@ -508,9 +499,9 @@ API 주요 경로 (C 확정). `/auth/login` 외에는 모두 `Authorization: Bea
 | PATCH | /tasks/{task_id} | 연락완료·보류 처리 (body: status, note). 승인·보류 상태에서만 |
 
 결정 body: `{"decisions": [{"customer_id", "action": "approve"|"reject"|"rewrite", "edited_draft"?, "reject_reason"?}]}`
-→ Graph resume 값: `{"pb_id", "decided_at", "decisions": [...]}`. API가 기대하는 Graph 모양은 `tests/api/contract_graph.py` 참고.
+→ API가 `ApprovalBatch`·`PBContext`로 바꿔 `runtime.resume`에 넘긴다 (4-7절).
 
-Graph 선택: `GRAPH_ADAPTER=fake`(기본, agent/ 없이 시나리오 A 흉내) | `real`(agent.graph.build_graph).
+Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내, 발표 비상용) | `real`(agent.AgentRuntime).
 점검: 서버를 켠 뒤 `uv run python -m api.smoke --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
 
 ---
