@@ -298,13 +298,13 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 - [x] 결정 누적은 `State.decisions = {customer_id: {status, edited_message, reject_reason, pb_id, decided_at}}`
 - [x] 반려 고객은 업무 없음(`save_rejection`이 감사 기록), interrupt 노드 앞 DB 쓰기 없음
 - [ ] **`agent.Dependencies` 조립을 누가 할지** (tools=B MCP, model=A llm, harness=D, persistence·create_task=B 도구). 지금 `api/graph_adapter.default_dependencies()`는 TODO로 실패한다. API는 조립된 deps를 받기만 하면 된다.
-- [ ] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0`에서 `MultiServerMCPClient` import 오류 (INTEGRATION.md "현재 외부 의존성 제한"). pyproject·uv.lock 담당이 호환 버전으로 고정해야 진짜 MCP를 쓸 수 있다.
+- [x] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0` import 오류 → B가 `mcp>=1.12,<2`, `fastmcp>=2.12,<3`로 고정하고 `uv.lock`을 갱신했다 (feat/b-risk-score). 실제 서버 두 개에 `MCPTools.connect`가 붙는 것을 확인했다.
 
 **B (MCP·shared) 확인 항목**
-- [ ] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
-- [ ] `save_assessment`로 기존 assessment의 status를 바꿀 방법을 정한다(WAITING_APPROVAL → DONE). rcept_no 기준 upsert든, assessment_id를 받든 상관없다.
-- [ ] `PATCH /tasks`는 지금 API가 DB를 직접 고친다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
-- [ ] `calculate_risk_score`의 점수 내역 항목에 근거 인용(quote)을 넣으면 화면이 그대로 표로 보여준다. 키 이름은 자유다.
+- [x] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
+- [x] `save_assessment`는 **rcept_no 기준 upsert**다. 같은 공시를 다시 저장하거나 `signals`·`score_result`를 비우고 status만 보내도(WAITING_APPROVAL → DONE) `assessment_id`가 유지된다. 점수 계산 전 실패(RUNNING·FAILED·MANUAL_CHECK)도 점수 없이 저장된다.
+- [ ] (C 결정 필요) `PATCH /tasks`는 지금 API가 DB를 직접 고친다. `update_task_status` 도구는 같은 규칙(`rules.yaml`의 `task_transitions`: 승인·보류 → 연락완료·보류)으로 준비돼 있다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
+- [x] `calculate_risk_score`의 `breakdown[i]`에 `quote`와 `evidence`(`{source, quote, rcept_no, location}` 목록)가 실린다. 입력 `new_signals[i].evidence`를 그대로 돌려주고, 과거 신호는 `source_chunks`도 붙는다 (`mcp_servers/business/README.md`).
 
 **D (데이터·Harness·문서) 확인 항목**
 - [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
