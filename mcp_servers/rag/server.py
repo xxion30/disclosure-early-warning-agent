@@ -9,8 +9,9 @@ from mcp_servers.rag.tools import search_disclosure_text, search_reference
 PORT = 8002  # 기본값. RAG_MCP_URL의 포트가 다르면 그 포트로 뜬다
 
 mcp = FastMCP("rag-mcp")
-mcp.tool(search_disclosure_text)
-mcp.tool(search_reference)
+_READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+mcp.tool(search_disclosure_text, annotations=_READ_ONLY)
+mcp.tool(search_reference, annotations=_READ_ONLY)
 
 if __name__ == "__main__":
     from urllib.parse import urlparse

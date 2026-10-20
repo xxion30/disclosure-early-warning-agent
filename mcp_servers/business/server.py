@@ -19,19 +19,24 @@ PORT = 8001  # 기본값. BUSINESS_MCP_URL의 포트가 다르면 그 포트로 
 
 mcp = FastMCP("business-mcp")
 
-for _tool in (
-    list_new_disclosures,
-    get_disclosure,
-    get_company_profile,
-    get_signal_history,
-    calculate_risk_score,
-    get_holders,
-    compute_customer_impact,
-    save_assessment,
-    create_contact_task,
-    update_task_status,
+# MCP 도구 주석(annotations): 조회 도구는 readOnlyHint, 데이터를 바꾸는 도구는 destructiveHint로 표시한다.
+# Agent·MCP 클라이언트가 변경 도구를 알아보고 실행 전에 사람의 승인을 거치게 하는 근거다 (수업 자료: 변경 도구는 destructiveHint).
+READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+MUTATING = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
+
+for _tool, _hints in (
+    (list_new_disclosures, READ_ONLY),
+    (get_disclosure, READ_ONLY),
+    (get_company_profile, READ_ONLY),
+    (get_signal_history, READ_ONLY),
+    (calculate_risk_score, READ_ONLY),  # 규칙 계산이지만 DB를 바꾸지 않는다
+    (get_holders, READ_ONLY),
+    (compute_customer_impact, READ_ONLY),
+    (save_assessment, MUTATING),  # rcept_no 기준 upsert (같은 입력이면 같은 결과)
+    (create_contact_task, MUTATING),  # PB 승인 뒤에만, (평가, 고객)당 1건 (멱등)
+    (update_task_status, MUTATING),  # PB가 화면에서만
 ):
-    mcp.tool(_tool)
+    mcp.tool(_tool, annotations=_hints)
 
 if __name__ == "__main__":
     from shared.db import init_db
