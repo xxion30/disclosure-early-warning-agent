@@ -96,7 +96,7 @@ uv run python scripts/replay_all.py --all           # 금양까지 5개
 uv run python scripts/replay_all.py --stock 048260  # 한 회사만
 ```
 회사마다 사건 전 공시 → 사건 공시 → 기대 결과 비교(✓/✗)를 하고 `eval/results/scenario_b.md`에 표를 저장한다. 처리한 공시는 화면(경보 목록)에 그대로 나타난다.
-최근 실행(진짜 모델, 실제 DART 공시) 결과는 5개 회사 모두 기대와 일치했다: 금양 사건 98일 전 High·사건 Critical·고객 7명(P1 5, P2 2),
+최근 실행(진짜 모델, 실제 DART 공시) 결과는 5개 회사 모두 기대와 일치했다: 금양 사건 2~3개월 전 High(실행마다 12월~1월)·사건 Critical·고객 7명(P1 5, P2 2),
 위니아 사건 174일 전 Critical, 오스템 사건 전 경보 없음·횡령 Critical·고객 3명, CGV 최고 Medium, SK 최고 Low (자세한 표는 `eval/results/scenario_b.md`).
 
 > **같은 공시는 한 서버 프로세스에서 한 번만 실행된다**(서버가 메모리에 기억한다). 다시 실행하려면 DB 기록을 지우는 것만으로는 안 되고 **서버를 다시 시작**해야 한다.
