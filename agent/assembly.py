@@ -191,12 +191,47 @@ def signal_input(extracted: dict) -> list[dict]:
     for fact in extracted.get("facts", []):
         evidence = list(fact.get("evidence") or [])
         signals.append({
-            "signal_type": fact["signal_type"],
+            "signal_type": str(fact["signal_type"]).strip().upper(),  # 모델이 소문자로 써도 규칙표 이름에 맞춘다
             "detail": dict(fact.get("values") or {}),
             "evidence": evidence,
             "rcept_no": evidence[0]["rcept_no"] if evidence else None,
         })
     return signals
+
+
+# ------------------------------------------------------------------ 모델
+def _openai_chat(model: str, api_key: str):
+    """OpenAI strict 구조화 출력은 dict[str, Any] 필드(facts.values, drafts)를 거부한다.
+    A의 스키마를 바꾸지 않고 function calling 방식으로 쓴다."""
+    from langchain_openai import ChatOpenAI
+
+    class FunctionCallingChatOpenAI(ChatOpenAI):
+        def with_structured_output(self, schema=None, **kwargs):
+            kwargs.setdefault("method", "function_calling")
+            return super().with_structured_output(schema, **kwargs)
+
+    return FunctionCallingChatOpenAI(model=model, api_key=api_key)
+
+
+def build_model(harness, settings):
+    """기본 Anthropic(LLM_PRIMARY) + 대체 OpenAI(LLM_FALLBACK).
+
+    Anthropic 키가 없으면 OpenAI 모델 하나를 기본·대체로 쓴다(개발·점검용). 이때는 503 → 대체 모델 전환이
+    같은 모델로 가므로 "다른 회사 모델로 넘어간다"는 시연은 되지 않는다.
+    """
+    from agent.llm import StructuredLLM
+
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("대체 모델용 OPENAI_API_KEY가 .env에 필요합니다")
+    fallback = _openai_chat(settings.LLM_FALLBACK, settings.OPENAI_API_KEY)
+    if settings.ANTHROPIC_API_KEY:
+        from langchain_anthropic import ChatAnthropic
+
+        primary = ChatAnthropic(model=settings.LLM_PRIMARY, api_key=settings.ANTHROPIC_API_KEY)
+    else:
+        log.warning("ANTHROPIC_API_KEY 없음 → OpenAI(%s)를 기본·대체 모델로 사용", settings.LLM_FALLBACK)
+        primary = fallback
+    return StructuredLLM(primary, fallback, harness, settings.FAKE_LLM_ERROR)
 
 
 # ------------------------------------------------------------------ 조립
@@ -209,9 +244,7 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
 
         tools = await MCPTools.connect(settings)
     if model is None:
-        from agent.llm import StructuredLLM
-
-        model = StructuredLLM.from_settings(harness, settings)
+        model = build_model(harness, settings)
     return Dependencies(
         tools=tools,
         model=model,

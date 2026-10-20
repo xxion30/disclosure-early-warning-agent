@@ -23,7 +23,8 @@ def test_mcp_normalization_and_tool_allowlist():
 @pytest.mark.parametrize("name", ["system", "extract_facts", "explain_risk", "draft_message", "rewrite_message"])
 def test_versioned_prompts(name):
     version, body = read_prompt(name)
-    assert version == "v1"
+    # 프롬프트를 바꾸면 버전을 올린다. extract_facts v2: B의 signal_type·values 이름을 넣음
+    assert version == {"extract_facts": "v2"}.get(name, "v1")
     assert body.strip()
 
 
