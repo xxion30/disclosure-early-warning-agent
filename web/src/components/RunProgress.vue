@@ -18,6 +18,7 @@ const steps = computed(() => {
 </script>
 
 <template>
+  <p v-if="state.queued" class="notice">큐에서 차례를 기다리는 중입니다…</p>
   <ol class="progress">
     <li v-for="s in steps" :key="s.node" :class="`step-${s.status}`">
       <span class="dot" />

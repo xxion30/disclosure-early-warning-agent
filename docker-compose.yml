@@ -1,0 +1,19 @@
+# 가산점: 공시 처리 큐 (CLAUDE.md 10장 9). 쓰려면 .env에 QUEUE_ENABLED=true
+#   docker compose up -d rabbitmq
+#   관리 화면 http://localhost:15672  (guest / guest)
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq   # 컨테이너를 다시 켜도 쌓인 메시지가 남는다
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  rabbitmq-data:

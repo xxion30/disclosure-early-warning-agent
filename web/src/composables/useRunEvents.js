@@ -4,11 +4,12 @@ import { onBeforeUnmount, reactive } from 'vue'
 import { API_BASE, tokenStorage } from '../api/client'
 
 const TERMINAL = ['waiting_approval', 'done', 'failed']
-const EVENTS = ['node_started', 'node_finished', ...TERMINAL]
+const EVENTS = ['queued', 'node_started', 'node_finished', ...TERMINAL]
 
 export function useRunEvents() {
   const state = reactive({
     connected: false,
+    queued: false, // 큐 모드: 실행 전 차례를 기다리는 중
     nodes: {}, // node → 'running' | 'done'
     order: [], // 이벤트가 온 노드 순서
     last: null, // 마지막 이벤트 이름
@@ -23,9 +24,12 @@ export function useRunEvents() {
     state.last = null
     state.lastData = null
     state.error = null
+    state.queued = false
   }
 
   function apply(name, data) {
+    state.queued = name === 'queued'
+    if (name === 'queued') return
     if (data.node && !state.order.includes(data.node)) state.order.push(data.node)
     if (name === 'node_started') state.nodes[data.node] = 'running'
     if (name === 'node_finished') state.nodes[data.node] = 'done'
