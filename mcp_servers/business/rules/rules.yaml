@@ -200,3 +200,18 @@ skip_title_prefixes: ["[첨부정정]", "[첨부추가]"]
 # 분류는 됐지만 신호가 없는 것이 정상인 유형. 이 유형에서 AI가 찾은 사실이 없으면 MANUAL_CHECK가 아니라
 # "신호 없음"으로 조용히 끝낸다(평가·경보를 만들지 않는다). 예: 대량보유보고서 대부분은 주식 담보 내용이 없다.
 no_signal_ok_types: [OWNERSHIP]
+
+# 공시 유형별로 AI가 신호로 올릴 수 있는 signal_type. 목록에 없는 것은 코드가 걸러낸다(AI가 유형에 안 맞는 신호를 만들 수 없게).
+# 예: 대량보유보고서(OWNERSHIP) 본문에 전환사채 보유 현황이 적혀 있어도 CB_BW 발행 신호가 아니다.
+allowed_signals_by_type:
+  AUDIT_REPORT: [AUDIT_OPINION, CAPITAL_IMPAIRMENT]
+  EMBEZZLEMENT: [EMBEZZLEMENT]
+  TRADING_HALT: [TRADING_HALT]
+  DELISTING: [DELISTING]
+  ADMIN_ISSUE: [ADMIN_ISSUE]
+  AUDITOR_CHANGE: [AUDITOR_CHANGE]
+  FILING_DELAY: [FILING_DELAY]
+  GOOD_NEWS_CANCEL: [GOOD_NEWS_CANCEL]
+  CB_BW: [CB_BW]
+  RIGHTS_OFFERING: [RIGHTS_OFFERING]
+  OWNERSHIP: [PLEDGE]

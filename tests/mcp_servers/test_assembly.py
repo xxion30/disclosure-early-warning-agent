@@ -508,3 +508,28 @@ def test_explain_risk_passes_through_when_a_breakdown_item_has_no_evidence():
     bd = [{"item": "a", "evidence": [ev]}, {"item": "근거 없는 항목", "evidence": []}]
     out = asyncio.run(KnownSignalsModel(Inner()).generate("explain_risk", ExplanationOutput, {"score_result": {"breakdown": bd}}))
     assert len(out.items) == 2 and out.items[1].explanation == "설명"  # 보정하지 않고 AI 결과 그대로
+
+
+def test_signal_types_must_fit_the_disclosure_type():
+    """대량보유보고서(OWNERSHIP)에서 AI가 CB_BW 신호를 올려도 걸러진다. 주식 담보(PLEDGE)만 허용."""
+    from agent.assembly import KnownSignalsModel
+    from agent.state import FactsOutput
+
+    text = "전환사채권 - 10,479,375 보유 현황"
+    chunk = {"source": "s", "text": text, "rcept_no": "1", "location": "chunk-0"}
+    ev = {"source": "s", "quote": text, "rcept_no": "1", "location": "chunk-0"}
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            return schema.model_validate({"facts": [
+                {"signal_type": "CB_BW", "values": {"refixing": True}, "evidence": [ev]},
+                {"signal_type": "PLEDGE", "values": {}, "evidence": [ev]},
+            ]})
+
+    model = KnownSignalsModel(Inner())
+    out = asyncio.run(model.generate("extract_facts", FactsOutput, {"chunks": [chunk], "disclosure_type": "OWNERSHIP"}))
+    assert [f.signal_type for f in out.facts] == ["PLEDGE"]
+    out = asyncio.run(model.generate("extract_facts", FactsOutput, {"chunks": [chunk], "disclosure_type": "CB_BW"}))
+    assert [f.signal_type for f in out.facts] == ["CB_BW"]
+    out = asyncio.run(model.generate("extract_facts", FactsOutput, {"chunks": [chunk]}))  # 유형을 모르면 기존 동작
+    assert len(out.facts) == 2
