@@ -29,6 +29,8 @@ MCP 도구 사용법은 [mcp_servers/business/README.md](mcp_servers/business/RE
 
 폴더와 담당: `agent/`(A) · `mcp_servers/`, `shared/`(B) · `api/`, `web/`(C) · `data/`, `rag_docs/`, `scripts/`, `harness/`, `eval/`(D).
 
+아키텍처 설계(구성도·시퀀스·Harness·ISO/IEC 25010 품질 특성별 설계와 검증 근거): [docs/architecture.md](docs/architecture.md)
+
 ## 빠른 시작
 
 ### 1. 준비 (처음 한 번)
