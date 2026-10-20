@@ -46,7 +46,9 @@ small, .muted { color: var(--muted); }
 .container { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
 
 /* 카드·표 */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; }
+/* 진짜 데이터는 표가 넓어질 수 있어 카드 밖으로 넘치지 않게 가로 스크롤 */
+.table-wrap { overflow-x: auto; }
+.card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

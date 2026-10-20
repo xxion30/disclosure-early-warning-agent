@@ -50,6 +50,17 @@ async function loadProgress() {
 onMounted(load)
 watch(() => props.assessmentId, load)
 
+// 같은 인용이 사실 추출·설명 단계에서 두 번 들어올 수 있어 출처+문장 기준으로 한 번만 보여준다
+const evidence = computed(() => {
+  const seen = new Set()
+  return (alert.value?.evidence || []).filter((e) => {
+    const key = `${e.source}|${e.rcept_no}|${e.quote}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+})
+
 const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
 </script>
 
@@ -86,17 +97,19 @@ const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.
 
     <div class="card">
       <h2>점수 내역 <small>항목별 점수의 합이 총점</small></h2>
-      <ScoreBreakdown :reasons="alert.reasons" :total-score="alert.total_score" :combo-upgraded="alert.combo_upgraded" />
+      <div class="table-wrap">
+        <ScoreBreakdown :reasons="alert.reasons" :total-score="alert.total_score" :combo-upgraded="alert.combo_upgraded" />
+      </div>
     </div>
 
     <div class="card">
       <h2>AI 설명과 원문 근거</h2>
       <p style="white-space: pre-wrap">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
-      <div v-for="(e, i) in alert.evidence" :key="i">
+      <div v-for="(e, i) in evidence" :key="i">
         <blockquote>{{ e.quote }}</blockquote>
         <small>출처: {{ e.source }}<template v-if="e.rcept_no"> · {{ e.rcept_no }}</template></small>
       </div>
-      <p v-if="!alert.evidence?.length" class="notice">원문 인용이 없습니다. 수동 확인이 필요합니다.</p>
+      <p v-if="!evidence.length" class="notice">원문 인용이 없습니다. 수동 확인이 필요합니다.</p>
     </div>
 
     <div class="card">

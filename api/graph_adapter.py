@@ -83,7 +83,7 @@ def pending_customers(view: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 FAKE_NODES = [
     "receive", "classify", "extract_facts", "score_risk", "explain_risk",
-    "route_by_level", "find_customers", "draft_messages", "guardrail_check",
+    "find_customers", "draft_messages", "guardrail_check",  # A의 Graph와 같은 이름 (route_by_level은 노드가 아니라 분기)
 ]
 
 # 안내문 초안 자리표시. 투자 권유 표현 없이 사실 안내만 한다.
