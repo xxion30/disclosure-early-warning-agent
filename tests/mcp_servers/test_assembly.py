@@ -412,3 +412,21 @@ def test_explain_risk_gets_exactly_one_item_per_breakdown():
     assert [i.breakdown_index for i in out.items] == [0, 1, 2, 3]
     assert out.items[0].explanation == "A" and out.items[2].explanation == "C"
     assert out.items[1].explanation.startswith("[규칙 요약]") and out.items[1].evidence[0].quote == "인용1"
+
+
+def test_langsmith_env_is_exported_only_outside_pytest(monkeypatch):
+    from types import SimpleNamespace
+
+    from agent.assembly import enable_langsmith
+
+    s = SimpleNamespace(LANGSMITH_TRACING=True, LANGSMITH_API_KEY="ls-test", LANGSMITH_PROJECT="p")
+    for k in ("LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_PROJECT"):
+        monkeypatch.setenv(k, "x")  # 테스트가 끝나면 원래(없음)로 되돌리도록 먼저 기록해 둔다
+        monkeypatch.delenv(k)
+    assert enable_langsmith(s) is False  # pytest 안에서는 보내지 않는다
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    assert enable_langsmith(s) is True
+    import os
+
+    assert os.environ["LANGSMITH_TRACING"] == "true" and os.environ["LANGSMITH_PROJECT"] == "p"
+    assert enable_langsmith(SimpleNamespace(LANGSMITH_TRACING=True, LANGSMITH_API_KEY="", LANGSMITH_PROJECT="p")) is False

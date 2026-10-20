@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from sqlalchemy import select
@@ -285,10 +286,23 @@ class KnownSignalsModel:
         return schema.model_validate({"facts": [f.model_dump() for f in kept]})
 
 
+# ------------------------------------------------------------------ 관측 (LangSmith)
+def enable_langsmith(settings) -> bool:
+    """`.env`의 LangSmith 설정을 환경 변수로 내보낸다. LangChain·LangGraph는 환경 변수만 읽기 때문에
+    이걸 하지 않으면 키가 있어도 trace가 전송되지 않는다. 테스트(pytest)에서는 전송하지 않는다."""
+    if os.environ.get("PYTEST_CURRENT_TEST") or not (settings.LANGSMITH_TRACING and settings.LANGSMITH_API_KEY):
+        return False
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGSMITH_API_KEY", settings.LANGSMITH_API_KEY)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.LANGSMITH_PROJECT)
+    return True
+
+
 # ------------------------------------------------------------------ 조립
 async def build_dependencies(settings=None, *, tools=None, model=None, harness=None) -> Dependencies:
     """tools·model·harness를 비우면 운영 구성(MCP 서버 2개, Anthropic/OpenAI 모델, D의 Harness)을 만든다."""
     settings = settings or get_settings()
+    enable_langsmith(settings)
     harness = harness or default_harness()
     if tools is None:
         from agent.mcp_client import MCPTools
