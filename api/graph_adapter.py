@@ -39,6 +39,7 @@ NODE_FINISHED = "node_finished"
 WAITING_APPROVAL = "waiting_approval"
 DONE = "done"
 FAILED = "failed"
+QUEUED = "queued"  # 큐 모드에서 실행 전 (끝 이벤트 아님)
 TERMINAL_EVENTS = {WAITING_APPROVAL, DONE, FAILED}
 
 Event = dict[str, Any]

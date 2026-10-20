@@ -10,7 +10,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from api.graph_adapter import FAILED, TERMINAL_EVENTS, Event, GraphAdapter, make_event
+from api.graph_adapter import FAILED, QUEUED, TERMINAL_EVENTS, Event, GraphAdapter, make_event
 
 _CLOSE = object()  # 구독자 큐에 넣는 "구간 끝" 표시
 
@@ -53,12 +53,25 @@ class RunManager:
         return self._channels.get(rcept_no)
 
     def start(self, rcept_no: str) -> RunChannel:
+        """처음 실행, 실패 뒤 다시 실행, 큐에서 꺼낸 실행. 이미 실행 중·처리된 공시는 RunConflict."""
         ch = self._channels.get(rcept_no)
-        if ch is not None and (ch.running or ch.last_event != FAILED):
+        if ch is not None and (ch.running or ch.last_event not in (FAILED, QUEUED)):
             raise RunConflict(f"{rcept_no}는 이미 실행 중이거나 처리되었습니다.")
-        ch = RunChannel(rcept_no)
-        self._channels[rcept_no] = ch
+        if ch is None:
+            ch = self._channels[rcept_no] = RunChannel(rcept_no)
+        ch.history = []  # 새 구간. 큐 대기 중에 붙은 SSE 구독자는 그대로 이어서 받는다
         self._spawn(ch, self.adapter.run(rcept_no))
+        return ch
+
+    def mark_queued(self, rcept_no: str, position: int | None = None) -> RunChannel:
+        """큐 모드(POST /runs): 실행 전에 채널을 만들어 두어 SSE를 바로 붙일 수 있게 한다."""
+        ch = self._channels.get(rcept_no)
+        if ch is not None and (ch.running or ch.last_event not in (FAILED, QUEUED)):
+            raise RunConflict(f"{rcept_no}는 이미 실행 중이거나 처리되었습니다.")
+        if ch is None:
+            ch = self._channels[rcept_no] = RunChannel(rcept_no)
+        ch.history = []
+        ch.publish(make_event(QUEUED, rcept_no, position=position))
         return ch
 
     def resume(self, rcept_no: str, decision: dict) -> RunChannel:
