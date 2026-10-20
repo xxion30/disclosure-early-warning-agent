@@ -51,7 +51,9 @@ class ScriptedModel:
 
     async def generate(self, prompt, schema, payload):
         self.prompts.append((prompt, payload))
-        if prompt == "extract_facts":
+        if prompt == "select_tools":
+            v = {"requests": []}
+        elif prompt == "extract_facts":
             ch = next(c for c in payload["chunks"] if "의견거절" in c["text"])
             ev = {"source": ch["source"], "quote": "감사의견 의견거절", "rcept_no": ch["rcept_no"], "location": ch["location"]}
             v = {"facts": [{"signal_type": "AUDIT_OPINION", "values": {"opinion": "의견거절"}, "evidence": [ev]}]}

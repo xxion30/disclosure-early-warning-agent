@@ -178,7 +178,7 @@ flowchart TD
 | 반복·자기 교정 | 근거 검증 실패 시 사실 추출 재시도, 금지 표현이 있으면 안내문 재작성(각 최대 2회) | `extract_facts`, `draft_messages`↔`guardrail_check` |
 | 사람 개입(HITL) | 변경 도구 앞 `interrupt()`, PB별 결정 묶음을 누적 | `pb_approval`, `finalize` |
 | 메모리·재개 | 체크포인터에 상태 저장, 재시작 후 같은 thread로 재개 | `agent/runtime.py`(`AsyncSqliteSaver`) |
-| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출 (모델이 선택하는 읽기 전용 도구는 §11 참고) | `agent/mcp_client.py`, `agent/execution.py` |
+| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다(최대 2건, 현재 공시로 고정, 오류는 관찰로만 남김) | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
 | 안전한 실패 | 근거를 못 찾거나 한도를 넘으면 지어내지 않고 `MANUAL_CHECK` | `agent/nodes/handle_failure.py` |
 
 ## 6. 배포 뷰 (실행 위치)
@@ -317,7 +317,7 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 
 ## 12. 알려진 한계와 다음 단계
 
-- **도구 선택**: 현재 도구 호출은 코드가 결정하는 **결정론적 오케스트레이션**이다. 모델이 읽기 전용 도구(`search_reference`, `search_disclosure_text`)를 스스로 고르는 확장은 별도 작업으로 진행한다(변경 도구는 계속 코드와 승인이 통제).
+- **도구 선택**: 모델이 고르는 도구는 읽기 전용 2개뿐이고(`select_tools` 단계, 사실 추출 첫 시도와 설명 생성에서 각 1회), 변경 도구는 스키마에 없어 고를 수 없다. 모델 호출 8회 한도를 함께 쓰므로 재시도가 겹치면 `MANUAL_CHECK`로 끝난다. 모델이 도구를 여러 번 되풀이하는 자유 루프는 두지 않았다.
 - **Harness 연결**: `harness/loop_limits.py`·`harness/context.py`의 대화 요약(`trim_messages`)은 현재 흐름에 연결되어 있지 않다(같은 값의 한도는 `agent/execution.py`가 시행).
 - **평가**: `eval/run_eval.py`의 조합 규칙·RAG k·모델 비교 실험은 아직 채우지 않았다.
 - **큐**: RabbitMQ 연동은 가짜 큐 백엔드로 시험했고 실제 브로커와의 연동은 확인하지 않았다.

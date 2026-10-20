@@ -39,6 +39,17 @@ class ExplanationOutput(StrictModel):
     items: list[ExplanationItem] = Field(min_length=1)
 
 
+class ToolRequest(StrictModel):
+    tool: Literal["search_disclosure_text", "search_reference"]
+    query: str = Field(min_length=1, max_length=200)
+    category: str | None = None  # search_reference일 때만: 상장규정 | 공시해설 | 회계용어 | 안내문가이드
+
+
+class ToolSelection(StrictModel):
+    # 비어 있으면 추가 조회가 필요 없다는 뜻이다.
+    requests: list[ToolRequest] = Field(default_factory=list, max_length=2)
+
+
 class DraftOutput(StrictModel):
     message: str = Field(min_length=1)
 

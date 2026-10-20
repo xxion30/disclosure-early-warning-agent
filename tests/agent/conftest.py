@@ -53,12 +53,15 @@ class FakeModel:
         self.unsafe = False
         self.invalid_drafts = False
         self.failure = None
+        self.tool_requests = []
 
     async def generate(self, prompt, schema, payload):
         self.calls.append((prompt, payload))
         if self.failure:
             raise self.failure
-        if prompt == "extract_facts":
+        if prompt == "select_tools":
+            value = {"requests": self.tool_requests}
+        elif prompt == "extract_facts":
             evidence = {**EVIDENCE, "quote": "지어낸 인용"} if self.bad_evidence else EVIDENCE
             value = {"facts": [{"signal_type": "TEST", "values": {"opinion": "거절"}, "evidence": [evidence]}]}
         elif prompt == "explain_risk":
