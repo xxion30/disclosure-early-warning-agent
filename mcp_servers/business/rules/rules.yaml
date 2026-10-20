@@ -170,4 +170,9 @@ classification:
   - {type: RIGHTS_OFFERING, keywords: ["유상증자결정"]}
   - {type: GOOD_NEWS_CANCEL, keywords: ["단일판매ㆍ공급계약해지", "단일판매ㆍ공급계약정정", "단일판매·공급계약해지", "단일판매·공급계약정정"]}
   - {type: OWNERSHIP, keywords: ["주식등의대량보유", "최대주주등소유주식변동"]}
-  - {type: PERIODIC_REPORT, keywords: ["사업보고서", "반기보고서", "분기보고서"]}
+  # 정기보고서(사업·반기·분기)는 분류하지 않는다: 점수가 되는 신호는 제목 키워드(제출지연 등)로 따로 잡고,
+  # 사업보고서 기본 점수는 companies.base_score로 이미 반영한다. 분류하지 않으면 "해당 없음"으로 조용히 끝난다.
+
+# 분류는 됐지만 신호가 없는 것이 정상인 유형. 이 유형에서 AI가 찾은 사실이 없으면 MANUAL_CHECK가 아니라
+# "신호 없음"으로 조용히 끝낸다(평가·경보를 만들지 않는다). 예: 대량보유보고서 대부분은 주식 담보 내용이 없다.
+no_signal_ok_types: [OWNERSHIP]

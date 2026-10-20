@@ -18,6 +18,12 @@ async def extract_facts(state, deps):
             "disclosure": state["disclosure"], "disclosure_type": state["disclosure_type"],
             "chunks": chunks, "attempt": attempt,
         })
+        if not result.facts:
+            if state["disclosure_type"] in deps.quiet_types:
+                # 신호가 없는 공시: 평가·경보를 만들지 않고 끝낸다.
+                return {"extracted_facts": {"facts": []}, "evidence": [], "no_signal": True, "status": "DONE",
+                        "fact_attempts": attempt, "retry_count": attempt - 1}
+            raise ValueError("추출된 사실 없음")
         evidence = [e.model_dump() for fact in result.facts for e in fact.evidence]
         validate_evidence(evidence, chunks)
         return {"extracted_facts": result.model_dump(), "evidence": evidence,

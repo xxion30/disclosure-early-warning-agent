@@ -147,3 +147,10 @@ def test_fake_error_env(monkeypatch):
 def test_tool_timeout_retried_once():
     results = iter([{"ok": False, "error": {"code": "TIMEOUT", "message": "t"}}, {"ok": True, "data": {}}])
     assert recovery.call_tool_with_retry(lambda: next(results))["ok"] is True
+
+
+def test_mask_text_keeps_iso_dates():
+    # 날짜(2025-03-21)는 계좌번호 모양과 같아서 가려지면 안 된다
+    assert masking.mask_text("접수일 2025-03-21") == "접수일 2025-03-21"
+    assert masking.mask_text("계좌 110-123-456789") == "계좌 ***"
+    assert masking.mask_obj({"filed_at": "2025-03-21"}) == {"filed_at": "2025-03-21"}

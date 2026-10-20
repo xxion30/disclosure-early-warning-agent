@@ -297,7 +297,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 - [x] interrupt 전에 `persistence.save(state, "WAITING_APPROVAL")` → `State.assessment_id`, 끝나면 `DONE`
 - [x] 결정 누적은 `State.decisions = {customer_id: {status, edited_message, reject_reason, pb_id, decided_at}}`
 - [x] 반려 고객은 업무 없음(`save_rejection`이 감사 기록), interrupt 노드 앞 DB 쓰기 없음
-- [ ] **`agent.Dependencies` 조립을 누가 할지** (tools=B MCP, model=A llm, harness=D, persistence·create_task=B 도구). 지금 `api/graph_adapter.default_dependencies()`는 TODO로 실패한다. API는 조립된 deps를 받기만 하면 된다.
+- [x] **`agent.Dependencies` 조립**은 B가 `agent/assembly.py`의 `build_dependencies()`로 만들었다 (tools=`MCPTools`, model=`StructuredLLM`, harness=D 모듈을 async로 연결, persistence=`AssessmentStore`, create_task=`ToolTaskCreator`). `api/graph_adapter.default_dependencies()`가 이를 부른다. 실제 실행에는 business-mcp(8001)·rag-mcp(8002)와 `.env`의 `ANTHROPIC_API_KEY`·`OPENAI_API_KEY`가 필요하다. 모델만 가짜로 바꾼 시나리오 A 통합 테스트: `tests/mcp_servers/test_assembly.py`.
 - [x] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0` import 오류 → B가 `mcp>=1.12,<2`, `fastmcp>=2.12,<3`로 고정하고 `uv.lock`을 갱신했다 (feat/b-risk-score). 실제 서버 두 개에 `MCPTools.connect`가 붙는 것을 확인했다.
 
 **B (MCP·shared) 확인 항목**

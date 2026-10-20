@@ -51,5 +51,7 @@ class Dependencies:
     signal_input: Callable[[dict], list[dict]]
     # Authorizes actual task creation; must also implement storage idempotency.
     create_task: Callable[[dict], Awaitable[int]]
+    # 신호가 없는 것이 정상인 disclosure_type (rules.yaml no_signal_ok_types). 비어 있으면 모든 유형이 사실을 요구한다.
+    quiet_types: frozenset[str] = frozenset()
     execution_seconds: float = 120
     max_model_turns: int = 8

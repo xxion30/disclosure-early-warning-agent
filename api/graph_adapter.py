@@ -310,12 +310,20 @@ class _EventTap:
             sink.put_nowait((name, payload["node"]))
 
 
-def default_dependencies():
-    """진짜 MCP·LLM·Harness·저장소를 묶은 agent.Dependencies.
+async def default_dependencies():
+    """진짜 MCP·LLM·Harness·저장소를 묶은 agent.Dependencies (조립은 agent/assembly.py).
 
-    TODO(A·B·D 확인): 누가 조립할지 정해지면 여기서 부른다. agent/INTEGRATION.md의 B·D 연결 표 참고.
+    business-mcp(8001)·rag-mcp(8002)가 떠 있고 모델 API 키가 .env에 있어야 한다.
     """
-    raise RuntimeError("agent.Dependencies 조립이 아직 없습니다 (TODO: A·B·D 확인 필요)")
+    from agent.assembly import build_dependencies
+
+    try:
+        return await build_dependencies()
+    except Exception as exc:
+        raise RuntimeError(
+            f"agent.Dependencies 조립 실패 ({type(exc).__name__}): "
+            "business-mcp(8001)·rag-mcp(8002)가 떠 있는지, .env의 ANTHROPIC_API_KEY·OPENAI_API_KEY가 있는지 확인하세요"
+        ) from exc
 
 
 class RealGraphAdapter:
@@ -338,7 +346,7 @@ class RealGraphAdapter:
             if self._runtime is None:
                 from agent import open_runtime
 
-                deps = self._deps if self._deps is not None else default_dependencies()
+                deps = self._deps if self._deps is not None else await default_dependencies()
                 deps = dataclasses.replace(deps, harness=_EventTap(deps.harness))
                 self._runtime_cm = open_runtime(deps, str(self.checkpoint_path))
                 self._runtime = await self._runtime_cm.__aenter__()
