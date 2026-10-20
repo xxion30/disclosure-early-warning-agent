@@ -240,7 +240,12 @@ def build_model(harness, settings):
 
 
 class KnownSignalsModel:
-    """extract_facts 결과에서 규칙표에 없는 signal_type을 걸러낸다 (AI가 신호 이름을 지어낼 수 없게)."""
+    """모델 출력을 코드가 보증하는 값으로 맞춘다.
+
+    - extract_facts: 규칙표에 없는 signal_type을 걸러낸다 (AI가 신호 이름을 지어낼 수 없게).
+    - explain_risk: 인용(evidence)은 점수 내역에 B 도구가 담아 준 원문 그대로를 붙인다. AI는 설명 문장만 쓴다.
+      (AI가 긴 인용문을 한 글자씩 똑같이 베끼지 못해 검증에서 멈추는 일을 막는다.)
+    """
 
     def __init__(self, inner):
         self.inner = inner
@@ -250,6 +255,25 @@ class KnownSignalsModel:
 
     async def generate(self, prompt, schema, payload):
         result = await self.inner.generate(prompt, schema, payload)
+        if prompt == "explain_risk":
+            breakdown = payload.get("score_result", {}).get("breakdown", [])
+            by_index: dict[int, dict] = {}
+            for item in result.items:  # 같은 항목을 두 번 설명했으면 첫 번째만 쓴다
+                if 0 <= item.breakdown_index < len(breakdown) and item.breakdown_index not in by_index:
+                    by_index[item.breakdown_index] = item.model_dump()
+            items = []
+            for i, row in enumerate(breakdown):
+                data = by_index.get(i) or {
+                    # AI가 빠뜨린 항목은 규칙이 계산한 내용을 그대로 요약한다 (AI 설명이 아님을 표시)
+                    "breakdown_index": i,
+                    "explanation": f"[규칙 요약] {row.get('item')}: {row.get('points')}점"
+                                   f" (반영률 {row.get('weight', 1)}). {row.get('note') or ''}".strip(),
+                    "evidence": row.get("evidence") or [],
+                }
+                if row.get("evidence"):
+                    data["evidence"] = row["evidence"]
+                items.append(data)
+            return schema.model_validate({"items": items})
         if prompt != "extract_facts":
             return result
         rules = load_rules()

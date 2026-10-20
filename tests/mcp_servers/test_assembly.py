@@ -375,3 +375,40 @@ def test_unknown_signal_types_are_dropped_before_scoring(world):
 
     st = asyncio.run(run())
     assert st["status"] == "DONE" and st.get("no_signal") is True
+
+
+def test_explain_risk_citations_are_replaced_by_verified_evidence():
+    """AI가 인용을 바꿔 써도(말줄임, 요약) 점수 내역의 검증된 근거로 대체된다."""
+    from agent.assembly import KnownSignalsModel
+    from agent.state import ExplanationOutput
+
+    ev = {"source": "s", "quote": "원문 그대로의 긴 인용문", "rcept_no": "1", "location": "chunk-0"}
+    bad = {"source": "s", "quote": "원문 그대로의…(줄임)", "rcept_no": "1", "location": "chunk-0"}
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            return schema.model_validate({"items": [{"breakdown_index": 0, "explanation": "설명", "evidence": [bad]}]})
+
+    out = asyncio.run(KnownSignalsModel(Inner()).generate(
+        "explain_risk", ExplanationOutput, {"score_result": {"breakdown": [{"evidence": [ev]}]}}))
+    assert out.items[0].evidence[0].quote == ev["quote"] and out.items[0].explanation == "설명"
+
+
+def test_explain_risk_gets_exactly_one_item_per_breakdown():
+    """AI가 항목을 빠뜨리거나 중복해도 점수 내역 개수만큼 하나씩 채워진다."""
+    from agent.assembly import KnownSignalsModel
+    from agent.state import ExplanationOutput
+
+    ev = lambda n: {"source": "s", "quote": f"인용{n}", "rcept_no": "1", "location": f"chunk-{n}"}  # noqa: E731
+    breakdown = [{"item": f"항목{n}", "points": 1.0, "weight": 0.5, "evidence": [ev(n)]} for n in range(4)]
+
+    class Inner:
+        async def generate(self, prompt, schema, payload):
+            mk = lambda i, t: {"breakdown_index": i, "explanation": t, "evidence": [ev(i)]}  # noqa: E731
+            return schema.model_validate({"items": [mk(0, "A"), mk(0, "중복"), mk(2, "C")]})
+
+    out = asyncio.run(KnownSignalsModel(Inner()).generate(
+        "explain_risk", ExplanationOutput, {"score_result": {"breakdown": breakdown}}))
+    assert [i.breakdown_index for i in out.items] == [0, 1, 2, 3]
+    assert out.items[0].explanation == "A" and out.items[2].explanation == "C"
+    assert out.items[1].explanation.startswith("[규칙 요약]") and out.items[1].evidence[0].quote == "인용1"
