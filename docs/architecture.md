@@ -218,7 +218,7 @@ flowchart TD
 | Tools | MCP Client로 도구를 가져오고 허용 목록으로 제한. 모델 입력의 긴 문자열은 4,000자로 자름 | ✓ (도구 오류는 모델이 아니라 코드가 받아 `MANUAL_CHECK`로 처리) |
 | Context | 입력 6,000토큰 예산 안으로 줄임(`prepare_input`), RAG는 상위 5개 조각 | △ 단일 호출 구조라 "오래된 대화 요약"은 쓰지 않음 |
 | State·Memory | `AsyncSqliteSaver`, `thread_id = rcept_no`, 승인 대기 후 그대로 재개 | ✓ |
-| Agent Loop | 모델 호출 최대 8회·작업 120초·같은 입력의 같은 도구 3회까지, 넘으면 `MANUAL_CHECK` | ✓ (`agent/execution.py`에서 시행. `harness/loop_limits.py`는 독립 모듈로 있으나 연결되지 않았다) |
+| Agent Loop | 모델 호출 최대 8회·작업 120초·같은 입력의 같은 도구 3회까지, 넘으면 `MANUAL_CHECK` | ✓ (한도 값은 `harness/loop_limits.py`가 단일 출처이고 `agent/ports.py`·`agent/execution.py`가 이를 가져와 시행한다. 모듈의 `LoopGuard`/`count_tool_call`은 단위 테스트용으로 남아 있다) |
 | Guardrails | 변경 도구 전 `interrupt()`, 고객 이름·연락처 마스킹, 안내문 금지 표현 검사와 재작성 | ✓ |
 | Recovery | LLM 429·503은 1초·3초 간격 2회 재시도 후 대체 모델, 실패하면 `FAILED`. MCP `TIMEOUT`은 1회 재시도 | ✓ |
 | Observability | LangSmith에서 trace 하나에 노드·도구·LLM·토큰·지연·비용, 메타데이터(rcept_no, corp_name, risk_level, prompt_version, model). 실패·결정은 `audit_logs`에 `trace_id`와 함께 기록 | ✓ |
@@ -318,7 +318,7 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 ## 12. 알려진 한계와 다음 단계
 
 - **도구 선택**: 모델이 고르는 도구는 읽기 전용 2개뿐이고(`select_tools` 단계, 사실 추출 첫 시도와 설명 생성에서 각 1회), 변경 도구는 스키마에 없어 고를 수 없다. 모델 호출 8회 한도를 함께 쓰므로 재시도가 겹치면 `MANUAL_CHECK`로 끝난다. 모델이 도구를 여러 번 되풀이하는 자유 루프는 두지 않았다.
-- **Harness 연결**: `harness/loop_limits.py`·`harness/context.py`의 대화 요약(`trim_messages`)은 현재 흐름에 연결되어 있지 않다(같은 값의 한도는 `agent/execution.py`가 시행).
+- **Harness 연결**: `harness/context.py`의 대화 요약(`trim_messages`)은 현재 흐름에 연결되어 있지 않다(호출이 단일 구조라 쓸 일이 없고, 입력은 6,000토큰 예산으로 자른다).
 - **평가**: `eval/run_eval.py`로 가드레일·자르기·조합 규칙·RAG k·모델 비교 결과표를 `eval/results/`에 만들었다. 조합 규칙은 실제 공시에서 한 번도 발동하지 않아 켬/끔 차이가 없었고(효과를 주장하지 않음), 모델 비교는 같은 회사의 두 모델(gpt-5.4-mini/nano)이다. 해석은 각 표 아래에 적었다.
 - **큐**: 실제 RabbitMQ(3.13)로 확인했다. 지연 재시도 테스트가 통과했고, 배치 접수 직후 API를 종료해도 메시지 5건이 브로커에 남았다가 재시작 후 소비되어 큐가 0이 됐다. 이 확인에서 발견한 문제(실행 중 프로세스가 죽으면 같은 공시가 다시 와도 이어서 실행되지 않고 조용히 끝남)는 `AgentRuntime.start`가 마지막 체크포인트부터 이어 실행하도록 고쳤다. 메시지 유실 방지는 ack 시점에 의존하며, 가장 바쁜 시간대의 처리량은 측정하지 않았다.
 - **운영 환경**: 단일 노트북, SQLite, HTTP 구성이다. 운영에는 DB 분리, HTTPS, 서비스 분리(§9)가 필요하다.
