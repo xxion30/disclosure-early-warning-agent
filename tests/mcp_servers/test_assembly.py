@@ -250,3 +250,55 @@ def test_signal_input_never_carries_points():
     assert out == [{"signal_type": "FILING_DELAY", "detail": {}, "evidence": [
         {"source": "s", "quote": "q", "rcept_no": "1", "location": "l"}], "rcept_no": "1"}]
     assert "points" not in out[0]
+
+
+# ---------------------------------------------------------------- 모델 구성 (OpenAI 전용 포함)
+def _settings(**kw):
+    from types import SimpleNamespace
+
+    base = dict(OPENAI_API_KEY="sk-test", ANTHROPIC_API_KEY="", LLM_PRIMARY="claude-haiku-5-5",
+                LLM_FALLBACK="gpt-5.4-mini", FAKE_LLM_ERROR="")
+    return SimpleNamespace(**{**base, **kw})
+
+
+def _name(m):
+    return getattr(m, "model_name", getattr(m, "model", None))
+
+
+def test_model_openai_only_when_no_anthropic_key():
+    from agent.assembly import build_model
+
+    m = build_model(None, _settings())
+    assert _name(m.primary) == "gpt-5.4-mini" and _name(m.fallback) == "gpt-5.4-mini"
+
+
+def test_model_openai_primary_by_name():
+    from agent.assembly import build_model
+
+    m = build_model(None, _settings(LLM_PRIMARY="gpt-5.4", ANTHROPIC_API_KEY="x"))
+    assert _name(m.primary) == "gpt-5.4" and _name(m.fallback) == "gpt-5.4-mini"
+
+
+def test_model_anthropic_primary_when_key_present():
+    from agent.assembly import build_model
+
+    m = build_model(None, _settings(ANTHROPIC_API_KEY="sk-ant-test"))
+    assert _name(m.primary) == "claude-haiku-5-5" and _name(m.fallback) == "gpt-5.4-mini"
+
+
+def test_model_requires_openai_key():
+    from agent.assembly import build_model
+
+    with pytest.raises(ValueError):
+        build_model(None, _settings(OPENAI_API_KEY=""))
+
+
+def test_openai_models_use_function_calling_for_structured_output():
+    """strict json_schema는 dict[str, Any]를 거부하므로 function calling을 기본으로 쓴다."""
+    from agent.assembly import _openai_chat
+    from agent.state import DraftsOutput, FactsOutput
+
+    m = _openai_chat("gpt-5.4-mini", "sk-test")
+    for schema in (FactsOutput, DraftsOutput):
+        bound = m.with_structured_output(schema)
+        assert "tool" in str(bound.first.kwargs).lower() or "function" in str(bound.first.kwargs).lower()

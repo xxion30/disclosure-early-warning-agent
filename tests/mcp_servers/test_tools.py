@@ -17,6 +17,7 @@ from mcp_servers.business.tools.update_task_status import update_task_status
 pytestmark = pytest.mark.usefixtures("seeded_db")
 
 KY_CORP, KY_STOCK, KY_AUDIT = "00106119", "001570", "20250321802001"  # 금양, 감사의견 거절 공시
+OS_CORP = "00341916"  # 오스템임플란트 (기본 점수 0)
 
 
 def assert_err(res, code):
@@ -100,21 +101,21 @@ def _score_and_save(status="WAITING_APPROVAL"):
 
 
 def test_signals_feed_history_and_combo_across_calls():
-    # 신호 3종을 차례로 저장하면 다음 계산에서 이력으로 쓰이고 조합 규칙이 켜진다.
+    # 기본 점수가 0인 오스템임플란트로, 신호 3종을 차례로 저장하면 다음 계산에서 이력으로 쓰이고 조합 규칙이 켜진다.
     seq = [("20240430000001", "2024-04-30", "FILING_DELAY", {}), ("20240601000001", "2024-06-01", "PLEDGE", {"pledge_ratio_pct": 60})]
     from shared.db import get_session
     from shared.models import Disclosure
 
     with get_session() as s:
         for rcept, filed, *_ in seq:
-            s.add(Disclosure(rcept_no=rcept, corp_code=KY_CORP, title="t", filed_at=filed, processed=False))
+            s.add(Disclosure(rcept_no=rcept, corp_code=OS_CORP, title="t", filed_at=filed, processed=False))
     for rcept, filed, st, detail in seq:
-        sc = calculate_risk_score(KY_CORP, [{"signal_type": st, "detail": detail, "rcept_no": rcept, "filed_at": filed}], filed)["data"]
-        assert save_assessment(KY_CORP, rcept, sc["signals"], sc, None, "DONE")["ok"]
-    hist = get_signal_history(KY_CORP, 12, "2024-07-01")["data"]["signals"]
+        sc = calculate_risk_score(OS_CORP, [{"signal_type": st, "detail": detail, "rcept_no": rcept, "filed_at": filed}], filed)["data"]
+        assert save_assessment(OS_CORP, rcept, sc["signals"], sc, None, "DONE")["ok"]
+    hist = get_signal_history(OS_CORP, 12, "2024-07-01")["data"]["signals"]
     assert [h["signal_type"] for h in hist] == ["FILING_DELAY", "PLEDGE"]
     # 세 번째 서로 다른 유형 → 합계 4+3+2=9(High) → 조합 규칙으로 한 단계 올라 Critical
-    third = calculate_risk_score(KY_CORP, [{"signal_type": "CB_BW", "detail": {}, "filed_at": "2024-07-01"}], "2024-07-01")["data"]
+    third = calculate_risk_score(OS_CORP, [{"signal_type": "CB_BW", "detail": {}, "filed_at": "2024-07-01"}], "2024-07-01")["data"]
     assert third["total_score"] == 9 and third["level"] == "Critical"
     assert third["combo_upgraded"] is True and third["level"] == "Critical"
 

@@ -214,23 +214,28 @@ def _openai_chat(model: str, api_key: str):
 
 
 def build_model(harness, settings):
-    """기본 Anthropic(LLM_PRIMARY) + 대체 OpenAI(LLM_FALLBACK).
+    """모델 구성. 기본은 LLM_PRIMARY, 장애 시 LLM_FALLBACK (OpenAI).
 
-    Anthropic 키가 없으면 OpenAI 모델 하나를 기본·대체로 쓴다(개발·점검용). 이때는 503 → 대체 모델 전환이
-    같은 모델로 가므로 "다른 회사 모델로 넘어간다"는 시연은 되지 않는다.
+    - LLM_PRIMARY가 `claude…`이고 ANTHROPIC_API_KEY가 있으면 Anthropic을 기본으로 쓴다.
+    - LLM_PRIMARY가 `gpt…`이면 OpenAI 모델을 기본으로 쓴다 (Anthropic 키가 필요 없다).
+    - LLM_PRIMARY가 `claude…`인데 Anthropic 키가 없으면 LLM_FALLBACK(OpenAI)로 대신한다.
+    OpenAI만 쓰면 503 → 대체 모델 전환은 같은 회사 모델 사이에서 일어난다(재시도·전환 동작 자체는 같다).
     """
     from agent.llm import StructuredLLM
 
     if not settings.OPENAI_API_KEY:
-        raise ValueError("대체 모델용 OPENAI_API_KEY가 .env에 필요합니다")
+        raise ValueError("OPENAI_API_KEY가 .env에 필요합니다 (대체 모델 또는 OpenAI 전용 구성)")
     fallback = _openai_chat(settings.LLM_FALLBACK, settings.OPENAI_API_KEY)
-    if settings.ANTHROPIC_API_KEY:
+    name = settings.LLM_PRIMARY
+    if name.startswith("claude") and settings.ANTHROPIC_API_KEY:
         from langchain_anthropic import ChatAnthropic
 
-        primary = ChatAnthropic(model=settings.LLM_PRIMARY, api_key=settings.ANTHROPIC_API_KEY)
-    else:
-        log.warning("ANTHROPIC_API_KEY 없음 → OpenAI(%s)를 기본·대체 모델로 사용", settings.LLM_FALLBACK)
+        primary = ChatAnthropic(model=name, api_key=settings.ANTHROPIC_API_KEY)
+    elif name.startswith("claude"):
+        log.warning("ANTHROPIC_API_KEY 없음 → OpenAI(%s)를 기본 모델로 사용", settings.LLM_FALLBACK)
         primary = fallback
+    else:
+        primary = _openai_chat(name, settings.OPENAI_API_KEY)
     return StructuredLLM(primary, fallback, harness, settings.FAKE_LLM_ERROR)
 
 
