@@ -477,6 +477,7 @@ url: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=...
 | 경보 목록 | /alerts | 회사명, 등급 배지, 점수, 영향 고객 수, P1 수, 상태 / 등급·상태 필터 / 일일 요약 탭 |
 | 경보 상세 | /alerts/:assessmentId | 진행 단계 표시(SSE), 점수 내역 표, AI 설명과 원문 인용, 영향 고객 목록(우선순위순) |
 | 안내문 검토 | /alerts/:assessmentId/drafts | 고객별 초안, 가드레일 결과, 승인 / 수정 후 승인 / 다시 작성 / 반려(사유 필수) |
+| 고객 현황 | /customers | 내 담당 고객의 보유 종목, 경보 종목 노출(우선순위 P1·P2·P3), 연락 이력 (조회 전용) |
 | 연락 업무 | /tasks | 내 업무 목록, 연락완료·보류 처리, 결과 메모 |
 
 - PB는 자기 담당 고객의 안내문만 승인할 수 있다 (토큰의 pb_id와 customers.pb_id 비교).
@@ -497,6 +498,7 @@ API 주요 경로 (C 확정). `/auth/login` 외에는 모두 `Authorization: Bea
 | GET | /alerts/{assessment_id} | 경보 상세. 다른 PB 고객 이름은 `고객 C002`로 가림 |
 | GET | /alerts/{assessment_id}/drafts | 내 담당 고객 안내문 초안 (`{고객명}` 자리표시 + 실명 미리보기) |
 | POST | /alerts/{assessment_id}/decision | PB 결정 1묶음 → Graph 재개. 다른 PB 고객 403, 반려 사유 필수 422 |
+| GET | /customers | 내 담당 고객 현황: 고객별 보유 종목, 가장 최근의 High·Critical 경보 노출과 우선순위(영향도 규칙), 연락 이력(업무·반려). 다른 PB의 고객은 나오지 않는다. 조회 전용 |
 | GET | /tasks | 내 연락 업무 목록 (`?status=`) |
 | PATCH | /tasks/{task_id} | 연락완료·보류 처리 (body: status, note). 승인·보류 상태에서만 |
 

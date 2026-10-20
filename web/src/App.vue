@@ -17,6 +17,7 @@ function logout() {
     <div class="brand">공시 조기경보</div>
     <nav>
       <RouterLink to="/alerts">경보</RouterLink>
+      <RouterLink to="/customers">고객 현황</RouterLink>
       <RouterLink to="/tasks">연락 업무</RouterLink>
     </nav>
     <div class="who">
