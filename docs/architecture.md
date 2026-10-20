@@ -206,7 +206,7 @@ flowchart TD
 | | `save_assessment`(rcept_no 기준 upsert), `create_contact_task`(평가·고객별 멱등, PB 승인 뒤에만), `update_task_status`(PB가 화면에서만) | 변경 |
 | rag-mcp | `search_disclosure_text`(공시 1건 안에서만 검색), `search_reference`(상장규정·공시해설·회계용어·안내문가이드) | 조회 |
 
-모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다.
+모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다. 도구 주석(annotations)으로 조회 도구는 `readOnlyHint`, 변경 도구 3개는 `destructiveHint`를 표시한다(수업 자료의 Harness 규칙).
 
 **문서 색인 (오프라인, Pipe-and-Filter)**: `rag_docs/*.md`(실제 DART 공시 원문, 참고 문서) → 800자·겹침 100자 청킹 → 임베딩(`text-embedding-3-small`) → Chroma(코사인). 조각마다 `source`, `rcept_no`, `location`을 메타데이터로 남기고, 컬렉션에 임베딩 설정을 기록해 **질의 때 다른 임베딩이면 검색을 거부**한다. 실행: `uv run python -m mcp_servers.rag.ingest`.
 

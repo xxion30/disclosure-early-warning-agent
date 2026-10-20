@@ -225,3 +225,19 @@ def test_correction_is_detected_from_disclosure_title_not_from_ai():
     assert second["total_score"] == 2 + 2  # 같은 유형 정정은 점수를 다시 더하지 않는다 (이전: 8점 High였다)
     assert second["level"] == "Medium"
     assert next(b for b in second["breakdown"] if not b.get("from_history") and b["group"] == "B")["points"] == 0
+
+
+def test_tool_annotations_mark_mutating_tools():
+    """조회 도구는 readOnlyHint, 데이터를 바꾸는 도구 3개만 destructiveHint (수업 자료의 Harness 승인 규칙)."""
+    from fastmcp import Client
+
+    from mcp_servers.business.server import mcp
+
+    async def run():
+        async with Client(mcp) as c:
+            return {t.name: t.annotations for t in await c.list_tools()}
+
+    ann = asyncio.run(run())
+    mutating = {n for n, a in ann.items() if a and a.destructiveHint}
+    assert mutating == {"save_assessment", "create_contact_task", "update_task_status"}
+    assert all(a.readOnlyHint for n, a in ann.items() if n not in mutating)
