@@ -136,6 +136,7 @@ uv run python scripts/replay_all.py --stock 048260  # 한 회사만
 | `DART_API_KEY` | `fetch_dart.py`, `compute_base_score.py`용. 시연만 할 때는 필요 없다 |
 | `GRAPH_ADAPTER` | `fake`(기본) \| `real` |
 | `FAKE_LLM_ERROR` | `503`이면 기본 모델 호출만 실패시킨다 (재시도 → 대체 모델 시연) |
+| `FAKE_UNSAFE_DRAFT` | `true`면 첫 안내문 초안에 금지 표현을 섞는다 (가드레일 → 다시 쓰기 시연). 발표 증빙 trace는 [docs/evidence/traces.md](docs/evidence/traces.md) |
 | `JWT_SECRET` | 32자 이상 권장 |
 | `DB_URL`, `CHECKPOINT_DB`, `CHROMA_DIR` | 기본값 `data/app.db`, `data/checkpoints.db`, `data/chroma` |
 | `RULES_PATH` | 다른 규칙표를 쓸 때(평가용 복사본). 기본은 `mcp_servers/business/rules/rules.yaml` |
@@ -182,7 +183,7 @@ uv run python scripts/compute_base_score.py      # 기본 점수 계산 결과 �
 ## Harness (`harness/`)
 | 파일 | 구성 요소 | 하는 일 |
 | --- | --- | --- |
-| `loop_limits.py` | 5 Agent Loop | 8턴 · 120초 · 같은 도구 3회. 넘으면 `LoopLimitExceeded` → MANUAL_CHECK |
+| `loop_limits.py` | 5 Agent Loop | 8턴 · 120초 · 같은 도구 3회. 한도 값의 단일 출처이고 Agent(`agent/ports.py`, `agent/execution.py`)가 가져와 시행한다. 넘으면 MANUAL_CHECK |
 | `guardrails.py` | 6 Guardrails | 안내문 금지 표현 검사, 재작성 2회 한도 |
 | `masking.py` | 6 Guardrails | 고객 이름 `고객 C001`, 전화·계좌 `***` (날짜는 가리지 않음) |
 | `recovery.py` | 7 Recovery | LLM 429/503 → 재시도(1초, 3초) → 대체 모델 → FAILED, 도구 TIMEOUT 1회 재시도 |

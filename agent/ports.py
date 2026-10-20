@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Protocol
 
 from pydantic import BaseModel
+from harness.loop_limits import MAX_SECONDS, MAX_TURNS
 from shared.schemas import ToolResponse
 from agent.state import AgentState
 
@@ -53,5 +54,5 @@ class Dependencies:
     create_task: Callable[[dict], Awaitable[int]]
     # 신호가 없는 것이 정상인 disclosure_type (rules.yaml no_signal_ok_types). 비어 있으면 모든 유형이 사실을 요구한다.
     quiet_types: frozenset[str] = frozenset()
-    execution_seconds: float = 120
-    max_model_turns: int = 8
+    execution_seconds: float = MAX_SECONDS  # harness/loop_limits.py가 한도의 단일 출처
+    max_model_turns: int = MAX_TURNS

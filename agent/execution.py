@@ -9,6 +9,7 @@ import time
 from langgraph.errors import GraphInterrupt
 
 from agent.ports import AgentError
+from harness.loop_limits import MAX_SAME_TOOL
 from shared.schemas import ToolResponse
 
 
@@ -40,7 +41,7 @@ async def invoke_tool(tools, harness, name, arguments):
     async def operation():
         scope.remaining()
         count = scope.repeated_calls.get(key, 0) + 1
-        if count > 3:
+        if count > MAX_SAME_TOOL:
             raise AgentError(f"동일 입력 도구 호출 한도 초과: {name}")
         scope.repeated_calls[key] = count
         scope.tool_counts[name] = scope.tool_counts.get(name, 0) + 1
