@@ -311,9 +311,13 @@ class KnownSignalsModel:
             return result
         rules = load_rules()
         allowed = set(rules["group_a"]) | set(rules["group_b"])
+        by_type = rules.get("allowed_signals_by_type") or {}
+        per_type = by_type.get(payload.get("disclosure_type"))
+        if per_type is not None:  # 이 공시 유형에서 올릴 수 있는 신호만 (유형에 안 맞는 신호는 AI가 만들 수 없다)
+            allowed = allowed & set(per_type)
         kept = [f for f in result.facts if str(f.signal_type).strip().upper() in allowed]
         if len(kept) != len(result.facts):
-            log.info("규칙표에 없는 signal_type 제외: %s",
+            log.info("규칙표에 없거나 이 공시 유형에 맞지 않는 signal_type 제외: %s",
                      [f.signal_type for f in result.facts if f not in kept])
         chunks = payload.get("chunks") or []
         facts = []
