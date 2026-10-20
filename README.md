@@ -69,6 +69,26 @@ uv run python -m mcp_servers.rag.ingest                          # 색인이 없
 API는 처음 공시를 처리할 때 MCP 서버에 연결하므로 두 MCP 서버가 먼저 떠 있어야 한다.
 </details>
 
+## 전체를 한 번에 검증 (`scripts/verify_all.py`)
+
+테스트부터 시나리오 A, 안전장치, 장애, 관측까지 **명령 하나로** 순서대로 돌리고 ✓/✗ 표로 보여 준다.
+**내 `data/app.db`와 켜져 있는 서버는 건드리지 않는다**(임시 DB와 별도 포트 18100번대에서 실행). `.env`에 `OPENAI_API_KEY`가 있어야 한다.
+```bash
+uv run python scripts/verify_all.py            # 테스트 + 시나리오 A + 안전장치 + 장애 + LangSmith (2~10분, 모델 비용 소액)
+uv run python scripts/verify_all.py --with-b   # + 위니아·오스템·CGV·SK (30분 이상)
+uv run python scripts/verify_all.py --ui       # 끝나면 같은 데이터로 화면을 띄운다 (http://localhost:5180, Ctrl+C로 종료)
+```
+| 단계 | 통과 기준 |
+| --- | --- |
+| 1. 자동 테스트 | `pytest` 전체 통과 |
+| 2~3. 환경·서버 | 키, 임시 DB(회사 5·공시 594), 색인, 서버 3개 기동 |
+| 4. 시나리오 A | 사건 전 첫 High, 사건 Critical, 영향 고객 7명(P1 5·P2 2), 점수 내역 원문 인용, 가드레일 통과, 안내문 `{고객명}` 유지 |
+| 5. 안전장치 | 금지 표현 수정안 422, **서버 재시작 후에도 승인 대기 복원·이어서 실행**, 타 PB 고객 승인 403, 승인·반려·업무 생성·감사 로그, 고객 현황 |
+| 6. 장애 | `FAKE_LLM_ERROR=503`에서 재시도(1초·3초) → 대체 모델 → 정상 완료 |
+| 7. 관측 | LangSmith에 한 공시의 trace가 노드·토큰·비용과 함께 올라옴 (키가 없으면 건너뜀) |
+
+결과는 `eval/results/verify_all.md`에 저장된다. 화면의 모양(진행 단계, 점수 내역 표, 안내문 검토, 고객 현황)은 사람이 눈으로 봐야 해서 `--ui`로 확인한다.
+
 ## 시나리오 A(금양)를 한 번에 점검
 
 서버를 끈 상태에서 DB를 초기화하고, 터미널 두 개로 진행한다:
