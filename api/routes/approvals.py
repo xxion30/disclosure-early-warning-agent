@@ -15,7 +15,7 @@ from api.audit import write_audit
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from api.graph_adapter import GraphAdapter, get_graph_adapter, now_iso, pending_customers
-from api.routes.alerts import NAME_PLACEHOLDER, get_assessment
+from api.routes.alerts import GRAPH_DOWN, NAME_PLACEHOLDER, get_assessment, read_state
 from api.run_manager import RunConflict, RunManager, get_run_manager
 from shared.models import Customer
 
@@ -60,7 +60,9 @@ async def decide(
     manager: RunManager = Depends(get_run_manager),
 ) -> dict:
     a = get_assessment(db, assessment_id)
-    view = await adapter.get_state(a.rcept_no)
+    view, graph_error = await read_state(adapter, a.rcept_no)
+    if graph_error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, graph_error)
     if view is None or view.get("status") != "WAITING_APPROVAL":
         raise HTTPException(status.HTTP_409_CONFLICT, "승인 대기 중인 경보가 아닙니다.")
 
@@ -97,6 +99,8 @@ async def decide(
             raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
         except ValueError as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+        except Exception:  # 검사 중 Graph 연결이 끊김 — 결정은 기록하지 않는다
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, GRAPH_DOWN)
 
     for item in decisions:
         action = "decision.approve_edited" if item["edited_draft"] else f"decision.{item['action']}"

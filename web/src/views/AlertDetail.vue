@@ -114,7 +114,10 @@ const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.
 
     <div class="card">
       <h2>영향 고객 <small>{{ alert.customers.length }}명 · 우선순위순</small></h2>
-      <p v-if="!alert.graph_state_available" class="notice">
+      <p v-if="alert.graph_error" class="notice">
+        {{ alert.graph_error }} 점수 내역은 그대로 볼 수 있고, 영향 고객·안내문은 연결되면 다시 보입니다.
+      </p>
+      <p v-else-if="!alert.graph_state_available" class="notice">
         Graph 상태를 찾을 수 없어 영향 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
       </p>
       <table v-else>
