@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import auth
 from api.graph_adapter import close_graph_adapter, get_graph_adapter
-from api.routes import alerts, approvals, events, runs, tasks
+from api.routes import alerts, approvals, customers, events, runs, tasks
 from api.run_manager import get_run_manager
 from shared.config import get_settings
 from shared.db import init_db
@@ -69,6 +69,7 @@ app.include_router(events.router)
 app.include_router(alerts.router)
 app.include_router(approvals.router)
 app.include_router(tasks.router)
+app.include_router(customers.router)
 
 
 @app.get("/health")

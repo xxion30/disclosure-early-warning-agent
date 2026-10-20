@@ -4,6 +4,7 @@ import { setUnauthorizedHandler } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AlertDetail from '../views/AlertDetail.vue'
 import AlertList from '../views/AlertList.vue'
+import CustomerList from '../views/CustomerList.vue'
 import DraftReview from '../views/DraftReview.vue'
 import Login from '../views/Login.vue'
 import TaskList from '../views/TaskList.vue'
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/alerts', name: 'alerts', component: AlertList },
     { path: '/alerts/:assessmentId', name: 'alert-detail', component: AlertDetail, props: true },
     { path: '/alerts/:assessmentId/drafts', name: 'draft-review', component: DraftReview, props: true },
+    { path: '/customers', name: 'customers', component: CustomerList },
     { path: '/tasks', name: 'tasks', component: TaskList },
     { path: '/:pathMatch(.*)*', redirect: '/alerts' },
   ],
