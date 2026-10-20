@@ -1,0 +1,1389 @@
+{
+ "_note": "eval/capture_signals.py가 진짜 모델 재생 결과에서 저장. run_eval.py의 combo 실험 입력.",
+ "companies": {
+  "001570": {
+   "name": "금양",
+   "corp_code": "00106119",
+   "market": "KOSPI",
+   "base_score": 1,
+   "base_reasons": [
+    {
+     "item": "operating_profit_decline_3y",
+     "points": 1,
+     "reason": "영업이익 3년 연속 감소 (2021~2023)",
+     "evidence": {
+      "source": "금양 사업보고서 2023사업연도 재무제표(CFS)",
+      "quote": "영업이익(손실) 2023: -14,608,343,494원, 2022: 7,924,631,740원, 2021: 12,570,727,010원",
+      "rcept_no": "20240327001225",
+      "location": "DART fnlttSinglAcntAll"
+     }
+    }
+   ],
+   "event": {
+    "type": "감사의견 거절 / 상장폐지 사유",
+    "date": "2025-03-21",
+    "description": "2024사업연도 감사보고서에서 감사의견 거절을 받아 상장폐지 사유가 발생",
+    "verified": true,
+    "rcept_no": "20250321802001",
+    "source_note": "감사보고서제출 — 감사의견 의견거절(원문 확인)"
+   },
+   "assessments": [
+    {
+     "rcept_no": "20240503000208",
+     "filed_at": "2024-05-03",
+     "level": "Low",
+     "total_score": 3.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240521800540",
+     "filed_at": "2024-05-21",
+     "level": "Low",
+     "total_score": 3.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240522000004",
+     "filed_at": "2024-05-22",
+     "level": "Medium",
+     "total_score": 5.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240605000468",
+     "filed_at": "2024-06-05",
+     "level": "High",
+     "total_score": 7.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240927000916",
+     "filed_at": "2024-09-27",
+     "level": "High",
+     "total_score": 7.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241018000341",
+     "filed_at": "2024-10-18",
+     "level": "High",
+     "total_score": 7.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241028800775",
+     "filed_at": "2024-10-28",
+     "level": "High",
+     "total_score": 7.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241031000530",
+     "filed_at": "2024-10-31",
+     "level": "High",
+     "total_score": 7.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241108000484",
+     "filed_at": "2024-11-08",
+     "level": "Medium",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241118000287",
+     "filed_at": "2024-11-18",
+     "level": "High",
+     "total_score": 8.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20241118800526",
+     "filed_at": "2024-11-18",
+     "level": "High",
+     "total_score": 8.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20250117000380",
+     "filed_at": "2025-01-17",
+     "level": "High",
+     "total_score": 8.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20250321802001",
+     "filed_at": "2025-03-21",
+     "level": "Critical",
+     "total_score": 8.0,
+     "combo_upgraded": false
+    }
+   ],
+   "signals": [
+    {
+     "rcept_no": "20240503000208",
+     "signal_type": "PLEDGE",
+     "points": 2.0,
+     "detail": {
+      "market": "KOSPI",
+      "pledge_ratio_pct": null,
+      "is_correction": false,
+      "title": "주식등의대량보유상황보고서(일반)",
+      "quote": "최대주주[류광지] 대구은행 담보제공 주식 수 하향 조정을 위한 주식담보계약 해지 및 재설정",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 주식등의대량보유상황보고서(일반) (2024-05-03)",
+        "quote": "최대주주[류광지] 대구은행 담보제공 주식 수 하향 조정을 위한 주식담보계약 해지 및 재설정",
+        "rcept_no": "20240503000208",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2024-05-03"
+    },
+    {
+     "rcept_no": "20240522000004",
+     "signal_type": "PLEDGE",
+     "points": 2.0,
+     "detail": {
+      "market": "KOSPI",
+      "pledge_ratio_pct": 4.48,
+      "is_correction": false,
+      "title": "주식등의대량보유상황보고서(일반)",
+      "quote": "주) 상기 보고자인 류광지는 Millennia Capital Partners Limited와 체결한 환매조건부 주식매매계약이 대주의 계약 미이행에 따른 계약해제로 담보로 제공했던 주식 923,466주를 5월 21일에 반환조치 하였으며,",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 주식등의대량보유상황보고서(일반) (2024-05-22)",
+        "quote": "주) 상기 보고자인 류광지는 Millennia Capital Partners Limited와 체결한 환매조건부 주식매매계약이 대주의 계약 미이행에 따른 계약해제로 담보로 제공했던 주식 923,466주를 5월 21일에 반환조치 하였으며,",
+        "rcept_no": "20240522000004",
+        "location": "chunk-7 (4900-5700자)"
+       }
+      ]
+     },
+     "filed_at": "2024-05-22"
+    },
+    {
+     "rcept_no": "20240605000468",
+     "signal_type": "PLEDGE",
+     "points": 2.0,
+     "detail": {
+      "market": "KOSPI",
+      "pledge_ratio_pct": null,
+      "is_correction": false,
+      "title": "주식등의대량보유상황보고서(일반)",
+      "quote": "보고사유 1. 최대주주 [ 류광지 ] 부산은행 담보제공 주식 수 하향 조정을 위한 주식담보계약 일부해지(5/29)2.",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 주식등의대량보유상황보고서(일반) (2024-06-05)",
+        "quote": "보고사유 1. 최대주주 [ 류광지 ] 부산은행 담보제공 주식 수 하향 조정을 위한 주식담보계약 일부해지(5/29)2.",
+        "rcept_no": "20240605000468",
+        "location": "chunk-0 (0-800자)"
+       },
+       {
+        "source": "금양 주식등의대량보유상황보고서(일반) (2024-06-05)",
+        "quote": "5. 변동[변경]사유 변동방법 - 변동사유 - 변경사유 1. 최대주주 [ 류광지 ] 부산은행 담보제공 주식 수 하향 조정을 위한 주식담보계약 일부해지(5/29)2. 최대주주 [ 류광지 ] 주식담보대출 상",
+        "rcept_no": "20240605000468",
+        "location": "chunk-3 (2100-2900자)"
+       }
+      ]
+     },
+     "filed_at": "2024-06-05"
+    },
+    {
+     "rcept_no": "20241018000341",
+     "signal_type": "RIGHTS_OFFERING",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "ratio_pct": 19.95669914,
+      "third_party": false,
+      "is_correction": true,
+      "title": "[기재정정]주요사항보고서(유상증자결정)",
+      "quote": "1주당 신주배정주식수 (주) 0.1995669914",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 [기재정정]주요사항보고서(유상증자결정) (2024-10-18)",
+        "quote": "1주당 신주배정주식수 (주) 0.1995669914",
+        "rcept_no": "20241018000341",
+        "location": "chunk-19 (13300-14100자)"
+       }
+      ]
+     },
+     "filed_at": "2024-10-18"
+    },
+    {
+     "rcept_no": "20241028800775",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "reason": "공시불이행",
+      "lifted": true,
+      "is_correction": false,
+      "title": "매매거래정지및정지해제(불성실공시)",
+      "quote": "2. 매매거래정지 유형 공시불이행",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "금양 매매거래정지및정지해제(불성실공시) (2024-10-28)",
+        "quote": "2. 매매거래정지 유형 공시불이행",
+        "rcept_no": "20241028800775",
+        "location": "chunk-0 (0-402자)"
+       }
+      ]
+     },
+     "filed_at": "2024-10-28"
+    },
+    {
+     "rcept_no": "20241108000484",
+     "signal_type": "RIGHTS_OFFERING",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "ratio_pct": 19.95669914,
+      "third_party": false,
+      "is_correction": true,
+      "title": "[기재정정]주요사항보고서(유상증자결정)",
+      "quote": "1주당 신주배정주식수 (주) 0.1995669914",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 [기재정정]주요사항보고서(유상증자결정) (2024-11-08)",
+        "quote": "1주당 신주배정주식수 (주) 0.1995669914",
+        "rcept_no": "20241108000484",
+        "location": "chunk-19 (13300-14100자)"
+       }
+      ]
+     },
+     "filed_at": "2024-11-08"
+    },
+    {
+     "rcept_no": "20241118000287",
+     "signal_type": "PLEDGE",
+     "points": 2.0,
+     "detail": {
+      "market": "KOSPI",
+      "pledge_ratio_pct": null,
+      "is_correction": false,
+      "title": "주식등의대량보유상황보고서(일반)",
+      "quote": "변경사유 최대주주[류광지] 주식담보대출 계약 체결 (11/13)",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 주식등의대량보유상황보고서(일반) (2024-11-18)",
+        "quote": "변경사유 최대주주[류광지] 주식담보대출 계약 체결 (11/13)",
+        "rcept_no": "20241118000287",
+        "location": "chunk-4 (2800-3600자)"
+       }
+      ]
+     },
+     "filed_at": "2024-11-18"
+    },
+    {
+     "rcept_no": "20250117000380",
+     "signal_type": "RIGHTS_OFFERING",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "ratio_pct": null,
+      "third_party": false,
+      "is_correction": true,
+      "title": "[기재정정]주요사항보고서(유상증자결정)",
+      "quote": "유상증자 철회 - 당사는 2024년 09월 27일 최초 이사회결의를 통해 시설자금 및 채무상환자금을 조달하기 위하여 주주배정 후 실권주 일반공모 방식의 유상증자를 결정",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 [기재정정]주요사항보고서(유상증자결정) (2025-01-17)",
+        "quote": "유상증자 철회 - 당사는 2024년 09월 27일 최초 이사회결의를 통해 시설자금 및 채무상환자금을 조달하기 위하여 주주배정 후 실권주 일반공모 방식의 유상증자를 결정",
+        "rcept_no": "20250117000380",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2025-01-17"
+    },
+    {
+     "rcept_no": "20250117000380",
+     "signal_type": "REPEATED_CORRECTION",
+     "points": 2.0,
+     "detail": {
+      "for_type": "RIGHTS_OFFERING",
+      "count": 3,
+      "synthetic": true,
+      "quote": "유상증자 철회 - 당사는 2024년 09월 27일 최초 이사회결의를 통해 시설자금 및 채무상환자금을 조달하기 위하여 주주배정 후 실권주 일반공모 방식의 유상증자를 결정",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "금양 [기재정정]주요사항보고서(유상증자결정) (2025-01-17)",
+        "quote": "유상증자 철회 - 당사는 2024년 09월 27일 최초 이사회결의를 통해 시설자금 및 채무상환자금을 조달하기 위하여 주주배정 후 실권주 일반공모 방식의 유상증자를 결정",
+        "rcept_no": "20250117000380",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2025-01-17"
+    },
+    {
+     "rcept_no": "20250321802001",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "거절",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "가. 감사의견 의견거절 적정",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "금양 감사보고서제출 (2025-03-21)",
+        "quote": "가. 감사의견 의견거절 적정",
+        "rcept_no": "20250321802001",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2025-03-21"
+    },
+    {
+     "rcept_no": "20250321802001",
+     "signal_type": "CAPITAL_IMPAIRMENT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "impairment_pct": null,
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "가. 감사의견 의견거절 적정",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "금양 감사보고서제출 (2025-03-21)",
+        "quote": "가. 감사의견 의견거절 적정",
+        "rcept_no": "20250321802001",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2025-03-21"
+    }
+   ]
+  },
+  "071460": {
+   "name": "위니아",
+   "corp_code": "00300557",
+   "market": "KOSDAQ",
+   "base_score": 2,
+   "base_reasons": [
+    {
+     "item": "profit_but_negative_cfo",
+     "points": 2,
+     "reason": "2021 순이익 흑자 + 영업현금흐름 적자",
+     "evidence": {
+      "source": "위니아 사업보고서 2021사업연도 재무제표(CFS)",
+      "quote": "당기순이익 18,783,160,649원, 영업활동현금흐름 -43,263,415,083원",
+      "rcept_no": "20220317001294",
+      "location": "DART fnlttSinglAcntAll"
+     }
+    }
+   ],
+   "event": {
+    "type": "감사의견 거절 / 완전자본잠식 / 상장폐지",
+    "date": "2024-03-26",
+    "description": "감사범위 제한 및 계속기업 존속능력 불확실성으로 감사의견 거절, 완전자본잠식, 2025-06-18 상장폐지",
+    "verified": true,
+    "rcept_no": "20240326900364",
+    "source_note": "감사보고서제출 — 감사의견 의견거절(원문 확인)"
+   },
+   "assessments": [
+    {
+     "rcept_no": "20230323901845",
+     "filed_at": "2023-03-23",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20231004900633",
+     "filed_at": "2023-10-04",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20231005900057",
+     "filed_at": "2023-10-05",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20231005900684",
+     "filed_at": "2023-10-05",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20231023900362",
+     "filed_at": "2023-10-23",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20231221900772",
+     "filed_at": "2023-12-21",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240205901120",
+     "filed_at": "2024-02-05",
+     "level": "Critical",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240215000976",
+     "filed_at": "2024-02-15",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240227006923",
+     "filed_at": "2024-02-27",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240229901208",
+     "filed_at": "2024-02-29",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240229901242",
+     "filed_at": "2024-02-29",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240315900828",
+     "filed_at": "2024-03-15",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20240326900364",
+     "filed_at": "2024-03-26",
+     "level": "Critical",
+     "total_score": 6.0,
+     "combo_upgraded": false
+    }
+   ],
+   "signals": [
+    {
+     "rcept_no": "20230323901845",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "-감사의견 적정 적정 -계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "위니아 감사보고서제출 (2023-03-23)",
+        "quote": "-감사의견 적정 적정 -계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20230323901845",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2023-03-23"
+    },
+    {
+     "rcept_no": "20231004900633",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "풍문 또는 보도 관련",
+      "lifted": false,
+      "is_correction": false,
+      "title": "주권매매거래정지(풍문 또는 보도 관련)",
+      "quote": "2.정지사유 풍문 또는 보도 관련",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지(풍문 또는 보도 관련) (2023-10-04)",
+        "quote": "2.정지사유 풍문 또는 보도 관련",
+        "rcept_no": "20231004900633",
+        "location": "chunk-0 (0-293자)"
+       }
+      ]
+     },
+     "filed_at": "2023-10-04"
+    },
+    {
+     "rcept_no": "20231005900057",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "회생절차 개시신청",
+      "lifted": false,
+      "is_correction": false,
+      "title": "주권매매거래정지기간변경(회생절차 개시신청)",
+      "quote": "2.변경사유 회생절차 개시신청",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지기간변경(회생절차 개시신청) (2023-10-05)",
+        "quote": "2.변경사유 회생절차 개시신청",
+        "rcept_no": "20231005900057",
+        "location": "chunk-0 (0-537자)"
+       }
+      ]
+     },
+     "filed_at": "2023-10-05"
+    },
+    {
+     "rcept_no": "20231005900684",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "부도발생 공시에 따른 풍문사유 해소",
+      "lifted": true,
+      "is_correction": false,
+      "title": "주권매매거래정지기간변경(부도발생 공시에 따른 풍문사유 해소)",
+      "quote": "변경사유 부도발생 공시에 따른 풍문사유 해소",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지기간변경(부도발생 공시에 따른 풍문사유 해소) (2023-10-05)",
+        "quote": "변경사유 부도발생 공시에 따른 풍문사유 해소",
+        "rcept_no": "20231005900684",
+        "location": "chunk-0 (0-417자)"
+       }
+      ]
+     },
+     "filed_at": "2023-10-05"
+    },
+    {
+     "rcept_no": "20231023900362",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "회생절차개시결정",
+      "lifted": true,
+      "is_correction": false,
+      "title": "주권매매거래정지해제(회생절차개시결정)",
+      "quote": "주권매매거래정지해제 1.대상종목 (주)위니아 보통주 2.해제사유 회생절차개시결정 3.해제일시 2023-10-24 -",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지해제(회생절차개시결정) (2023-10-23)",
+        "quote": "주권매매거래정지해제 1.대상종목 (주)위니아 보통주 2.해제사유 회생절차개시결정 3.해제일시 2023-10-24 -",
+        "rcept_no": "20231023900362",
+        "location": "chunk-0 (0-108자)"
+       }
+      ]
+     },
+     "filed_at": "2023-10-23"
+    },
+    {
+     "rcept_no": "20231221900772",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "상장적격성 실질심사 대상 (사유발생)",
+      "lifted": false,
+      "is_correction": false,
+      "title": "주권매매거래정지(상장적격성 실질심사 대상 (사유발생))",
+      "quote": "2.정지사유 상장적격성 실질심사 대상 (사유발생)",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지(상장적격성 실질심사 대상 (사유발생)) (2023-12-21)",
+        "quote": "2.정지사유 상장적격성 실질심사 대상 (사유발생)",
+        "rcept_no": "20231221900772",
+        "location": "chunk-0 (0-158자)"
+       }
+      ]
+     },
+     "filed_at": "2023-12-21"
+    },
+    {
+     "rcept_no": "20240205901120",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "상장적격성 실질심사 대상 결정",
+      "lifted": false,
+      "is_correction": false,
+      "title": "주권매매거래정지기간변경              (상장적격성 실질심사 대상 결정)",
+      "quote": "3.정지기간 가.변경전 2023년 12월 22일~ 상장적격성 실질심사 대상여부에 관한 결정일까지",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 주권매매거래정지기간변경              (상장적격성 실질심사 대상 결정) (2024-02-05)",
+        "quote": "3.정지기간 가.변경전 2023년 12월 22일~ 상장적격성 실질심사 대상여부에 관한 결정일까지",
+        "rcept_no": "20240205901120",
+        "location": "chunk-0 (0-197자)"
+       }
+      ]
+     },
+     "filed_at": "2024-02-05"
+    },
+    {
+     "rcept_no": "20240215000976",
+     "signal_type": "FILING_DELAY",
+     "points": 4.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "is_correction": false,
+      "title": "감사전재무제표기한내미제출신고서(증선위미제출시)",
+      "quote": "개별(별도) 주석 작성시 필요한 종속기업 관련자료 접수 지연",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "위니아 감사전재무제표기한내미제출신고서(증선위미제출시) (2024-02-15)",
+        "quote": "개별(별도) 주석 작성시 필요한 종속기업 관련자료 접수 지연",
+        "rcept_no": "20240215000976",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2024-02-15"
+    },
+    {
+     "rcept_no": "20240227006923",
+     "signal_type": "FILING_DELAY",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "is_correction": true,
+      "title": "[기재정정]감사전재무제표기한내미제출신고서(증선위미제출시)",
+      "quote": "기한내 미제출 사유 개별(별도) 주석 작성시 필요한 종속기업 관련자료 접수 지연",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "위니아 [기재정정]감사전재무제표기한내미제출신고서(증선위미제출시) (2024-02-27)",
+        "quote": "기한내 미제출 사유 개별(별도) 주석 작성시 필요한 종속기업 관련자료 접수 지연",
+        "rcept_no": "20240227006923",
+        "location": "chunk-1 (700-1164자)"
+       }
+      ]
+     },
+     "filed_at": "2024-02-27"
+    },
+    {
+     "rcept_no": "20240229901208",
+     "signal_type": "DELISTING",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "lifted": false,
+      "is_correction": false,
+      "title": "내부결산시점관리종목지정ㆍ형식적상장폐지ㆍ상장적격성실질심사사유발생",
+      "quote": "내부결산시점 관리종목 지정ㆍ형식적 상장폐지ㆍ상장적격성 실질심사 사유 발생",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 내부결산시점관리종목지정ㆍ형식적상장폐지ㆍ상장적격성실질심사사유발생 (2024-02-29)",
+        "quote": "내부결산시점 관리종목 지정ㆍ형식적 상장폐지ㆍ상장적격성 실질심사 사유 발생",
+        "rcept_no": "20240229901208",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2024-02-29"
+    },
+    {
+     "rcept_no": "20240229901242",
+     "signal_type": "DELISTING",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "lifted": false,
+      "is_correction": false,
+      "title": "기타시장안내              (상장폐지 우려 및 관리종목 지정사유 추가 우려 안내)",
+      "quote": "동 사는 금일(2024.02.29) \"내부결산시점 관리종목 지정ㆍ형식적 상장폐지ㆍ상장적격성 실질심사 사유 발생\" 공시를 통해 최근 사업연도말 \"자본전액잠식\" 및 \"최근 3사업연도 중 2사업연도 자기자본 50%초과 법인세비용차감전계속사업손실 발생\"을 공시하였습니다.",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 기타시장안내              (상장폐지 우려 및 관리종목 지정사유 추가 우려 안내) (2024-02-29)",
+        "quote": "동 사는 금일(2024.02.29) \"내부결산시점 관리종목 지정ㆍ형식적 상장폐지ㆍ상장적격성 실질심사 사유 발생\" 공시를 통해 최근 사업연도말 \"자본전액잠식\" 및 \"최근 3사업연도 중 2사업연도 자기자본 50%초과 법인세비용차감전계속사업손실 발생\"을 공시하였습니다.",
+        "rcept_no": "20240229901242",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2024-02-29"
+    },
+    {
+     "rcept_no": "20240315900828",
+     "signal_type": "EMBEZZLEMENT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "ratio_to_equity_pct": 3.06,
+      "is_correction": false,
+      "title": "횡령ㆍ배임혐의발생",
+      "quote": "횡령 등 금액 발생금액(원) 1,000,000,000 자기자본(원) 32,726,221,230 자기자본대비(%) 3.06",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 횡령ㆍ배임혐의발생 (2024-03-15)",
+        "quote": "횡령 등 금액 발생금액(원) 1,000,000,000 자기자본(원) 32,726,221,230 자기자본대비(%) 3.06",
+        "rcept_no": "20240315900828",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2024-03-15"
+    },
+    {
+     "rcept_no": "20240326900364",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "opinion": "거절",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "- 감사의견 의견거절 적정 - 계속기업 존속불확실성 사유 해당여부 해당 미해당 - 내부회계관리제도 감사(검토)의견 비적정 등 여부 해당 미해당",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "위니아 감사보고서제출 (2024-03-26)",
+        "quote": "- 감사의견 의견거절 적정 - 계속기업 존속불확실성 사유 해당여부 해당 미해당 - 내부회계관리제도 감사(검토)의견 비적정 등 여부 해당 미해당",
+        "rcept_no": "20240326900364",
+        "location": "chunk-1 (700-1500자)"
+       }
+      ]
+     },
+     "filed_at": "2024-03-26"
+    }
+   ]
+  },
+  "048260": {
+   "name": "오스템임플란트",
+   "corp_code": "00341916",
+   "market": "KOSDAQ",
+   "base_score": 0,
+   "base_reasons": [],
+   "event": {
+    "type": "횡령·배임 / 거래정지",
+    "date": "2022-01-03",
+    "description": "자금관리 직원 횡령액 2,215억 원(자기자본 대비 108%)으로 정정 공시, 상장적격성 실질심사 사유 발생으로 거래정지",
+    "verified": true,
+    "rcept_no": "20220103900001",
+    "source_note": "횡령ㆍ배임혐의발생 최초 공시: 188,000,000,000원, 자기자본 대비 91.81%. 2022-01-10 정정 공시에서 확대(원문 확인 필요)"
+   },
+   "assessments": [
+    {
+     "rcept_no": "20210318900963",
+     "filed_at": "2021-03-18",
+     "level": "Low",
+     "total_score": 0.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20210415900328",
+     "filed_at": "2021-04-15",
+     "level": "Low",
+     "total_score": 0.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20210430001155",
+     "filed_at": "2021-04-30",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20210604000398",
+     "filed_at": "2021-06-04",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20210625000250",
+     "filed_at": "2021-06-25",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20210927000322",
+     "filed_at": "2021-09-27",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20211111900583",
+     "filed_at": "2021-11-11",
+     "level": "Low",
+     "total_score": 1.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20211119000163",
+     "filed_at": "2021-11-19",
+     "level": "Low",
+     "total_score": 1.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20211126000646",
+     "filed_at": "2021-11-26",
+     "level": "Low",
+     "total_score": 1.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20220103900001",
+     "filed_at": "2022-01-03",
+     "level": "Critical",
+     "total_score": 1.0,
+     "combo_upgraded": false
+    }
+   ],
+   "signals": [
+    {
+     "rcept_no": "20210318900963",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "-감사의견 적정 적정",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "오스템임플란트 감사보고서제출 (2021-03-18)",
+        "quote": "-감사의견 적정 적정",
+        "rcept_no": "20210318900963",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2021-03-18"
+    },
+    {
+     "rcept_no": "20210415900328",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "reason": "분할",
+      "lifted": false,
+      "is_correction": false,
+      "title": "주권매매거래정지(분할)",
+      "quote": "2.정지사유 분할",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "오스템임플란트 주권매매거래정지(분할) (2021-04-15)",
+        "quote": "2.정지사유 분할",
+        "rcept_no": "20210415900328",
+        "location": "chunk-0 (0-190자)"
+       }
+      ]
+     },
+     "filed_at": "2021-04-15"
+    },
+    {
+     "rcept_no": "20210430001155",
+     "signal_type": "PLEDGE",
+     "points": 2.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "pledge_ratio_pct": null,
+      "is_correction": false,
+      "title": "주식등의대량보유상황보고서(일반)",
+      "quote": "변경사유 최대주주 주식담보계약 추가 설정",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "오스템임플란트 주식등의대량보유상황보고서(일반) (2021-04-30)",
+        "quote": "변경사유 최대주주 주식담보계약 추가 설정",
+        "rcept_no": "20210430001155",
+        "location": "chunk-4 (2800-3600자)"
+       }
+      ]
+     },
+     "filed_at": "2021-04-30"
+    },
+    {
+     "rcept_no": "20220103900001",
+     "signal_type": "EMBEZZLEMENT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSDAQ",
+      "ratio_to_equity_pct": 91.81,
+      "is_correction": false,
+      "title": "횡령ㆍ배임혐의발생",
+      "quote": "횡령 등 금액 발생금액(원) 188,000,000,000 자기자본(원) 204,760,579,444 자기자본대비(%) 91.81",
+      "fixed_level": "Critical",
+      "evidence": [
+       {
+        "source": "오스템임플란트 횡령ㆍ배임혐의발생 (2022-01-03)",
+        "quote": "횡령 등 금액 발생금액(원) 188,000,000,000 자기자본(원) 204,760,579,444 자기자본대비(%) 91.81",
+        "rcept_no": "20220103900001",
+        "location": "chunk-0 (0-602자)"
+       }
+      ]
+     },
+     "filed_at": "2022-01-03"
+    }
+   ]
+  },
+  "079160": {
+   "name": "CJ CGV",
+   "corp_code": "00303873",
+   "market": "KOSPI",
+   "base_score": 2,
+   "base_reasons": [
+    {
+     "item": "operating_loss_2y",
+     "points": 2,
+     "reason": "영업손실 2년 연속 (2020~2021)",
+     "evidence": {
+      "source": "CJ CGV 사업보고서 2021사업연도 재무제표(CFS)",
+      "quote": "영업이익(손실) 2021: -241,445,734,017원, 2020: -388,660,290,864원",
+      "rcept_no": "20220321001182",
+      "location": "DART fnlttSinglAcntAll"
+     }
+    }
+   ],
+   "event": {
+    "type": "대규모 유상증자",
+    "date": "2023-06-20",
+    "description": "약 1조 원 규모 유상증자 추진",
+    "verified": true,
+    "rcept_no": "20230620000238",
+    "source_note": "유상증자결정: 신주 74,700,000주 / 증자 전 47,728,537주 = 약 156.5%"
+   },
+   "assessments": [
+    {
+     "rcept_no": "20220616000004",
+     "filed_at": "2022-06-16",
+     "level": "Medium",
+     "total_score": 5.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20220708000007",
+     "filed_at": "2022-07-08",
+     "level": "Medium",
+     "total_score": 5.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20220708000429",
+     "filed_at": "2022-07-08",
+     "level": "Medium",
+     "total_score": 5.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20230320800863",
+     "filed_at": "2023-03-20",
+     "level": "Low",
+     "total_score": 3.5,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20230620000238",
+     "filed_at": "2023-06-20",
+     "level": "Medium",
+     "total_score": 5.0,
+     "combo_upgraded": false
+    }
+   ],
+   "signals": [
+    {
+     "rcept_no": "20220616000004",
+     "signal_type": "CB_BW",
+     "points": 3.0,
+     "detail": {
+      "market": "KOSPI",
+      "refixing": true,
+      "is_correction": true,
+      "title": "[기재정정]주요사항보고서(전환사채권발행결정)",
+      "quote": "전환가액 조정에 관한 사항 (1) 사채권자가 전환청구를 하기 전에 발행회사가 당시 시가(\"증권의 발행 및 공시등에 관한 규정\" 제5-18조에서 정하는 기준주가)를 하회하는 발행가액으로",
+      "extras": [
+       "리픽싱 조항"
+      ],
+      "evidence": [
+       {
+        "source": "CJ CGV [기재정정]주요사항보고서(전환사채권발행결정) (2022-06-16)",
+        "quote": "전환가액 조정에 관한 사항 (1) 사채권자가 전환청구를 하기 전에 발행회사가 당시 시가(\"증권의 발행 및 공시등에 관한 규정\" 제5-18조에서 정하는 기준주가)를 하회하는 발행가액으로",
+        "rcept_no": "20220616000004",
+        "location": "chunk-4 (2800-3600자)"
+       }
+      ]
+     },
+     "filed_at": "2022-06-16"
+    },
+    {
+     "rcept_no": "20220708000007",
+     "signal_type": "CB_BW",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "refixing": true,
+      "is_correction": true,
+      "title": "[기재정정]주요사항보고서(전환사채권발행결정)",
+      "quote": "전환가액 조정에 관한 사항",
+      "extras": [],
+      "evidence": [
+       {
+        "source": "CJ CGV [기재정정]주요사항보고서(전환사채권발행결정) (2022-07-08)",
+        "quote": "전환가액 조정에 관한 사항",
+        "rcept_no": "20220708000007",
+        "location": "chunk-4 (2800-3600자)"
+       }
+      ]
+     },
+     "filed_at": "2022-07-08"
+    },
+    {
+     "rcept_no": "20230320800863",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "- 감사의견 적정 적정",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "CJ CGV 감사보고서제출 (2023-03-20)",
+        "quote": "- 감사의견 적정 적정",
+        "rcept_no": "20230320800863",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2023-03-20"
+    },
+    {
+     "rcept_no": "20230620000238",
+     "signal_type": "RIGHTS_OFFERING",
+     "points": 3.0,
+     "detail": {
+      "market": "KOSPI",
+      "ratio_pct": 156.39592407419937,
+      "third_party": false,
+      "is_correction": false,
+      "title": "주요사항보고서(유상증자결정)",
+      "quote": "1. 신주의 종류와 수 보통주식 (주) 74,700,000",
+      "extras": [
+       "50% 이상 또는 제3자배정"
+      ],
+      "evidence": [
+       {
+        "source": "CJ CGV 주요사항보고서(유상증자결정) (2023-06-20)",
+        "quote": "1. 신주의 종류와 수 보통주식 (주) 74,700,000",
+        "rcept_no": "20230620000238",
+        "location": "chunk-0 (0-800자)"
+       },
+       {
+        "source": "CJ CGV 주요사항보고서(유상증자결정) (2023-06-20)",
+        "quote": "3. 증자전 발행주식총수 (주) 보통주식 (주) 47,728,537",
+        "rcept_no": "20230620000238",
+        "location": "chunk-0 (0-800자)"
+       },
+       {
+        "source": "CJ CGV 주요사항보고서(유상증자결정) (2023-06-20)",
+        "quote": "전 발행주식총수 47,728,537주는 이사회 결의 전일(2023년 06월 19일) 현재",
+        "rcept_no": "20230620000238",
+        "location": "chunk-1 (700-1500자)"
+       },
+       {
+        "source": "CJ CGV 주요사항보고서(유상증자결정) (2023-06-20)",
+        "quote": "주주배정후 실권주 일반공모 유상증자와는 별도로, 당사의 최대주주인 CJ㈜를 배정대상자로 하는 제3자배정 유상증자를 계획하고 있습니다.",
+        "rcept_no": "20230620000238",
+        "location": "chunk-10 (7000-7800자)"
+       }
+      ]
+     },
+     "filed_at": "2023-06-20"
+    }
+   ]
+  },
+  "034730": {
+   "name": "SK",
+   "corp_code": "00181712",
+   "market": "KOSPI",
+   "base_score": 2,
+   "base_reasons": [
+    {
+     "reason": "영업이익 3년 연속 감소 (4.79조 → 2.40조 → 1.82조 원)",
+     "item": "operating_profit_decline_3y",
+     "points": 1,
+     "evidence": {
+      "source": "SK 사업보고서 2025사업연도 재무제표(CFS)",
+      "quote": "영업이익(손실) 2025: 1,818,476,000,000원, 2024: 2,396,002,000,000원, 2023: 4,788,536,000,000원",
+      "rcept_no": "20260318001157",
+      "location": "DART fnlttSinglAcntAll"
+     }
+    },
+    {
+     "reason": "순이익 중 일회성 이익 약 34% (중단영업 등 약 1.2조 원 / 3.56조 원)",
+     "item": "one_off_profit_30pct",
+     "points": 1,
+     "evidence": {
+      "source": "SK 사업보고서 2025사업연도 재무제표(CFS)",
+      "quote": "중단영업이익 1,199,423,000,000원 ÷ 당기순이익 3,555,246,000,000원 = 33.7%",
+      "rcept_no": "20260318001157",
+      "location": "DART fnlttSinglAcntAll"
+     }
+    }
+   ],
+   "event": null,
+   "assessments": [
+    {
+     "rcept_no": "20250408002939",
+     "filed_at": "2025-04-08",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20250425800612",
+     "filed_at": "2025-04-25",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20250730800381",
+     "filed_at": "2025-07-30",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20251022800441",
+     "filed_at": "2025-10-22",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260309801533",
+     "filed_at": "2026-03-09",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260309801568",
+     "filed_at": "2026-03-09",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260309801589",
+     "filed_at": "2026-03-09",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260310801471",
+     "filed_at": "2026-03-10",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260310801519",
+     "filed_at": "2026-03-10",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    },
+    {
+     "rcept_no": "20260311801996",
+     "filed_at": "2026-03-11",
+     "level": "Low",
+     "total_score": 2.0,
+     "combo_upgraded": false
+    }
+   ],
+   "signals": [
+    {
+     "rcept_no": "20260309801533",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출(자회사의 주요경영사항)",
+      "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 감사보고서제출(자회사의 주요경영사항) (2026-03-09)",
+        "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20260309801533",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-09"
+    },
+    {
+     "rcept_no": "20260309801568",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출(자회사의 주요경영사항)",
+      "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 감사보고서제출(자회사의 주요경영사항) (2026-03-09)",
+        "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20260309801568",
+        "location": "chunk-0 (0-800자)"
+       },
+       {
+        "source": "SK 감사보고서제출(자회사의 주요경영사항) (2026-03-09)",
+        "quote": "나. 감사의견 등 - 감사의견 적정 적정",
+        "rcept_no": "20260309801568",
+        "location": "chunk-1 (700-1500자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-09"
+    },
+    {
+     "rcept_no": "20260309801589",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출(자회사의 주요경영사항)",
+      "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 감사보고서제출(자회사의 주요경영사항) (2026-03-09)",
+        "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20260309801589",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-09"
+    },
+    {
+     "rcept_no": "20260310801471",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출(자회사의 주요경영사항)",
+      "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 감사보고서제출(자회사의 주요경영사항) (2026-03-10)",
+        "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20260310801471",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-10"
+    },
+    {
+     "rcept_no": "20260310801519",
+     "signal_type": "TRADING_HALT",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "reason": "중요내용 공시관련 매매거래 정지",
+      "lifted": true,
+      "is_correction": false,
+      "title": "매매거래정지및정지해제(중요내용공시)",
+      "quote": "2. 매매거래정지 유형 중요내용 공시관련 매매거래 정지",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 매매거래정지및정지해제(중요내용공시) (2026-03-10)",
+        "quote": "2. 매매거래정지 유형 중요내용 공시관련 매매거래 정지",
+        "rcept_no": "20260310801519",
+        "location": "chunk-0 (0-401자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-10"
+    },
+    {
+     "rcept_no": "20260311801996",
+     "signal_type": "AUDIT_OPINION",
+     "points": 0.0,
+     "detail": {
+      "market": "KOSPI",
+      "opinion": "적정",
+      "is_correction": false,
+      "title": "감사보고서제출",
+      "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+      "fixed_level": null,
+      "evidence": [
+       {
+        "source": "SK 감사보고서제출 (2026-03-11)",
+        "quote": "가. 감사의견 적정 적정 - 계속기업 존속불확실성 사유 해당여부 미해당 미해당",
+        "rcept_no": "20260311801996",
+        "location": "chunk-0 (0-800자)"
+       }
+      ]
+     },
+     "filed_at": "2026-03-11"
+    }
+   ]
+  }
+ }
+}

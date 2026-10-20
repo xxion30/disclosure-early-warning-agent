@@ -194,6 +194,7 @@ uv run python scripts/compute_base_score.py      # 기본 점수 계산 결과 �
 ## 평가
 ```bash
 uv run python eval/run_eval.py            # eval/results/*.md 에 전/후 표 저장
+uv run python eval/capture_signals.py      # (선택) combo·rag_k·model 실험의 입력 신호를 진짜 모델로 다시 저장 (수 분, 수백 원)
 uv run python eval/run_eval.py --only guardrail
 ```
 `guardrail`, `context`는 지금 돈다. `combo`, `rag_k`, `model`은 `EXPERIMENTS`에 함수를 채운다 (`combo`는 `RULES_PATH`로 `combo.enabled: false`인 규칙표 복사본을 쓰면 된다).
