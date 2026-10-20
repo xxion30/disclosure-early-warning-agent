@@ -181,6 +181,8 @@ async def get_drafts(
             "draft": text,  # {고객명} 자리표시 그대로 — 수정할 때 이 형태로 돌려보낸다
             "preview": fill_name(text, cust.name),  # 화면 표시용
             "decision": decision_status(view, cid),
+            # 가드레일 재작성 3회 실패 → 초안이 비워지고 PB가 직접 써야 한다 (수정 후 승인만 가능)
+            "manual": cid in view.get("manual_drafts", []),
             "edited_draft": decided.get("edited_draft"),
             "reject_reason": decided.get("reject_reason"),
         })
