@@ -23,7 +23,7 @@ from agent.rules import load_classifier
 from harness import context as ctx
 from harness import guardrails, masking, recovery
 from harness.tracing import write_audit_log
-from mcp_servers.business.rules.loader import DEFAULT_PATH
+from mcp_servers.business.rules.loader import DEFAULT_PATH, load_rules
 from shared.config import get_settings
 from shared.db import get_session
 from shared.models import AuditLog, Customer, RiskAssessment
@@ -239,6 +239,28 @@ def build_model(harness, settings):
     return StructuredLLM(primary, fallback, harness, settings.FAKE_LLM_ERROR)
 
 
+class KnownSignalsModel:
+    """extract_facts 결과에서 규칙표에 없는 signal_type을 걸러낸다 (AI가 신호 이름을 지어낼 수 없게)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    async def generate(self, prompt, schema, payload):
+        result = await self.inner.generate(prompt, schema, payload)
+        if prompt != "extract_facts":
+            return result
+        rules = load_rules()
+        allowed = set(rules["group_a"]) | set(rules["group_b"])
+        kept = [f for f in result.facts if str(f.signal_type).strip().upper() in allowed]
+        if len(kept) != len(result.facts):
+            log.info("규칙표에 없는 signal_type 제외: %s",
+                     [f.signal_type for f in result.facts if f not in kept])
+        return schema.model_validate({"facts": [f.model_dump() for f in kept]})
+
+
 # ------------------------------------------------------------------ 조립
 async def build_dependencies(settings=None, *, tools=None, model=None, harness=None) -> Dependencies:
     """tools·model·harness를 비우면 운영 구성(MCP 서버 2개, Anthropic/OpenAI 모델, D의 Harness)을 만든다."""
@@ -252,10 +274,11 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
         model = build_model(harness, settings)
     return Dependencies(
         tools=tools,
-        model=model,
+        model=KnownSignalsModel(model),
         harness=harness,
         persistence=AssessmentStore(tools, audit, harness, upsert_confirmed=True),
         classify=load_classifier(DEFAULT_PATH),
         signal_input=signal_input,
         create_task=ToolTaskCreator(tools, harness, authorize_task, idempotency_confirmed=True),
+        quiet_types=frozenset(load_rules().get("no_signal_ok_types", [])),
     )

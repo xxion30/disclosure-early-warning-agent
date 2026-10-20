@@ -302,3 +302,76 @@ def test_openai_models_use_function_calling_for_structured_output():
     for schema in (FactsOutput, DraftsOutput):
         bound = m.with_structured_output(schema)
         assert "tool" in str(bound.first.kwargs).lower() or "function" in str(bound.first.kwargs).lower()
+
+
+# ---------------------------------------------------------------- 신호 없는 공시
+def test_classification_skips_periodic_reports_and_keeps_ownership():
+    from agent.rules import load_classifier
+    from mcp_servers.business.rules.loader import DEFAULT_PATH
+
+    classify = load_classifier(DEFAULT_PATH)
+    assert classify("분기보고서 (2024.09)") is None and classify("[기재정정]사업보고서 (2023.12)") is None
+    assert classify("주식등의대량보유상황보고서(일반)") == "OWNERSHIP"
+
+
+def _ownership_disclosure(world):
+    from mcp_servers.rag import ingest as ing
+
+    path = next((ing.RAG_DIR / "companies").glob("001570_*/20240814_OWNERSHIP_004337.md"))
+    col = store.get_collection(store.DISCLOSURES, create=True)
+    _, recs, _ = ing.build_records(path, store.DISCLOSURES)
+    col.upsert(ids=[r["id"] for r in recs], documents=[r["text"] for r in recs],
+               metadatas=[r["meta"] for r in recs], embeddings=embed([r["text"] for r in recs]))
+    return recs[0]["meta"]["rcept_no"]
+
+
+class EmptyFactsModel(ScriptedModel):
+    async def generate(self, prompt, schema, payload):
+        if prompt == "extract_facts":
+            return schema.model_validate({"facts": []})
+        return await super().generate(prompt, schema, payload)
+
+
+def test_ownership_without_signal_ends_quietly(world):
+    rcept = _ownership_disclosure(world)
+
+    async def run():
+        deps = await build_dependencies(tools=DirectTools(), model=EmptyFactsModel())
+        async with open_runtime(deps, str(world)) as rt:
+            return await rt.start(rcept)
+
+    st = asyncio.run(run())
+    assert st["status"] == "DONE" and st.get("no_signal") is True and not st.get("error")
+    with db_module.get_session() as s:
+        assert s.scalars(select(RiskAssessment)).first() is None  # 평가·경보를 만들지 않는다
+
+
+def test_empty_facts_for_other_types_still_need_manual_check(world):
+    async def run():
+        deps = await build_dependencies(tools=DirectTools(), model=EmptyFactsModel())
+        async with open_runtime(deps, str(world)) as rt:
+            return await rt.start(RCEPT)  # 감사보고서는 사실이 없으면 수동 확인
+
+    st = asyncio.run(run())
+    assert st["status"] == "MANUAL_CHECK" and not st.get("no_signal")
+
+
+def test_unknown_signal_types_are_dropped_before_scoring(world):
+    """AI가 공시 유형 이름(OWNERSHIP)을 signal_type으로 써도 규칙표 오류가 아니라 '신호 없음'이 된다."""
+    rcept = _ownership_disclosure(world)
+
+    class WrongTypeModel(ScriptedModel):
+        async def generate(self, prompt, schema, payload):
+            if prompt == "extract_facts":
+                ch = payload["chunks"][0]
+                ev = {"source": ch["source"], "quote": ch["text"][:20], "rcept_no": ch["rcept_no"], "location": ch["location"]}
+                return schema.model_validate({"facts": [{"signal_type": "OWNERSHIP", "values": {}, "evidence": [ev]}]})
+            return await super().generate(prompt, schema, payload)
+
+    async def run():
+        deps = await build_dependencies(tools=DirectTools(), model=WrongTypeModel())
+        async with open_runtime(deps, str(world)) as rt:
+            return await rt.start(rcept)
+
+    st = asyncio.run(run())
+    assert st["status"] == "DONE" and st.get("no_signal") is True

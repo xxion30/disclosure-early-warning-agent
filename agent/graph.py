@@ -70,7 +70,8 @@ def build_graph(deps, checkpointer):
     graph.add_edge(START, "receive")
     edge("receive", "classify")
     branch("classify", lambda s: "extract_facts" if s["relevant"] else "completed", ["extract_facts", "completed"])
-    branch("extract_facts", lambda s: "score_risk" if s.get("extracted_facts") else "extract_facts", ["score_risk", "extract_facts"])
+    branch("extract_facts", lambda s: "completed" if s.get("no_signal") else (
+        "score_risk" if s.get("extracted_facts") else "extract_facts"), ["score_risk", "extract_facts", "completed"])
     edge("score_risk", "explain_risk")
     branch("explain_risk", route_by_level, ["find_customers", "save_and_summarize"])
     edge("save_and_summarize", "completed")

@@ -25,7 +25,8 @@ class Fact(StrictModel):
 
 
 class FactsOutput(StrictModel):
-    facts: list[Fact] = Field(min_length=1)
+    # 비어 있을 수 있다. 신호가 없는 것이 정상인 유형(Dependencies.quiet_types)만 조용히 끝나고, 그 밖의 유형은 재시도·수동 확인이다.
+    facts: list[Fact]
 
 
 class ExplanationItem(StrictModel):
@@ -105,6 +106,7 @@ class AgentState(TypedDict, total=False):
     customer_tasks: dict[str, int]
     rewrite_customers: list[str]
     relevant: bool
+    no_signal: bool
     last_node: str
     failure_recording_error: str
 
