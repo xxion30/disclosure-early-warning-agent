@@ -4,8 +4,7 @@
   A·B가 맡을 DB 쓰기(save_assessment, create_contact_task)도 가짜로 대신해서 화면을 끝까지 만들 수 있게 한다.
 - RealGraphAdapter: A의 agent.AgentRuntime으로 실제 실행한다 (agent/INTEGRATION.md).
 
-`GRAPH_ADAPTER=fake|real` 환경 변수로 고른다 (기본 fake).
-TODO(B): shared/config.py Settings에 GRAPH_ADAPTER, FAKE_GRAPH_DELAY 추가 요청. 그 전까지 os.environ에서 읽는다.
+`.env`의 `GRAPH_ADAPTER=fake|real`로 고른다 (기본 fake, shared.config).
 
 이벤트는 모두 {"event": <이름>, "data": {...}} 형태이고 이름은 CLAUDE.md 8장 SSE 이벤트를 따른다.
 
@@ -115,7 +114,7 @@ class FakeGraphAdapter:
     """agent/ 없이 /runs, SSE, 결정 API, 화면을 끝까지 만들어 보기 위한 가짜. 상태는 메모리에만 둔다."""
 
     def __init__(self, delay: float | None = None, session_factory: SessionFactory = get_session):
-        self.delay = float(os.getenv("FAKE_GRAPH_DELAY", "0.4")) if delay is None else delay
+        self.delay = get_settings().FAKE_GRAPH_DELAY if delay is None else delay
         self.session_factory = session_factory
         self._states: dict[str, dict] = {}
 
@@ -489,7 +488,7 @@ _adapter: GraphAdapter | None = None
 def get_graph_adapter() -> GraphAdapter:
     global _adapter
     if _adapter is None:
-        kind = os.getenv("GRAPH_ADAPTER", "fake").lower()
+        kind = get_settings().GRAPH_ADAPTER.strip().lower()
         _adapter = RealGraphAdapter() if kind == "real" else FakeGraphAdapter()
     return _adapter
 
