@@ -117,13 +117,22 @@ def list_disclosures(key: str, corp_code: str, start: date, end: date) -> list[d
     return rows
 
 
+def _decode(b: bytes) -> str:
+    """DART 원문은 UTF-8이 대부분이지만 일부(옛 공시)는 CP949다."""
+    try:
+        return b.decode("utf-8")
+    except UnicodeDecodeError:
+        return b.decode("cp949", errors="ignore")
+
+
 def fetch_text(key: str, rcept_no: str) -> str:
     r = requests.get(f"{BASE}/document.xml", params={"crtfc_key": key, "rcept_no": rcept_no}, timeout=60)
     try:
         with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-            raw = "\n".join(z.read(n).decode("utf-8", errors="ignore") for n in z.namelist())
+            raw = "\n".join(_decode(z.read(n)) for n in z.namelist())
     except zipfile.BadZipFile:
         return ""
+    raw = re.sub(r"<(style|script)\b.*?</\1>", " ", raw, flags=re.S | re.I)  # CSS·스크립트 제거
     text = re.sub(r"<[^>]+>", " ", raw)
     return re.sub(r"\s+", " ", text).strip()
 
