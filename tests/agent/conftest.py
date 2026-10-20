@@ -60,7 +60,13 @@ class FakeModel:
         if self.failure:
             raise self.failure
         if prompt == "select_tools":
-            value = {"requests": self.tool_requests}
+            rounds = getattr(self, "tool_rounds", None)  # {purpose: [1번째 호출의 요청, 2번째 호출의 요청, ...]}
+            if rounds is None:
+                value = {"requests": self.tool_requests}
+            else:
+                n = sum(1 for c, p in self.calls if c == "select_tools" and p["purpose"] == payload["purpose"])
+                seq = rounds.get(payload["purpose"], [])
+                value = {"requests": seq[n - 1] if n - 1 < len(seq) else []}
         elif prompt == "extract_facts":
             evidence = {**EVIDENCE, "quote": "지어낸 인용"} if self.bad_evidence else EVIDENCE
             value = {"facts": [{"signal_type": "TEST", "values": {"opinion": "거절"}, "evidence": [evidence]}]}

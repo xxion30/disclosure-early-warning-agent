@@ -178,7 +178,7 @@ flowchart TD
 | 반복·자기 교정 | 근거 검증 실패 시 사실 추출 재시도, 금지 표현이 있으면 안내문 재작성(각 최대 2회) | `extract_facts`, `draft_messages`↔`guardrail_check` |
 | 사람 개입(HITL) | 변경 도구 앞 `interrupt()`, PB별 결정 묶음을 누적 | `pb_approval`, `finalize` |
 | 메모리·재개 | 체크포인터에 상태 저장, 재시작 후 같은 thread로 재개 | `agent/runtime.py`(`AsyncSqliteSaver`) |
-| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다(최대 2건, 현재 공시로 고정, 오류는 관찰로만 남김) | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
+| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다. 결과를 본 뒤 한 번 더 고를 수 있고(최대 2회전, 회전당 2건, 같은 요청 반복 시 종료), 현재 공시로 고정하며 오류는 관찰로만 남긴다 | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
 | 안전한 실패 | 근거를 못 찾거나 한도를 넘으면 지어내지 않고 `MANUAL_CHECK` | `agent/nodes/handle_failure.py` |
 
 ## 6. 배포 뷰 (실행 위치)
@@ -216,7 +216,7 @@ flowchart TD
 | --- | --- | --- |
 | Instructions | `agent/prompts/*.md` (맨 위 `version: vN`, trace 메타데이터에 버전 기록) | ✓ |
 | Tools | MCP Client로 도구를 가져오고 허용 목록으로 제한. 모델 입력의 긴 문자열은 4,000자로 자름 | ✓ (도구 오류는 모델이 아니라 코드가 받아 `MANUAL_CHECK`로 처리) |
-| Context | 입력 6,000토큰 예산 안으로 줄임(`prepare_input`), RAG는 상위 5개 조각 | △ 단일 호출 구조라 "오래된 대화 요약"은 쓰지 않음 |
+| Context | 입력 6,000토큰 예산 안으로 줄임(`prepare_input`), RAG는 상위 5개 조각, 도구 조회 이력이 예산(2,000토큰)을 넘으면 오래된 결과를 `trim_messages`로 요약 | ✓ |
 | State·Memory | `AsyncSqliteSaver`, `thread_id = rcept_no`, 승인 대기 후 그대로 재개 | ✓ |
 | Agent Loop | 모델 호출 최대 8회·작업 120초·같은 입력의 같은 도구 3회까지, 넘으면 `MANUAL_CHECK` | ✓ (한도 값은 `harness/loop_limits.py`가 단일 출처이고 `agent/ports.py`·`agent/execution.py`가 이를 가져와 시행한다. 모듈의 `LoopGuard`/`count_tool_call`은 단위 테스트용으로 남아 있다) |
 | Guardrails | 변경 도구 전 `interrupt()`, 고객 이름·연락처 마스킹, 안내문 금지 표현 검사와 재작성 | ✓ |
@@ -317,8 +317,8 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 
 ## 12. 알려진 한계와 다음 단계
 
-- **도구 선택**: 모델이 고르는 도구는 읽기 전용 2개뿐이고(`select_tools` 단계, 사실 추출 첫 시도와 설명 생성에서 각 1회), 변경 도구는 스키마에 없어 고를 수 없다. 모델 호출 8회 한도를 함께 쓰므로 재시도가 겹치면 `MANUAL_CHECK`로 끝난다. 모델이 도구를 여러 번 되풀이하는 자유 루프는 두지 않았다.
-- **Harness 연결**: `harness/context.py`의 대화 요약(`trim_messages`)은 현재 흐름에 연결되어 있지 않다(호출이 단일 구조라 쓸 일이 없고, 입력은 6,000토큰 예산으로 자른다).
+- **도구 선택**: 모델이 고르는 도구는 읽기 전용 2개뿐이고 변경 도구는 스키마에 없어 고를 수 없다. 조회는 노드(사실 추출, 설명 생성)마다 최대 2회전이며 모델 호출 8회 한도를 함께 쓰므로, 재시도가 겹치면 `MANUAL_CHECK`로 끝난다. 모델이 도구를 무한히 부르는 자유 루프는 일부러 두지 않았다(업무가 정해진 순서의 규칙 계산이라 루프보다 통제가 우선).
+- **Context 요약**: 요약은 모델 호출 없이 코드로 한 줄씩 줄이는 방식이다(호출 횟수를 쓰지 않으려고). 문서 전체를 LLM으로 요약하지는 않는다.
 - **평가**: `eval/run_eval.py`로 가드레일·자르기·조합 규칙·RAG k·모델 비교 결과표를 `eval/results/`에 만들었다. 조합 규칙은 실제 공시에서 한 번도 발동하지 않아 켬/끔 차이가 없었고(효과를 주장하지 않음), 모델 비교는 같은 회사의 두 모델(gpt-5.4-mini/nano)이다. 해석은 각 표 아래에 적었다.
 - **큐**: 실제 RabbitMQ(3.13)로 확인했다. 지연 재시도 테스트가 통과했고, 배치 접수 직후 API를 종료해도 메시지 5건이 브로커에 남았다가 재시작 후 소비되어 큐가 0이 됐다. 이 확인에서 발견한 문제(실행 중 프로세스가 죽으면 같은 공시가 다시 와도 이어서 실행되지 않고 조용히 끝남)는 `AgentRuntime.start`가 마지막 체크포인트부터 이어 실행하도록 고쳤다. 메시지 유실 방지는 ack 시점에 의존하며, 가장 바쁜 시간대의 처리량은 측정하지 않았다.
 - **운영 환경**: 단일 노트북, SQLite, HTTP 구성이다. 운영에는 DB 분리, HTTPS, 서비스 분리(§9)가 필요하다.
