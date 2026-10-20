@@ -248,7 +248,7 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 | 하위 특성 | 설계 결정 | 구현 위치 | 검증 증거 |
 | --- | --- | --- | --- |
 | 시간 반응성 | 느린 LLM 경로는 202 후 SSE로 비동기 처리, 조회 API는 DB만 읽음 | `api/routes/runs.py` | 동기 API 테스트, SSE 이벤트 순서 테스트 |
-| 자원 효율 | 입력 6,000토큰 예산, RAG 상위 5개 조각만, 공시 원문을 통째로 넣지 않음, 작은 모델(`gpt-5.4-mini`) | `agent/assembly.py`(`prepare_input`) | 금양 사건 공시 1건: LLM 3회, 약 1만 토큰, 약 0.015달러 (LangSmith 기록) |
+| 자원 효율 | 입력 6,000토큰 예산, RAG 상위 5개 조각만, 공시 원문을 통째로 넣지 않음, 작은 모델(`gpt-5.4-mini`) | `agent/assembly.py`(`prepare_input`) | 금양 사건 공시 1건: LLM 5회(도구 선택 2회 포함), 약 0.023달러 (LangSmith 기록) |
 | 용량 | 큐로 일괄 처리(가산점) | `api/worker/` | 큐 단위 테스트(실제 RabbitMQ 연동은 미확인) |
 
 ### 10-3. 호환성 (Compatibility)
