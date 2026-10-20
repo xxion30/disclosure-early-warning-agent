@@ -1,0 +1,122 @@
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text: #1c2430;
+  --muted: #6b7380;
+  --accent: #1f4fd1;
+  --accent-soft: #e8eefc;
+  --ok: #18794e;
+  --ok-soft: #e3f4ea;
+  --warn: #9a5b00;
+  --warn-soft: #fff1d6;
+  --bad: #b42318;
+  --bad-soft: #fde7e5;
+  --info: #1f4fd1;
+  --info-soft: #e8eefc;
+  --radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+small, .muted { color: var(--muted); }
+
+/* 상단 바 */
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  padding: 0 24px; height: 52px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-weight: 700; }
+.topbar nav { display: flex; gap: 4px; flex: 1; }
+.topbar nav a { padding: 6px 12px; border-radius: 6px; color: var(--muted); }
+.topbar nav a.router-link-active { background: var(--accent-soft); color: var(--accent); font-weight: 600; text-decoration: none; }
+.who { display: flex; align-items: center; gap: 12px; }
+
+.container { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+
+/* 카드·표 */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #fafbfc; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding: 32px 0; }
+
+/* 폼 */
+input, select, textarea {
+  font: inherit; color: inherit;
+  border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--surface);
+}
+textarea { width: 100%; resize: vertical; min-height: 84px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+
+button {
+  font: inherit; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 6px; padding: 7px 14px; font-weight: 600;
+}
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--text); border-color: var(--border); font-weight: 500; }
+button.danger { background: var(--bad); border-color: var(--bad); }
+button.small { padding: 4px 10px; font-size: 13px; }
+
+/* 탭 */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); border-radius: 0; padding: 8px 14px; }
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* 배지 */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.level-critical { background: var(--bad); color: #fff; }
+.level-high { background: var(--bad-soft); color: var(--bad); }
+.level-medium { background: var(--warn-soft); color: var(--warn); }
+.level-low, .level-none { background: #eef0f3; color: var(--muted); }
+.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.tone-warn { background: var(--warn-soft); color: var(--warn); }
+.tone-bad { background: var(--bad-soft); color: var(--bad); }
+.tone-info { background: var(--info-soft); color: var(--info); }
+.tone-muted { background: #eef0f3; color: var(--muted); }
+.prio { font-weight: 700; }
+.prio-P1 { color: var(--bad); }
+.prio-P2 { color: var(--warn); }
+.prio-P3 { color: var(--muted); }
+
+/* 진행 단계 */
+.progress { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 4px; padding: 0; margin: 0; }
+.progress li { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #eef0f3; color: var(--muted); font-size: 12px; }
+.progress .dot { width: 8px; height: 8px; border-radius: 50%; background: #c5cad3; }
+.progress .step-done { background: var(--ok-soft); color: var(--ok); }
+.progress .step-done .dot { background: var(--ok); }
+.progress .step-running { background: var(--info-soft); color: var(--info); }
+.progress .step-running .dot { background: var(--info); animation: pulse 1s infinite; }
+.progress .step-waiting { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.progress .step-waiting .dot { background: var(--warn); }
+.progress .step-failed { background: var(--bad-soft); color: var(--bad); }
+.progress .step-failed .dot { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* 메시지 */
+.error { color: var(--bad); background: var(--bad-soft); padding: 8px 12px; border-radius: 6px; margin: 8px 0 0; }
+.notice { color: var(--warn); background: var(--warn-soft); padding: 8px 12px; border-radius: 6px; margin: 8px 0 0; }
+.success { color: var(--ok); background: var(--ok-soft); padding: 8px 12px; border-radius: 6px; margin: 8px 0 0; }
+blockquote { margin: 6px 0; padding: 6px 12px; border-left: 3px solid var(--accent); background: #f7f9fe; color: #33405a; }
+.message { white-space: pre-wrap; background: #fafbfc; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
