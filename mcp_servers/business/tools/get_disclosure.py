@@ -30,6 +30,8 @@ def get_disclosure(rcept_no: str) -> dict:
                 "filed_at": d.filed_at,
                 "url": d.url,
                 "body_text": d.body_text,
+                "text_purged": d.purged_at is not None,  # 운영: 처리 후 본문을 비웠다 (content_hash와 DART 주소로 다시 받을 수 있다)
+                "content_hash": d.content_hash,
                 "processed": d.processed,
             }
         )

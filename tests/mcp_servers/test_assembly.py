@@ -550,3 +550,65 @@ def test_unsafe_draft_injector_only_touches_first_drafts():
     assert guardrails.find_forbidden(first.drafts["C001"])
     again = asyncio.run(m.generate("rewrite_message", DraftsOutput, {}))
     assert not guardrails.find_forbidden(again.drafts["C001"])
+
+
+class RecordingTools:
+    """호출을 기록하는 가짜 도구 (정리 단계 확인용)."""
+
+    def __init__(self, fail=None):
+        self.calls, self.fail = [], fail
+
+    async def call(self, name, arguments):
+        self.calls.append((name, arguments))
+        if name == self.fail:
+            return ToolResponse.model_validate({"ok": False, "error": {"code": "DB_ERROR", "message": "x"}})
+        data = {"save_assessment": {"assessment_id": 7}, "release_disclosure_index": {"released_chunks": 5, "content_sha256": "abc"},
+                "purge_disclosure_text": {"purged": True}}[name]
+        return ToolResponse.model_validate({"ok": True, "data": data})
+
+
+class PassHarness:
+    async def recover_tool(self, operation):
+        return await operation()
+
+
+def _save(status, mode, tools):
+    from agent.assembly import AssessmentStore
+    from agent.execution import Execution, current_execution
+
+    async def run():
+        token = current_execution.set(Execution(120, 8))
+        try:
+            store_ = AssessmentStore(tools, None, PassHarness(), upsert_confirmed=True)
+            return await store_.save({"disclosure": {"corp_code": "C", "rcept_no": RCEPT}}, status)
+        finally:
+            current_execution.reset(token)
+
+    import os
+    os.environ["RAG_INDEX_MODE"] = mode
+    get_settings.cache_clear()
+    try:
+        return asyncio.run(run())
+    finally:
+        os.environ.pop("RAG_INDEX_MODE", None)
+        get_settings.cache_clear()
+
+
+def test_ephemeral_mode_releases_index_and_body_after_the_alert_is_saved():
+    tools = RecordingTools()
+    assert _save("WAITING_APPROVAL", "ephemeral", tools) == 7
+    assert [n for n, _ in tools.calls] == ["save_assessment", "release_disclosure_index", "purge_disclosure_text"]
+    assert tools.calls[2][1] == {"rcept_no": RCEPT, "content_hash": "abc"}  # 해시는 색인 쪽이 알려 준 값을 넘긴다
+
+
+def test_failed_or_persistent_runs_keep_the_text():
+    for status, mode in (("MANUAL_CHECK", "ephemeral"), ("FAILED", "ephemeral"), ("WAITING_APPROVAL", "persistent")):
+        tools = RecordingTools()
+        _save(status, mode, tools)
+        assert [n for n, _ in tools.calls] == ["save_assessment"], (status, mode)
+
+
+def test_cleanup_failure_does_not_undo_the_saved_alert():
+    tools = RecordingTools(fail="release_disclosure_index")
+    assert _save("DONE", "ephemeral", tools) == 7           # 저장은 성공으로 끝난다
+    assert [n for n, _ in tools.calls] == ["save_assessment", "release_disclosure_index"]

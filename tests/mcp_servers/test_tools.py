@@ -169,7 +169,7 @@ def test_create_task_blocked_unless_waiting_or_done():
     assert_err(create_contact_task(aid, "C001", "P1", "x"), "INVALID_INPUT")
 
 
-def test_server_registers_all_ten_tools():
+def test_server_registers_all_eleven_tools():
     from fastmcp import Client
 
     from mcp_servers.business.server import mcp
@@ -184,7 +184,7 @@ def test_server_registers_all_ten_tools():
     assert names == {
         "list_new_disclosures", "get_disclosure", "get_company_profile", "get_signal_history",
         "calculate_risk_score", "get_holders", "compute_customer_impact",
-        "save_assessment", "create_contact_task", "update_task_status",
+        "save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text",
     }
     assert data["ok"] is True and data["data"]["count"] == 7
 
@@ -239,5 +239,5 @@ def test_tool_annotations_mark_mutating_tools():
 
     ann = asyncio.run(run())
     mutating = {n for n, a in ann.items() if a and a.destructiveHint}
-    assert mutating == {"save_assessment", "create_contact_task", "update_task_status"}
+    assert mutating == {"save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text"}
     assert all(a.readOnlyHint for n, a in ann.items() if n not in mutating)

@@ -145,6 +145,26 @@ class AssessmentStore(ToolAssessmentStore):
     """
 
     async def save(self, state, status):
+        assessment_id = await self._save(state, status)
+        await self._release_after_save(state, status)
+        return assessment_id
+
+    async def _release_after_save(self, state, status):
+        """운영(RAG_INDEX_MODE=ephemeral): 경보를 저장한 뒤 이 공시의 임시 색인과 DB 본문을 지운다.
+        실패(MANUAL_CHECK·FAILED)는 해결될 때까지 남겨 두고, 정리가 실패해도 처리 결과는 바꾸지 않는다."""
+        if status not in ("WAITING_APPROVAL", "DONE") or get_settings().RAG_INDEX_MODE != "ephemeral":
+            return
+        rcept_no = (state.get("disclosure") or {}).get("rcept_no")
+        if not rcept_no:
+            return
+        try:
+            released = await invoke_tool(self.tools, self.harness, "release_disclosure_index", {"rcept_no": rcept_no})
+            await invoke_tool(self.tools, self.harness, "purge_disclosure_text",
+                              {"rcept_no": rcept_no, "content_hash": released.get("content_sha256")})
+        except Exception as exc:  # noqa: BLE001 — 정리는 부가 작업이라 평가 저장을 되돌리지 않는다
+            log.warning("처리 후 색인·본문 정리 실패 %s: %s: %s", rcept_no, type(exc).__name__, exc)
+
+    async def _save(self, state, status):
         if "score_result" in state:
             return await super().save(state, status)
         disclosure = state.get("disclosure") or {}

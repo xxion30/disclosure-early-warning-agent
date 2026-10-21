@@ -34,6 +34,10 @@ class Disclosure(Base):
     url: Mapped[str | None] = mapped_column(String, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 운영(RAG_INDEX_MODE=ephemeral): 처리가 끝나면 본문과 색인을 지우고 아래 기록만 남긴다.
+    content_hash: Mapped[str | None] = mapped_column(String, nullable=True)  # 원문 sha256 (DART에서 다시 받았을 때 같은 문서인지 확인)
+    processed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    purged_at: Mapped[str | None] = mapped_column(String, nullable=True)  # 본문을 비운 시각
 
 
 class Signal(Base):
