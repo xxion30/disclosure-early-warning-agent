@@ -34,7 +34,7 @@ flowchart LR
       H["Harness<br/>Instructions · Context · Guardrails<br/>Recovery · Loop 한도 · Observability"]
       MC["MCP Client (langchain-mcp-adapters)"]
     end
-    BIZ["business-mcp (FastMCP :8001)<br/>조회·규칙 계산·변경 도구 10개"]
+    BIZ["business-mcp (FastMCP :8001)<br/>조회·규칙 계산·변경 도구 11개"]
     RAG["rag-mcp (FastMCP :8002)<br/>원문·참고 문서 검색 2개"]
     SQL[("SQLite app.db<br/>업무 데이터·감사 로그")]
     CKPT[("SQLite checkpoints.db<br/>Graph 상태 (thread_id)")]
@@ -178,7 +178,7 @@ flowchart TD
 | 반복·자기 교정 | 근거 검증 실패 시 사실 추출 재시도, 금지 표현이 있으면 안내문 재작성(각 최대 2회) | `extract_facts`, `draft_messages`↔`guardrail_check` |
 | 사람 개입(HITL) | 변경 도구 앞 `interrupt()`, PB별 결정 묶음을 누적 | `pb_approval`, `finalize` |
 | 메모리·재개 | 체크포인터에 상태 저장, 재시작 후 같은 thread로 재개 | `agent/runtime.py`(`AsyncSqliteSaver`) |
-| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다. 결과를 본 뒤 한 번 더 고를 수 있고(최대 2회전, 회전당 2건, 같은 요청 반복 시 종료), 현재 공시로 고정하며 오류는 관찰로만 남긴다 | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
+| 도구 사용 | MCP 도구 13개(허용 목록)를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다. 결과를 본 뒤 한 번 더 고를 수 있고(최대 2회전, 회전당 2건, 같은 요청 반복 시 종료), 현재 공시로 고정하며 오류는 관찰로만 남긴다 | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
 | 안전한 실패 | 근거를 못 찾거나 한도를 넘으면 지어내지 않고 `MANUAL_CHECK` | `agent/nodes/handle_failure.py` |
 
 ## 6. 배포 뷰 (실행 위치)
@@ -206,7 +206,7 @@ flowchart TD
 | | `save_assessment`(rcept_no 기준 upsert), `create_contact_task`(평가·고객별 멱등, PB 승인 뒤에만), `update_task_status`(PB가 화면에서만) | 변경 |
 | rag-mcp | `search_disclosure_text`(공시 1건 안에서만 검색), `search_reference`(상장규정·공시해설·회계용어·안내문가이드) | 조회 |
 
-모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다. 도구 주석(annotations)으로 조회 도구는 `readOnlyHint`, 변경 도구 3개는 `destructiveHint`를 표시한다(수업 자료의 Harness 규칙).
+모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다. 도구 주석(annotations)으로 조회 도구는 `readOnlyHint`, 변경 도구 5개(business 4·rag 1)는 `destructiveHint`를 표시한다(수업 자료의 Harness 규칙).
 
 **운영 모드(`RAG_INDEX_MODE=ephemeral`)**: 공시 1건을 처리할 때 그 원문만 임시로 색인하고(원문은 DB 본문 → rag_docs 파일 → DART 순서로 찾음), 경보를 저장한 직후 `release_disclosure_index`와 `purge_disclosure_text`로 색인 조각과 DB 본문을 지운다. 해시(`content_hash`)·처리 시각·삭제 시각, 신호와 근거 문장은 남는다. 실패(`MANUAL_CHECK`·`FAILED`) 공시는 해결될 때까지 지우지 않고, 정리가 실패해도 처리 결과는 바꾸지 않는다. 기본은 `persistent`(데모·평가)다.
 

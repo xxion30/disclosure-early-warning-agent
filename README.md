@@ -23,8 +23,8 @@ MCP 도구 사용법은 [mcp_servers/business/README.md](mcp_servers/business/RE
 | 프로세스 | 포트 | 하는 일 |
 | --- | --- | --- |
 | `api` (FastAPI) | 8000 | 로그인(JWT), 공시 실행(`/runs`), 진행 이벤트(SSE), 경보·결정·업무 API |
-| `business-mcp` (FastMCP) | 8001 | 조회·규칙 계산·저장 도구 10개 (점수, 영향도, 평가·업무 저장) |
-| `rag-mcp` (FastMCP) | 8002 | 공시 원문·참고 문서 검색 도구 2개 (Chroma) |
+| `business-mcp` (FastMCP) | 8001 | 조회·규칙 계산·저장 도구 11개 (점수, 영향도, 평가·업무 저장, 처리 후 본문 정리) |
+| `rag-mcp` (FastMCP) | 8002 | 공시 원문·참고 문서 검색 도구 2개 + 처리 후 색인 정리 1개 (Chroma) |
 | `web` (Vue 3 + Vite) | 5173 | PB 화면: 경보 목록, 상세, 안내문 검토, 연락 업무 |
 
 폴더와 담당: `agent/`(A) · `mcp_servers/`, `shared/`(B) · `api/`, `web/`(C) · `data/`, `rag_docs/`, `scripts/`, `harness/`, `eval/`(D).
