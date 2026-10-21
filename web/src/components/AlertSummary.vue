@@ -22,7 +22,8 @@ const cust = computed(() => props.summary.customers)
       <div class="stat">
         <small>총점</small>
         <strong>{{ totalScore ?? '-' }}점</strong>
-        <span v-if="changeText" class="muted" :class="{ up: change > 0 }">직전 {{ prev.total_score }}점 → {{ changeText }}</span>
+        <span v-if="filing.fixed_level && prev" class="muted">직전 {{ prev.total_score }}점 · 확정 악재라 점수와 상관없이 등급 고정</span>
+        <span v-else-if="changeText" class="muted" :class="{ up: change > 0 }">직전 {{ prev.total_score }}점 → {{ changeText }}</span>
         <span v-else class="muted">직전 평가 없음</span>
       </div>
       <div class="stat">
