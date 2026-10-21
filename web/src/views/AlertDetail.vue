@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
 import LevelBadge from '../components/LevelBadge.vue'
+import AlertSummary from '../components/AlertSummary.vue'
 import RunProgress from '../components/RunProgress.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -89,6 +90,8 @@ const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.
         <button>안내문 검토 ({{ myPending.length }}명)</button>
       </RouterLink>
     </div>
+
+    <AlertSummary v-if="alert.summary" :summary="alert.summary" :level="alert.level" :total-score="alert.total_score" />
 
     <div v-if="hasRunHistory" class="card">
       <h2>진행 단계</h2>

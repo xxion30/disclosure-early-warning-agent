@@ -52,8 +52,27 @@ def get_session():
         session.close()
 
 
-def init_db() -> None:
-    """테이블이 없으면 만든다."""
+def _ensure_columns(engine: Engine) -> None:
+    """이미 만들어진 DB(data/app.db)에 나중에 모델에 추가한 칸(nullable)을 채워 넣는다. 데이터는 건드리지 않는다."""
+    from sqlalchemy import inspect, text
+
     from shared.models import Base
 
-    Base.metadata.create_all(get_engine())
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have and col.nullable and not col.primary_key:
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
+
+
+def init_db() -> None:
+    """테이블이 없으면 만들고, 모델에 새로 생긴 칸이 기존 DB에 없으면 추가한다."""
+    from shared.models import Base
+
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _ensure_columns(engine)
