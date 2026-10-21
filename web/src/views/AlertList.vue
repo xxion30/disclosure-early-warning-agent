@@ -50,6 +50,9 @@ watch(tab, () => {
 watch([statusFilter, levelFilter, summaryDate], load)
 onMounted(load)
 
+// 진짜 모드에서 MCP 서버가 꺼져 있으면 영향 고객 수를 못 센다. 목록은 DB 내용으로 계속 보여준다
+const graphError = computed(() => rows.value.find((r) => r.graph_error)?.graph_error || '')
+
 const waitingCount = computed(() => rows.value.filter((r) => r.status === 'WAITING_APPROVAL').length)
 
 // ---- 공시 1건 처리 시작 (데모용) ----
@@ -119,6 +122,7 @@ async function startRun() {
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="graphError" class="notice">{{ graphError }} 영향 고객 수는 연결되면 다시 보입니다.</p>
     <table>
       <thead>
         <tr>

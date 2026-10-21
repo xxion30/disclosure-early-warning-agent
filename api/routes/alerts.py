@@ -3,7 +3,10 @@
 - 경보 숫자(등급, 점수, 점수 내역, 상태)는 DB risk_assessments에서 읽는다.
 - 영향 고객·안내문 초안은 Graph State(체크포인트)에서 읽는다.
 - 고객 실명은 로그인한 PB의 담당 고객만 채운다. 다른 PB 고객은 "고객 C002"처럼 가린다.
+- Graph(MCP 서버·모델)에 붙지 못해도 목록·상세는 DB 내용으로 계속 보여준다 (graph_error로 알림).
 """
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -18,6 +21,18 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 NAME_PLACEHOLDER = "{고객명}"
 PRIORITY_ORDER = {"P1": 0, "P2": 1, "P3": 2}
 ALERT_LEVELS = ("High", "Critical")  # 고객 영향도를 계산하는 등급 (5-4장)
+GRAPH_DOWN = "진행 엔진(Graph)에 연결할 수 없습니다. MCP 서버(8001·8002)와 .env의 API 키를 확인하세요."
+
+log = logging.getLogger("api.alerts")
+
+
+async def read_state(adapter: GraphAdapter, rcept_no: str) -> tuple[dict | None, str | None]:
+    """(State, 오류 문구). 진짜 모드에서 MCP 서버가 꺼져 Dependencies 조립이 실패해도 예외를 올리지 않는다."""
+    try:
+        return await adapter.get_state(rcept_no), None
+    except Exception as exc:
+        log.warning("Graph 상태 읽기 실패 %s: %s: %s", rcept_no, type(exc).__name__, exc)
+        return None, GRAPH_DOWN
 
 
 def masked_name(customer_id: str) -> str:
@@ -74,8 +89,11 @@ async def list_alerts(
     rows = db.execute(q).all()
     my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id)))
     result = []
+    graph_error = None  # 한 번 실패하면 남은 행은 다시 붙어 보지 않는다 (목록이 느려지지 않게)
     for a, corp_name, title, filed_at in rows:
-        view = await adapter.get_state(a.rcept_no) if a.level in ALERT_LEVELS else None
+        view = None
+        if a.level in ALERT_LEVELS and graph_error is None:
+            view, graph_error = await read_state(adapter, a.rcept_no)
         customers = (view or {}).get("affected_customers", [])
         result.append({
             "assessment_id": a.assessment_id,
@@ -91,6 +109,7 @@ async def list_alerts(
             "affected_count": len(customers),
             "p1_count": sum(c.get("priority") == "P1" for c in customers),
             "my_pending_count": sum(c in my_ids for c in pending_customers(view)) if view else 0,
+            "graph_error": graph_error if a.level in ALERT_LEVELS else None,
         })
     return result
 
@@ -105,7 +124,7 @@ async def get_alert(
     a = get_assessment(db, assessment_id)
     company = db.get(Company, a.corp_code)
     disclosure = db.get(Disclosure, a.rcept_no)
-    view = await adapter.get_state(a.rcept_no)
+    view, graph_error = await read_state(adapter, a.rcept_no)
     affected = sorted(
         (view or {}).get("affected_customers", []),
         key=lambda c: (PRIORITY_ORDER.get(c.get("priority"), 9), -c.get("impact_score", 0)),
@@ -147,6 +166,7 @@ async def get_alert(
         "customers": customers,
         "pending": pending_customers(view) if view else [],
         "graph_state_available": view is not None,
+        "graph_error": graph_error,
     }
 
 
@@ -159,7 +179,9 @@ async def get_drafts(
 ) -> dict:
     """로그인한 PB의 담당 고객 안내문만 돌려준다."""
     a = get_assessment(db, assessment_id)
-    view = await adapter.get_state(a.rcept_no)
+    view, graph_error = await read_state(adapter, a.rcept_no)
+    if graph_error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, graph_error)
     if view is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Graph 상태가 없습니다. 공시를 다시 실행해야 합니다.")
 
