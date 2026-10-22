@@ -114,7 +114,7 @@ small, .muted { color: var(--muted); }
 .dot-ok { background: var(--ok-dot); }
 
 /* ---------- 표 ---------- */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; position: relative; } /* 안의 .sr-only가 페이지 밖으로 새어 가로 스크롤을 만들지 않게 */
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 14px 16px; vertical-align: middle; }
 th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--surface-2); white-space: nowrap; }
@@ -280,3 +280,37 @@ blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md);
 .choice.selected.edit { background: var(--navy); border-color: var(--navy); color: #fff; }
 .choice.selected.rewrite { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-strong); }
 .choice.selected.reject { background: var(--bad-soft); border-color: var(--bad-soft); color: var(--bad); }
+
+/* ---------- 검색창 (돋보기 아이콘) ---------- */
+.search-field { position: relative; display: inline-flex; align-items: center; }
+.search-field svg { position: absolute; left: 16px; color: var(--muted); pointer-events: none; }
+.search-field input { width: 240px; border-radius: var(--pill); padding-left: 44px; }
+
+/* ---------- 둥근 아이콘 버튼 (펼치기 등) ---------- */
+button.icon-button { width: 36px; min-height: 36px; height: 36px; padding: 0; background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+button.icon-button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+button.icon-button.active { background: var(--blue-soft); border-color: var(--blue-soft); color: var(--blue-strong); }
+
+/* ---------- 종목 칩 ---------- */
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip.stock { background: #f1f4f9; color: #2a3554; }
+.chip.alert { background: var(--bad-soft); color: var(--bad); font-weight: 700; }
+
+/* ---------- 타임라인 (연락 이력) ---------- */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline > li { display: flex; gap: 12px; }
+.timeline-rail { display: flex; flex-direction: column; align-items: center; flex: none; }
+.timeline-dot { width: 12px; height: 12px; border-radius: var(--pill); margin-top: 6px; background: var(--blue); }
+.timeline-dot.ok { background: var(--ok-dot); }
+.timeline-dot.warn { background: var(--warn-dot); }
+.timeline-dot.bad { background: var(--critical); }
+.timeline-line { flex: 1; width: 2px; background: var(--border); margin: 4px 0; }
+.timeline > li:last-child .timeline-line { display: none; }
+.timeline-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 16px; min-width: 0; }
+.timeline > li:last-child .timeline-body { padding-bottom: 0; }
+
+/* ---------- 네이비 요약 띠 ---------- */
+.summary-band { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--navy); color: #fff; border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px; }
+.summary-band .muted, .summary-band small { color: #c9d3ee; }
+.summary-band .progress-bar { background: #2a3766; margin: 0; }
+.summary-band .progress-bar > span { background: var(--ok-dot); }
