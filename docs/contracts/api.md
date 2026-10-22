@@ -1,7 +1,16 @@
 # API·화면 계약
 
-> 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 삭제 대상이고, `/states`·`/collect`가 추가된다.
+> 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 오후 회의로 되살아나고(점수는 응답에서 뺀다), `/states`·`/collect`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
+
+- 되살리는 경로: `GET /alerts/{id}/drafts`, `POST /alerts/{id}/decision`(승인 / 수정 후 승인 / 다시 작성 / 반려, 반려 사유 필수, 다른 PB 고객 403), `GET /tasks`, `PATCH /tasks/{task_id}`. 화면 `/alerts/:id/drafts`, `/tasks`와 SSE `waiting_approval`도 돌아온다.
+- **점수 비노출**: PB 화면용 응답(`/states`, `/states/{stock_code}`, `/alerts*`, `/customers`)에는 **총점·항목별 점수 필드를 넣지 않는다.** 보여 주는 것은 `stage`(단계 배지), 항목 이름, 설명 문장, 근거 인용, DART 링크.
+- **정렬은 서버가 한다**: 목록·대시보드 알림은 ① 단계(RED → ORANGE·COMPOSITE → YELLOW) ② 같은 단계에서 점수 높은 순 ③ 최근 공시 순으로 이미 정렬해 돌려준다. 클라이언트는 순서를 그대로 쓴다.
+- **대시보드 알림**: 경보(RED/ORANGE/YELLOW/COMPOSITE)가 생기면 담당 PB의 메인 대시보드 알림 목록에 오른다. WATCH(관찰)는 알림이 아니다. 목록은 `GET /states?alert=true`(정렬됨). 새 경보 표시는 `new: true`. `[R4·R5 합의]`: 별도 경로를 둘지는 구현 때 정한다.
+- `/customers`: 영향도(P1~P3) 없음. 고객별 보유 종목 + 종목의 현재 `stage` 배지 + 연락 이력. 고객 순서는 보유 평가금액 큰 순.
+- 직접 발송 API는 없다. 연락 업무는 PB가 직접 연락하는 일을 기록하는 용도다.
 
 ## 8. PB 화면 (Vue)
 

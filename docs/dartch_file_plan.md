@@ -1,7 +1,8 @@
 # DARTCH 파일 구성 계획 (초안 — 아직 실행하지 않음)
 
 > 목적: R1~R5가 **서로 같은 파일을 고치지 않고** 병렬로 개발할 수 있게 폴더와 파일을 정리하는 계획이다.
-> 이 문서는 계획만 담고 있고, 파일은 하나도 옮기거나 지우지 않았다.
+> 이 문서는 계획만 담고 있고, 파일은 하나도 옮기거나 지우지 않았다. (구조 정리는 이후 실행했고 9장에 결과가 있다.)
+> **오후 회의(10/22) 반영**: 고객 연락 기능은 "삭제"에서 **"복원 예정"**으로 바뀌었다(영향도 P1~P3는 복원하지 않음). 표에서 "복원 예정"이 그 항목이다. 자세한 결정은 설계서 맨 위 "오후 추가 회의 변경".
 > 기준: [DARTCH Phase 1 MVP 설계서](dartch_phase1_mvp.md), 팀이 합의한 역할 분담(R1 양시온, R2 윤찬웅, R3 한예빈, R4 양경환, R5 박세호).
 > 범례: **유지** 그대로 / **수정** 내용만 바꿈 / **이동** 위치만 바꿈 / **분리** 파일을 여러 개로 쪼갬 / **삭제** / **신규**
 
@@ -144,7 +145,8 @@ dartch/
 | `business/server.py`, `tools/_common.py` | 수정·유지 | 새 도구 목록 등록 | R4 |
 | `tools/calculate_risk_score.py` | 수정 | 단계 판정 결과를 돌려줌 (이름 변경 여부는 계약 변경이라 합의) | R4 |
 | `tools/get_company_profile.py`, `get_disclosure.py`, `get_holders.py`, `get_signal_history.py`, `list_new_disclosures.py`, `save_assessment.py` | 수정 | 새 모델(tenant, risk_states)에 맞춤 | R4 |
-| `tools/compute_customer_impact.py`, `create_contact_task.py`, `update_task_status.py`, `purge_disclosure_text.py` | **삭제** | 연락·원문 저장 폐지 | — |
+| `tools/compute_customer_impact.py`, `purge_disclosure_text.py` | **삭제 유지** | 영향도는 복원하지 않음(보유 고객 전원), 원문 저장 폐지 | — |
+| `tools/create_contact_task.py`, `update_task_status.py` | **복원 예정 (오후 회의)** | 연락 기능 재도입. git 이력에서 복원 | R4 |
 | — | 신규 | `get_risk_state`, `save_risk_state`, `get_financial_snapshot` (예상) | R4 |
 | `rag/server.py`, `tools.py` | 수정 | `release_disclosure_index` 삭제 | R3 |
 | `rag/store.py` | 수정 | Chroma 영속 → 메모리 임시 색인 | R3 |
@@ -156,25 +158,26 @@ dartch/
 ### agent
 | 현재 | 변경 | 계획 | 담당 |
 | --- | --- | --- | --- |
-| `graph.py` | 재작성 | 승인·초안 없는 새 그래프 | R2 |
-| `state.py` | 수정 | 승인·초안·결정 항목 제거, 단계 항목 추가 | R2 |
+| `graph.py` | 재작성 | 새 위험 판정 그래프. 경보 저장 뒤 승인·초안 구간은 **복원 예정** | R2 |
+| `state.py` | 수정 | 단계 항목 추가. 승인·초안·결정 항목은 **복원 예정** | R2 |
 | `runtime.py` | 수정 | interrupt 제거, Postgres 체크포인트 | R2 (연결 R4) |
 | `execution.py`, `evidence.py`, `tool_loop.py`, `llm.py` | 유지·수정 | | R2 |
-| `ports.py` | 수정 | 승인·업무 생성 포트 제거 | R2 |
+| `ports.py` | 수정 | 업무 생성 포트는 **복원 예정** | R2 |
 | `rules.py` | 수정 | 분류·신호 연결 (`assembly.py`의 `signal_input`, `make_classifier` 이동 받음) | R2 |
 | `nodes/classify.py`, `receive.py`, `explain_risk.py`, `handle_failure.py` | 수정·유지 | | R2 |
 | `nodes/extract_facts.py` | 수정·이름 변경 | `extract_flags.py` | R2 |
 | `nodes/score_risk.py` | **분리** | `score_orange.py`, `score_yellow.py` | R2 |
 | `nodes/save_and_summarize.py` | 수정 | `save_state.py` | R2 |
-| `nodes/create_tasks.py`, `draft_messages.py`, `find_customers.py`, `guardrail_check.py`, `pb_approval.py`, `save_rejection.py` | **삭제** | 연락·승인 폐지 | — |
+| `nodes/create_tasks.py`, `draft_messages.py`, `guardrail_check.py`, `pb_approval.py`, `save_rejection.py` | **복원 예정 (오후 회의)** | 연락·승인 재도입. git 이력에서 복원 | R2 |
+| `nodes/find_customers.py` | **복원 예정 (단순화)** | 영향도 계산 없이 보유 고객 전원 선택 | R2 |
 | — | 신규 | `nodes/mark_red.py`, `judge_stage.py` | R2 |
 | `prompts/system.md`, `explain_risk.md`, `select_tools.md` | 수정·유지 | | R2 |
 | `prompts/extract_facts.md` | 수정·이름 변경 | `extract_flags.md` | R2 |
-| `prompts/draft_message.md`, `rewrite_message.md` | **삭제** | | — |
+| `prompts/draft_message.md`, `rewrite_message.md` | **복원 예정 (오후 회의)** | | R2 |
 | `assembly.py` (423줄) | **분리** | 아래 표 참고 | R2·R4 |
 | `harness_adapter.py` | 이동 | `adapters/bindings.py` | R4 |
 | `mcp_client.py` | 이동 | `adapters/mcp_client.py` | R4 |
-| `persistence.py` | 이동·통합 | `adapters/store.py`. `ToolTaskCreator` 삭제 | R4 |
+| `persistence.py` | 이동·통합 | `adapters/store.py`. `ToolTaskCreator`는 복원 예정 | R4 |
 
 **`agent/assembly.py` 분리 방식 (가장 중요)**
 | 지금 있는 것 | 새 위치 | 담당 |
@@ -183,7 +186,7 @@ dartch/
 | `prepare_input`, `check_message`, `recover_llm` (+ `_shrink_strings`, `_longest_string`) | `agent/harness_llm.py` | R2 |
 | `signal_input`, `make_classifier` | `agent/rules.py` | R2 |
 | `recover_tool`, `event`, `default_harness`, `_trace_id`, `_audit_system` | `agent/adapters/harness_tools.py` | R4 |
-| `AssessmentStore`, `audit`, `_write_audit` | `agent/adapters/store.py` (`authorize_task`, `_owns`, `_release_after_save`는 삭제) | R4 |
+| `AssessmentStore`, `audit`, `_write_audit` | `agent/adapters/store.py` (`authorize_task`, `_owns`는 복원 예정, `_release_after_save`는 삭제) | R4 |
 | `enable_langsmith` | `harness/tracing.py` | R4 |
 | `build_dependencies` | `agent/adapters/assembly.py` (얇은 조립만) | R4 |
 
@@ -202,9 +205,9 @@ dartch/
 | `auth.py` | 수정 | 사용자에 회사 소속 저장 (SSO 없음) | R4 |
 | — | 신규 | `tenancy.py` (로그인한 사용자의 회사로 자동 필터) | R4 |
 | `routes/alerts.py` | 재작성·이름 변경 | `routes/states.py` (종목별 위험 상태) | R4 |
-| `routes/customers.py` | 수정 | 연락 이력·우선순위 제거, 보유·노출만 | R4 |
+| `routes/customers.py` | 수정 | 우선순위(P1~P3) 없음. 보유·노출 + 연락 이력은 복원 시 다시 표시 | R4 |
 | `routes/events.py`, `runs.py` | 유지·수정 | | R4 |
-| `routes/approvals.py`, `tasks.py` | **삭제** | | — |
+| `routes/approvals.py`, `tasks.py` | **복원 예정 (오후 회의)** | PB 승인·연락 업무. 화면용 응답에는 점수를 내리지 않음 | R4 |
 | — | 신규 | `routes/collect.py` (수집 상태, 수동 실행) | R4 |
 | `worker/` | 유지 | 큐는 Phase 1에서 끔 | R4 |
 | `smoke.py` | 이동 | `scripts/demo/smoke.py` | R5 |
@@ -212,10 +215,10 @@ dartch/
 ### web (R5)
 | 현재 | 변경 | 계획 |
 | --- | --- | --- |
-| `views/Login.vue`, `CustomerList.vue` | 유지·수정 | 고객 현황은 연락 이력 제거 |
+| `views/Login.vue`, `CustomerList.vue` | 유지·수정 | 고객 현황 (연락 이력은 복원 시 다시 표시). 점수 숫자·점수 내역 표는 화면에서 제거 |
 | `views/AlertList.vue` | 이름 변경·수정 | `RiskList.vue` |
 | `views/AlertDetail.vue` | 이름 변경·수정 | `RiskDetail.vue` |
-| `views/DraftReview.vue`, `TaskList.vue` | **삭제** | |
+| `views/DraftReview.vue`, `TaskList.vue` | **복원 예정 (오후 회의)** | | R5 |
 | `components/AlertSummary.vue`, `LevelBadge.vue` | 이름 변경·수정 | `RiskSummary.vue`, `StageBadge.vue` |
 | `components/ScoreBreakdown.vue`, `StatusBadge.vue`, `RunProgress.vue` | 수정 | 새 점수 내역·상태 |
 | `router/`, `stores/`, `api/client.js`, `labels.js`, `composables/` | 수정 | 새 경로·단계 이름 |
@@ -224,7 +227,7 @@ dartch/
 | 현재 | 변경 | 계획 | 담당 |
 | --- | --- | --- | --- |
 | `rag_docs/companies/` (140개) | **삭제** | 원문은 저장하지 않음 | R3 |
-| `rag_docs/reference/*` | 수정 | 위험 항목 해설로 재작성. `message_guide.md` 삭제 | R3 |
+| `rag_docs/reference/*` | 수정 | 위험 항목 해설로 재작성. `message_guide.md`는 연락 기능이 돌아오므로 유지 | R3 |
 | `data/customers.json` | 수정·이동 | `data/seed/` (회사·PB·고객·보유 종목) | R3 |
 | `data/demo_companies.json`, `data/disclosures/*.json` | **삭제** | 새 테스트 사례는 `eval/cases/`로 | R3 |
 | `scripts/fetch_dart.py`, `build_rag_docs.py`, `compute_base_score.py` | **삭제** | `collector/`로 통합 | R3 |
@@ -239,7 +242,7 @@ dartch/
 ### tests
 | 현재 | 변경 | 계획 | 담당 |
 | --- | --- | --- | --- |
-| `tests/agent/test_approval.py` | **삭제** | 승인 폐지 | — |
+| `tests/agent/test_approval.py` | **복원 예정** | 승인 재도입 | R2 |
 | `tests/agent/*` 나머지 | 수정 | 새 그래프 | R2 |
 | `tests/harness/test_harness.py` | **분리** | R2 쪽(문맥·가드레일·LLM 복구)과 R4 쪽(마스킹·도구 복구) | R2·R4 |
 | `tests/mcp_servers/test_tools.py` | 이동 | `tests/business/` | R4 |
@@ -247,7 +250,7 @@ dartch/
 | `tests/mcp_servers/test_rag.py`, `test_ephemeral_index.py` | 이동·수정 | `tests/rag/` | R3 |
 | `tests/mcp_servers/test_assembly.py` | 이동·수정 | `tests/wiring/` | R4 (R2 협업) |
 | `tests/mcp_servers/test_replay_all.py` | 이동 | `tests/demo/` | R5 |
-| `tests/api/*` | 수정 | 승인·업무 테스트 삭제, 상태·회사 분리 테스트 추가 | R4 |
+| `tests/api/*` | 수정 | 승인·업무 테스트는 복원 예정, 상태·회사 분리 테스트 추가 | R4 |
 | — | 신규 | `tests/collector/`, `tests/risk_engine/` | R3, R4 |
 
 ---
@@ -320,7 +323,7 @@ collector ──▶ shared 만       risk_engine ──▶ shared 만 (collector
 | `CLAUDE.md`·`README.md` 분리, `docs/contracts/` | 완료 (`docs/run.md`, `docs/verification.md`, `docs/risk_policy.md` 뼈대 포함) |
 | `data/customers.json` → `data/seed/` | 완료 |
 | `.github/CODEOWNERS`, 신규 폴더 뼈대(`collector/`·`migrations/`·`docker/`·`eval/cases/`) | 완료 (GitHub 아이디는 자리표시) |
-| 고객 연락 기능 삭제 | 완료: 노드 6개·프롬프트 2개, 도구 4개(`compute_customer_impact`·`create_contact_task`·`update_task_status`·`purge_disclosure_text`), `release_disclosure_index`, `impact_rules.py`, `ContactTask` 모델, 승인·업무 API, 안내문 검토·연락 업무 화면 |
+| 고객 연락 기능 삭제 | 완료했으나 **오후 회의(10/22)로 다시 넣기로 함**(영향도 P1~P3 제외, 보유 고객 전원, PB 승인 유지). 아래는 당시 삭제한 목록이며 영향도 관련(`compute_customer_impact`, `impact_rules.py`)을 뺀 나머지는 git 이력에서 복원한다: 노드 6개·프롬프트 2개, 도구 4개(`compute_customer_impact`·`create_contact_task`·`update_task_status`·`purge_disclosure_text`), `release_disclosure_index`, `impact_rules.py`, `ContactTask` 모델, 승인·업무 API, 안내문 검토·연락 업무 화면 |
 
 ### 계획과 다르게 한 것 (이유와 다음 담당)
 | 항목 | 이번에 한 것 | 이유 | 다음 |

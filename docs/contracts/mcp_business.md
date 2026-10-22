@@ -1,7 +1,14 @@
 # business-mcp 도구 계약
 
-> 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 연락 관련 도구(`create_contact_task`, `update_task_status`, `compute_customer_impact`)와 `purge_disclosure_text`는 삭제 대상이다.
+> 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `create_contact_task`·`update_task_status`는 오후 회의로 되살아나고, `compute_customer_impact`와 `purge_disclosure_text`는 삭제 대상이다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
+
+- 되살리는 도구: `create_contact_task(assessment_id, customer_id, draft_message)` — **PB 승인 후에만**, `priority` 인자 없음, (assessment_id, customer_id)당 1건(멱등). `update_task_status(task_id, status, note)` — PB가 화면에서만, 승인·보류 → 연락완료·보류.
+- 되살리지 않는 도구: `compute_customer_impact`, `purge_disclosure_text`. 이에 따라 `create_contact_task`의 "영향도 규칙으로 다시 계산한 우선순위와 같아야 만든다" 검사는 **없앤다**. 대신 승인된 PB의 `pb_id`가 `customers.pb_id`와 같은지, 평가 status가 `WAITING_APPROVAL`인지만 검사한다.
+- `get_holders(stock_code)`: 보유 고객 전원, **`eval_amount` 큰 순**으로 돌려준다 (고객 이름은 마스킹 유지).
+- `calculate_risk_score`는 서버 안에서 점수를 계산하지만, 그 점수를 PB 화면용 응답까지 전달하지 않는다 (api.md). Agent 내부 State에는 정렬을 위해 남는다.
 
 ## 4-2. business-mcp 도구 (포트 8001)
 

@@ -3,6 +3,12 @@
 > 담당: **R2 (마스킹·tracing·도구 복구는 R4)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 안내문 금지 표현 검사는 설명문 검사로 바뀐다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
+
+- 되살림: `agent/prompts/draft_message.md`, `rewrite_message.md`. `create_contact_task`는 실행 전에 interrupt로 멈추고 PB 승인을 받는다 (PB 승인 단계 유지).
+- Guardrails: **안내문 금지 표현 검사**(매도하세요·매수하세요·비중을 줄이·반드시·확실히·손실을 피하 등)를 되살리고, **설명문 검사**도 같은 목록으로 건다. 걸리면 `rewrite_message.md`로 다시 쓰고 2회 실패하면 PB에게 "직접 작성 필요"로 넘긴다.
+- LLM은 실제 고객 이름을 보지 않는다 (마스킹 유지). 사람의 결정(승인·반려·수정)은 audit_logs에 남긴다.
+
 ## 6. Harness (수업 자료의 8개 구성 요소)
 
 > Agent = 모델 + Harness. 모델은 "다음에 뭘 할지" 제안만 하고, 실행·제한·기록·복구는 Harness가 맡는다.

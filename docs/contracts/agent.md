@@ -1,7 +1,16 @@
 # Agent 계약 (State·Graph·API 연결)
 
-> 담당: **R2** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인(interrupt)·안내문·연락 업무 관련 State와 노드는 삭제 대상이고, 그래프는 새로 정한다.
+> 담당: **R2** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인(interrupt)·안내문·연락 업무 관련 State와 노드는 오후 회의로 되살아난다(영향도 제외). 그래프는 아래 "오후 회의 반영"을 따른다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
+
+- State 되살림(영향도 필드는 제외): `affected_customers: list[{customer_id, eval_amount}]` (영향도·priority 없음, **보유 고객 전원**), `drafts`, `guardrail_flags`, `approval`, `task_ids`, `decisions`. `retry_count`는 `draft_messages`에서도 쓴다.
+- 그래프: `... → judge_stage → explain_risk → save_state` 뒤에서 **경보 단계(RED/ORANGE/YELLOW/COMPOSITE)만** `find_customers → draft_messages → guardrail_check ⟲(실패, 최대 2회) → pb_approval [interrupt] → (승인) create_tasks / (반려) save_rejection → END`. WATCH·NONE은 `save_state`에서 끝난다.
+- `find_customers`는 `get_holders`로 해당 종목 보유 고객 전원을 고른다 (`compute_customer_impact` 없음, P1~P3 없음).
+- `thread_id = rcept_no`, 승인 대기 후 같은 thread_id로 재개, 서버 재시작 후에도 이어짐(이전 계약과 같음). `status = WAITING_APPROVAL`이 돌아온다.
+- 안내문은 매수·매도 권유 금지, 고객 이름은 `{고객명}` 자리표시. 설명문(`explain_risk`)에도 같은 금지 표현 검사를 건다.
+- 되살릴 때는 새로 짜지 않고 구조 정리 PR 이전 커밋(`feat/...` 기준 main 6266619)의 코드를 가져와, 영향도 부분만 뺀다.
 
 ## 4-5. Agent State (`agent/state.py`)
 
