@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from mcp_servers.business.rules.impact_rules import ImpactInputError
-from mcp_servers.business.rules.risk_rules import RuleInputError
+from risk_engine.impact_rules import ImpactInputError
+from risk_engine.risk_rules import RuleInputError
 from shared.schemas import ErrorCode, fail
 
 log = logging.getLogger("business-mcp")

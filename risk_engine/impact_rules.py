@@ -1,7 +1,7 @@
 """compute_customer_impact 계산 로직 (CLAUDE.md 5-5장). 숫자는 rules.yaml에서 읽는다."""
 from __future__ import annotations
 
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine.loader import load_rules
 
 
 class ImpactInputError(ValueError):

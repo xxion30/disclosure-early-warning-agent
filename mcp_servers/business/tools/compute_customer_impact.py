@@ -1,5 +1,5 @@
-from mcp_servers.business.rules import impact_rules
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine import impact_rules
+from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid
 from mcp_servers.business.tools.get_holders import holders_of
 from shared.db import get_session

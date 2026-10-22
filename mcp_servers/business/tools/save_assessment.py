@@ -1,6 +1,6 @@
 from sqlalchemy import delete, select
 
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, not_found, now_iso, require_company
 from shared.db import get_session
 from shared.models import ASSESSMENT_STATUSES, LEVELS, Disclosure, RiskAssessment, Signal

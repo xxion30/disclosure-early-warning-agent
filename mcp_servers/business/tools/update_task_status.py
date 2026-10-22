@@ -1,4 +1,4 @@
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, not_found, now_iso, task_dict
 from shared.db import get_session
 from shared.models import TASK_STATUSES, ContactTask

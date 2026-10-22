@@ -68,7 +68,7 @@ def _fixture() -> dict | None:
 
 def _replay_levels(comp: dict, rules: dict) -> list[dict]:
     """저장된 신호를 같은 순서로 규칙에 다시 넣어 공시마다의 등급을 구한다 (AI 호출 없음)."""
-    from mcp_servers.business.rules import risk_rules
+    from risk_engine import risk_rules
 
     by_rcept: dict[str, list[dict]] = {}
     for sg in comp["signals"]:
@@ -93,7 +93,7 @@ def exp_combo() -> list[dict]:
     import copy
     from datetime import date
 
-    from mcp_servers.business.rules.loader import load_rules
+    from risk_engine.loader import load_rules
 
     data = _fixture()
     if not data:

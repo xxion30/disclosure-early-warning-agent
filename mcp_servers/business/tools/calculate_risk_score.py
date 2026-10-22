@@ -2,8 +2,8 @@ from datetime import date
 
 from sqlalchemy import select
 
-from mcp_servers.business.rules import risk_rules
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine import risk_rules
+from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, require_company
 from mcp_servers.business.tools.get_signal_history import history_rows
 from shared.db import get_session

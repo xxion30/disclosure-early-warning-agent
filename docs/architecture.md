@@ -13,7 +13,7 @@
 | 요구 | 아키텍처 결정 | 구현 위치 |
 | --- | --- | --- |
 | LLM 응답은 수 초~수십 초 걸린다 | 공시 처리는 작업으로 접수해 **202를 바로 돌려주고**, 진행 상황은 **SSE 이벤트**로 보낸다 | `api/routes/runs.py`, `api/routes/events.py` |
-| 점수는 설명 가능해야 하고 AI가 바꾸면 안 된다 | **점수·등급·우선순위는 규칙(코드)**이 계산하고, AI는 공시 해석(사실 추출)·설명·안내문만 맡는다. 규칙의 숫자는 `rules.yaml` 한 곳에만 둔다 | `mcp_servers/business/rules/` |
+| 점수는 설명 가능해야 하고 AI가 바꾸면 안 된다 | **점수·등급·우선순위는 규칙(코드)**이 계산하고, AI는 공시 해석(사실 추출)·설명·안내문만 맡는다. 규칙의 숫자는 `rules.yaml` 한 곳에만 둔다 | `risk_engine/` |
 | 데이터를 바꾸는 일은 사람이 확인한다 | 변경 도구(`create_contact_task`) 앞에서 Graph가 **`interrupt()`로 멈추고** 상태를 저장한 뒤, PB 승인을 받으면 **같은 `thread_id`로 재개**한다 | `agent/nodes/pb_approval.py`, `agent/runtime.py` |
 | 답변에는 근거 문서가 있어야 한다 | 원문을 질문과 별개로 **미리 색인**하고(rag-mcp), AI의 인용은 **검색된 원문의 연속 구간과 글자 그대로 일치**해야 통과한다(아니면 수동 확인) | `mcp_servers/rag/`, `agent/evidence.py`, `agent/assembly.py` |
 | 고객 개인정보를 모델에 보내지 않는다 | 모델 입력에서 이름·연락처를 마스킹하고 안내문은 `{고객명}` 자리표시로만 쓴다. 이름은 화면에 보여줄 때만 채운다 | `harness/masking.py`, `agent/assembly.py`(`prepare_input`) |

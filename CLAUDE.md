@@ -317,7 +317,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 
 ---
 
-## 5. 위험도 규칙 (`mcp_servers/business/rules/rules.yaml`에 그대로 옮긴다)
+## 5. 위험도 규칙 (`risk_engine/rules.yaml`에 그대로 옮긴다)
 
 숫자는 코드에 직접 쓰지 말고 yaml에서 읽는다. 회계 담당이 조정할 수 있게 하기 위해서다.
 

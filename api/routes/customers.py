@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from api.routes.alerts import ALERT_LEVELS, PRIORITY_ORDER, fill_name
-from mcp_servers.business.rules.impact_rules import ImpactInputError, customer_impact
+from risk_engine.impact_rules import ImpactInputError, customer_impact
 from shared.config import ROOT_DIR
 from shared.models import AuditLog, Company, ContactTask, Customer, Holding, RiskAssessment
 

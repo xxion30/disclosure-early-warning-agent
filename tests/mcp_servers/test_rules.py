@@ -1,8 +1,8 @@
 """risk_rules / impact_rules 순수 계산 테스트 (DB 없음)."""
 import pytest
 
-from mcp_servers.business.rules import impact_rules, risk_rules
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine import impact_rules, risk_rules
+from risk_engine.loader import load_rules
 
 AS_OF = "2025-03-01"
 
@@ -205,7 +205,7 @@ def test_base_score_item_evidence_only_when_given():
 
 def test_agent_classifier_reads_rules_yaml():
     from agent.rules import load_classifier
-    from mcp_servers.business.rules.loader import DEFAULT_PATH
+    from risk_engine.loader import DEFAULT_PATH
 
     classify = load_classifier(DEFAULT_PATH)
     assert classify("감사보고서제출") == "AUDIT_REPORT"

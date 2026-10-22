@@ -2,7 +2,7 @@ from datetime import date
 
 from sqlalchemy import select
 
-from mcp_servers.business.rules.risk_rules import minus_months, parse_date
+from risk_engine.risk_rules import minus_months, parse_date
 from mcp_servers.business.tools._common import guarded, invalid, require_company
 from shared.db import get_session
 from shared.models import Signal

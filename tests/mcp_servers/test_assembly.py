@@ -309,7 +309,7 @@ def test_openai_models_use_function_calling_for_structured_output():
 # ---------------------------------------------------------------- 신호 없는 공시
 def test_classification_skips_periodic_reports_and_keeps_ownership():
     from agent.rules import load_classifier
-    from mcp_servers.business.rules.loader import DEFAULT_PATH
+    from risk_engine.loader import DEFAULT_PATH
 
     classify = load_classifier(DEFAULT_PATH)
     assert classify("분기보고서 (2024.09)") is None and classify("[기재정정]사업보고서 (2023.12)") is None

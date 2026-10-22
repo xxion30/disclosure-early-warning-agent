@@ -25,7 +25,7 @@ from agent.rules import load_classifier
 from harness import context as ctx
 from harness import guardrails, masking, recovery
 from harness.tracing import write_audit_log
-from mcp_servers.business.rules.loader import DEFAULT_PATH, load_rules
+from risk_engine.loader import DEFAULT_PATH, load_rules
 from shared.config import get_settings
 from shared.db import get_session
 from shared.models import AuditLog, Customer, RiskAssessment

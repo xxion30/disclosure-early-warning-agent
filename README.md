@@ -140,11 +140,11 @@ uv run python scripts/replay_all.py --stock 048260  # 한 회사만
 | `FAKE_UNSAFE_DRAFT` | `true`면 첫 안내문 초안에 금지 표현을 섞는다 (가드레일 → 다시 쓰기 시연). 발표 증빙 trace는 [docs/evidence/traces.md](docs/evidence/traces.md) |
 | `JWT_SECRET` | 32자 이상 권장 |
 | `DB_URL`, `CHECKPOINT_DB`, `CHROMA_DIR` | 기본값 `data/app.db`, `data/checkpoints.db`, `data/chroma` |
-| `RULES_PATH` | 다른 규칙표를 쓸 때(평가용 복사본). 기본은 `mcp_servers/business/rules/rules.yaml` |
+| `RULES_PATH` | 다른 규칙표를 쓸 때(평가용 복사본). 기본은 `risk_engine/rules.yaml` |
 
 ## 점수와 경보 기준
 
-모든 숫자는 [`mcp_servers/business/rules/rules.yaml`](mcp_servers/business/rules/rules.yaml)에만 있다. 총점 = 기본 점수 + 최근 12개월 숨은 신호 × 시간 반영률(6개월 이내 100%, 6~12개월 50%).
+모든 숫자는 [`risk_engine/rules.yaml`](risk_engine/rules.yaml)에만 있다. 총점 = 기본 점수 + 최근 12개월 숨은 신호 × 시간 반영률(6개월 이내 100%, 6~12개월 50%).
 
 | 총점 | 등급 | 하는 일 |
 | --- | --- | --- |

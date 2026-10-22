@@ -8,7 +8,7 @@ from __future__ import annotations
 import calendar
 from datetime import date
 
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine.loader import load_rules
 
 
 class RuleInputError(ValueError):
