@@ -3,8 +3,8 @@
 증권사 PB를 위한 B2B 에이전트의 전체 AI 아키텍처 설계와 ISO/IEC 25010 품질 특성별 설계·검증 근거를 정리한다.
 각 항목은 **설계 결정 → 구현 위치(파일) → 검증 증거(테스트·실행 결과) → 한계**를 함께 적었다. 구현과 다른 내용은 쓰지 않았고, 아직 못 한 것은 "한계"에 그대로 남겼다.
 
-- 팀 약속(테이블·도구·State)은 [CLAUDE.md](../CLAUDE.md), Agent 연동 경계는 [agent/INTEGRATION.md](../agent/INTEGRATION.md), 실행·검증은 [README.md](../README.md)
-- 검증 증거: `uv run pytest -q`(202 통과), `uv run python scripts/verify_all.py`(33개 항목), `eval/results/scenario_b.md`(데모 회사 5개)
+- 팀 약속(테이블·도구·State)은 [CLAUDE.md](../CLAUDE.md), Agent 연동 경계는 [docs/contracts/agent.md](../docs/contracts/agent.md), 실행·검증은 [README.md](../README.md)
+- 검증 증거: `uv run pytest -q`(202 통과), `uv run python scripts/ops/verify_all.py`(33개 항목), `eval/results/scenario_b.md`(데모 회사 5개)
 
 ---
 
@@ -13,7 +13,7 @@
 | 요구 | 아키텍처 결정 | 구현 위치 |
 | --- | --- | --- |
 | LLM 응답은 수 초~수십 초 걸린다 | 공시 처리는 작업으로 접수해 **202를 바로 돌려주고**, 진행 상황은 **SSE 이벤트**로 보낸다 | `api/routes/runs.py`, `api/routes/events.py` |
-| 점수는 설명 가능해야 하고 AI가 바꾸면 안 된다 | **점수·등급·우선순위는 규칙(코드)**이 계산하고, AI는 공시 해석(사실 추출)·설명·안내문만 맡는다. 규칙의 숫자는 `rules.yaml` 한 곳에만 둔다 | `mcp_servers/business/rules/` |
+| 점수는 설명 가능해야 하고 AI가 바꾸면 안 된다 | **점수·등급·우선순위는 규칙(코드)**이 계산하고, AI는 공시 해석(사실 추출)·설명·안내문만 맡는다. 규칙의 숫자는 `rules.yaml` 한 곳에만 둔다 | `risk_engine/` |
 | 데이터를 바꾸는 일은 사람이 확인한다 | 변경 도구(`create_contact_task`) 앞에서 Graph가 **`interrupt()`로 멈추고** 상태를 저장한 뒤, PB 승인을 받으면 **같은 `thread_id`로 재개**한다 | `agent/nodes/pb_approval.py`, `agent/runtime.py` |
 | 답변에는 근거 문서가 있어야 한다 | 원문을 질문과 별개로 **미리 색인**하고(rag-mcp), AI의 인용은 **검색된 원문의 연속 구간과 글자 그대로 일치**해야 통과한다(아니면 수동 확인) | `mcp_servers/rag/`, `agent/evidence.py`, `agent/assembly.py` |
 | 고객 개인정보를 모델에 보내지 않는다 | 모델 입력에서 이름·연락처를 마스킹하고 안내문은 `{고객명}` 자리표시로만 쓴다. 이름은 화면에 보여줄 때만 채운다 | `harness/masking.py`, `agent/assembly.py`(`prepare_input`) |
@@ -183,7 +183,7 @@ flowchart TD
 
 ## 6. 배포 뷰 (실행 위치)
 
-데모는 한 대의 노트북에서 프로세스로 실행한다(`uv run python scripts/run_stack.py`). **모든 서버는 `127.0.0.1`에만 연다**(외부에 노출되는 포트 없음).
+데모는 한 대의 노트북에서 프로세스로 실행한다(`uv run python scripts/ops/run_stack.py`). **모든 서버는 `127.0.0.1`에만 연다**(외부에 노출되는 포트 없음).
 
 | 프로세스 | 포트 | 기술 | 접근하는 쪽 |
 | --- | --- | --- | --- |
@@ -274,7 +274,7 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 | 성숙성·결함 허용 | LLM 429·503은 2회 재시도 후 대체 모델, 계속 실패하면 `FAILED`. 안전하게 실패(`MANUAL_CHECK`) | `agent/assembly.py`(`recover_llm`) | `verify_all.py` 6단계: `FAKE_LLM_ERROR=503`에서도 완료, 재시도·대체 전환 기록 |
 | 복구성 | 승인 대기 상태를 체크포인트에 저장, **서버 재시작 후에도 이어서 실행** | `agent/runtime.py` | `verify_all.py` 5단계: 재시작 후 승인 대기 복원·승인 이어서 실행 |
 | 일관성(멱등) | `save_assessment`는 rcept_no 기준 upsert, 업무는 (평가, 고객)당 1건, 결정 감사 기록은 `idempotency_key`로 중복 방지 | `mcp_servers/business/tools/` | 멱등 테스트, 재시도 테스트 |
-| 가용성 | 화면 서버가 죽어도 API·MCP는 유지하고 화면만 다시 시작 | `scripts/run_stack.py` | 신호를 보내 직접 시험 |
+| 가용성 | 화면 서버가 죽어도 API·MCP는 유지하고 화면만 다시 시작 | `scripts/ops/run_stack.py` | 신호를 보내 직접 시험 |
 
 한계: 단일 노트북 구성이라 이중화·장애 조치는 없다.
 
@@ -295,12 +295,12 @@ ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했�
 | 모듈성 | 계층 분리, 도구는 파일 하나에 도구 하나, 노드는 파일 하나에 노드 하나 | `mcp_servers/business/tools/`, `agent/nodes/` |
 | 재사용성·수정 용이성 | 위험도 숫자·분류 키워드·예외 규칙을 `rules.yaml`에만 두고 코드에 숫자를 쓰지 않음, 프롬프트를 버전 파일로 관리 | `rules.yaml`, `agent/prompts/` |
 | 분석 용이성 | LangSmith trace와 `audit_logs`로 한 공시의 모든 단계를 추적 | `verify_all.py` 7단계 |
-| 시험 용이성 | 테스트 202개(규칙·도구·RAG·Agent 경계·API·Harness·조립), 한 번에 검증하는 `verify_all.py`(33개 항목) | `tests/`, `scripts/verify_all.py` |
+| 시험 용이성 | 테스트 202개(규칙·도구·RAG·Agent 경계·API·Harness·조립), 한 번에 검증하는 `verify_all.py`(33개 항목) | `tests/`, `scripts/ops/verify_all.py` |
 
 ### 10-8. 이식성 (Portability)
 | 하위 특성 | 설계 결정 | 근거 |
 | --- | --- | --- |
-| 설치 용이성 | `uv.lock`으로 의존성 고정, `scripts/doctor.py`로 환경 점검, `run_stack.py`로 한 번에 실행 | `README.md` |
+| 설치 용이성 | `uv.lock`으로 의존성 고정, `scripts/ops/doctor.py`로 환경 점검, `run_stack.py`로 한 번에 실행 | `README.md` |
 | 적응성 | 모델 공급자·임베딩·DB 경로·포트를 `.env`로 교체(Anthropic/OpenAI, `EMBEDDING_PROVIDER`) | `shared/config.py`, `agent/assembly.py` |
 
 한계: SQLite 파일 하나를 여러 프로세스가 쓰므로 PB 여러 명의 동시 결정은 시험하지 않았다.

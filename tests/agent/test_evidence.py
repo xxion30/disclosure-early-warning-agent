@@ -1,3 +1,4 @@
+"""근거 검증: 원문에서 확인되지 않은 인용은 점수 계산에 닿지 않는다. (담당: R2)"""
 import asyncio
 
 import pytest
@@ -17,23 +18,7 @@ def test_unverified_evidence_cannot_reach_scoring(kit, failure):
         state = await AgentRuntime(kit.deps, InMemorySaver()).start(RCEPT)
         assert state["status"] == "MANUAL_CHECK"
         assert "calculate_risk_score" not in [name for name, _ in kit.tools.calls]
-        assert not kit.store.tasks
         if failure == "bad_evidence":
             assert state["fact_attempts"] == 3
             assert state["retry_count"] == 2
-    asyncio.run(scenario())
-
-
-@pytest.mark.parametrize("failure", ["unsafe", "invalid_drafts"])
-def test_rewrite_exhaustion_requires_manual_message(kit, failure):
-    async def scenario():
-        setattr(kit.model, failure, True)
-        state = await AgentRuntime(kit.deps, InMemorySaver()).start(RCEPT)
-        assert state["error"] is None, state
-        assert state["status"] == "WAITING_APPROVAL"
-        assert len(state["manual_drafts"]) == 7
-        assert set(state["drafts"].values()) == {""}
-        assert set(state["draft_attempts"].values()) == {3}
-        assert [p for p, _ in kit.model.calls].count("rewrite_message") == 2
-        assert not kit.store.tasks
     asyncio.run(scenario())

@@ -7,8 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from mcp_servers.business.rules.impact_rules import ImpactInputError
-from mcp_servers.business.rules.risk_rules import RuleInputError
+from risk_engine.risk_rules import RuleInputError
 from shared.schemas import ErrorCode, fail
 
 log = logging.getLogger("business-mcp")
@@ -42,7 +41,7 @@ def guarded(fn):
             return fn(*args, **kwargs)
         except ToolFail as e:
             return fail(e.code, e.message)
-        except (RuleInputError, ImpactInputError) as e:
+        except RuleInputError as e:
             return fail(ErrorCode.INVALID_INPUT, str(e))
         except TimeoutError as e:
             return fail(ErrorCode.TIMEOUT, str(e) or "시간 초과")

@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from mcp_servers.business.rules.risk_rules import parse_date
+from risk_engine.risk_rules import parse_date
 from mcp_servers.business.tools._common import guarded
 from shared.db import get_session
 from shared.models import Company, Disclosure

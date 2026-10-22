@@ -1,6 +1,6 @@
 """GET /runs/{rcept_no}/events — 진행 이벤트 SSE (CLAUDE.md 8장 이벤트 이름).
 
-waiting_approval / done / failed 중 하나가 오면 스트림을 닫는다.
+done / failed 중 하나가 오면 스트림을 닫는다.
 화면은 EventSource(`/runs/{rcept_no}/events?token=<JWT>`)로 붙는다.
 """
 import json

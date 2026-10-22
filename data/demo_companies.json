@@ -1,5 +1,5 @@
 {
-  "_note": "데모 회사 5개와 기대 결과(평가 정답). corp_code와 정확한 사건일은 scripts/fetch_dart.py 실행 후 DART 공시로 확인해서 채운다. verified=false인 값은 아직 확인 전이다.",
+  "_note": "데모 회사 5개와 기대 결과(평가 정답). corp_code와 정확한 사건일은 scripts/data/fetch_dart.py 실행 후 DART 공시로 확인해서 채운다. verified=false인 값은 아직 확인 전이다.",
   "companies": [
     {
       "name": "금양",

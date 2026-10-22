@@ -1,6 +1,6 @@
 from sqlalchemy import delete, select
 
-from mcp_servers.business.rules.loader import load_rules
+from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, not_found, now_iso, require_company
 from shared.db import get_session
 from shared.models import ASSESSMENT_STATUSES, LEVELS, Disclosure, RiskAssessment, Signal
@@ -34,7 +34,7 @@ def save_assessment(
         signals: calculate_risk_score가 돌려준 signals
         score_result: calculate_risk_score 결과 (total_score, level, combo_upgraded, breakdown)
         ai_explanation: AI가 쓴 설명 (점수 내역마다 원문 인용 포함)
-        status: RUNNING | WAITING_APPROVAL | DONE | FAILED | MANUAL_CHECK
+        status: RUNNING | DONE | FAILED | MANUAL_CHECK
 
     Returns:
         assessment_id, created(새로 만들었으면 true)

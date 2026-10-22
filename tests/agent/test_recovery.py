@@ -42,7 +42,6 @@ def test_ai_turn_budget_ends_in_manual_check(kit):
     async def scenario():
         state = await AgentRuntime(replace(kit.deps, max_model_turns=1), InMemorySaver()).start(RCEPT)
         assert state["status"] == "MANUAL_CHECK"
-        assert not kit.store.tasks
     asyncio.run(scenario())
 
 
@@ -55,7 +54,6 @@ def test_execution_timeout(kit):
         kit.tools.call = slow
         state = await AgentRuntime(replace(kit.deps, execution_seconds=0.01), InMemorySaver()).start(RCEPT)
         assert state["status"] == "MANUAL_CHECK"
-        assert not kit.store.tasks
     asyncio.run(scenario())
 
 

@@ -1,6 +1,6 @@
 """OpenDART에서 공시 원문 1건을 받아 평문으로 돌려준다 (운영의 공시별 임시 색인용).
 
-scripts/fetch_dart.py(D)와 같은 방식(document.xml → zip → 태그 제거)이다. 네트워크·키 오류는 예외로 올리고,
+scripts/data/fetch_dart.py(D)와 같은 방식(document.xml → zip → 태그 제거)이다. 네트워크·키 오류는 예외로 올리고,
 rag 도구가 NOT_FOUND·TIMEOUT 형식으로 바꿔 돌려준다.
 """
 from __future__ import annotations

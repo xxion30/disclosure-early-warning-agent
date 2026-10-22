@@ -36,8 +36,8 @@ trace_id `b0b519c6-9a78-4899-9aa1-56f78d1e9a45` · `FAKE_LLM_ERROR=503`
 ## 다시 만드는 법
 ```bash
 # 1. 정상 흐름: 서버를 띄운 뒤 금양 사건 공시를 처리
-uv run python scripts/run_stack.py
-uv run python scripts/replay_demo.py --stock 001570
+uv run python scripts/ops/run_stack.py
+uv run python scripts/demo/replay_demo.py --stock 001570
 # 2. 가드레일: .env에 FAKE_UNSAFE_DRAFT=true 를 넣고 api 서버를 다시 시작한 뒤 같은 공시를 새 DB에서 처리
 # 3. 503: .env에 FAKE_LLM_ERROR=503 을 넣고 api 서버를 다시 시작한 뒤 같은 공시를 새 DB에서 처리
 ```

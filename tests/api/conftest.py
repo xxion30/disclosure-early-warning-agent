@@ -27,7 +27,7 @@ def session_factory():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
-    seed = json.loads((ROOT_DIR / "data" / "customers.json").read_text(encoding="utf-8"))
+    seed = json.loads((ROOT_DIR / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))
     with SessionLocal() as s:
         for p in seed["pbs"]:
             s.add(PB(pb_id=p["pb_id"], name=p["name"], email=p["email"], password_hash=hash_password(p["password"])))

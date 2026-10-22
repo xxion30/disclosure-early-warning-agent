@@ -74,17 +74,6 @@ class RunManager:
         ch.publish(make_event(QUEUED, rcept_no, position=position))
         return ch
 
-    def resume(self, rcept_no: str, decision: dict) -> RunChannel:
-        """결정 API(다음 단계)가 부른다. 승인 대기 중인 채널만 재개할 수 있다."""
-        ch = self._channels.get(rcept_no)
-        if ch is None:  # 서버 재시작 뒤: 채널은 없지만 체크포인트에서 이어서 실행할 수 있다
-            ch = self._channels[rcept_no] = RunChannel(rcept_no)
-        elif ch.running:
-            raise RunConflict(f"{rcept_no}는 아직 실행 중입니다.")
-        ch.history = []  # 새 구간
-        self._spawn(ch, self.adapter.resume(rcept_no, decision))
-        return ch
-
     def _spawn(self, ch: RunChannel, events: AsyncIterator[Event]) -> None:
         ch.task = asyncio.create_task(self._pump(ch, events), name=f"run-{ch.rcept_no}")
 
