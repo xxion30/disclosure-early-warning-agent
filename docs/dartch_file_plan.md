@@ -300,3 +300,41 @@ collector ──▶ shared 만       risk_engine ──▶ shared 만 (collector
 2. `risk_engine/` 분리(MCP 서버 밖으로)를 할지. 안 하면 `mcp_servers/business/rules/`에 두고, 담당 표는 그대로 쓴다.
 3. 1단계 구조 정리를 한 사람이 한꺼번에 하는 방식으로 동의하는지 (그동안 다른 사람은 대기).
 4. `.github/CODEOWNERS`에 쓸 GitHub 아이디.
+
+---
+
+## 9. 실행 결과 (2026-10-22, 브랜치 `dartch/scaffold`)
+
+계획 중 **구조 정리(1단계)** 를 실행했다. 단위 테스트는 시작 때 234개(건너뜀 1) → 끝 197개(건너뜀 1)다. 줄어든 37개는 삭제한 기능(승인·안내문·연락 업무·영향도·색인 삭제 도구)을 시험하던 테스트이고, 남은 테스트는 모두 통과한다. 진짜 모델·MCP로 감사의견 거절 공시 1건을 끝까지 돌려 `Critical` → `DONE`을 확인했고, 화면 3개(경보 목록·상세·고객 현황)를 브라우저로 확인했다.
+
+### 계획대로 한 것
+| 계획 | 결과 |
+| --- | --- |
+| 규칙 엔진을 `risk_engine/`으로 이동 | 완료 (`rules.yaml`, `loader.py`, `risk_rules.py`) |
+| `shared/models.py` → `models/` 패키지 | 완료 (`base`·`core`·`tenant`·`risk`·`collect`) |
+| `agent/assembly.py` 분리 | 완료: `model_adapter.py`·`harness_llm.py`·`rules.py`(R2), `adapters/`(R4), `enable_langsmith`는 `harness/tracing.py` |
+| `harness/recovery.py` 분리 | 완료: `recovery_llm.py`(R2), `recovery_tools.py`(R4) |
+| `eval/run_eval.py` 분리 | 완료: 실행기 + `eval/experiments/`(실험별 파일) |
+| `scripts/` 하위 폴더, `api/smoke.py` 이동 | 완료: `ops/`·`data/`·`demo/` |
+| `tests/mcp_servers/` 재배치 | 완료: `business`·`risk_engine`·`rag`·`wiring`·`demo`, 모델 쪽 단위 테스트는 `tests/agent/test_model_adapter.py` |
+| `CLAUDE.md`·`README.md` 분리, `docs/contracts/` | 완료 (`docs/run.md`, `docs/verification.md`, `docs/risk_policy.md` 뼈대 포함) |
+| `data/customers.json` → `data/seed/` | 완료 |
+| `.github/CODEOWNERS`, 신규 폴더 뼈대(`collector/`·`migrations/`·`docker/`·`eval/cases/`) | 완료 (GitHub 아이디는 자리표시) |
+| 고객 연락 기능 삭제 | 완료: 노드 6개·프롬프트 2개, 도구 4개(`compute_customer_impact`·`create_contact_task`·`update_task_status`·`purge_disclosure_text`), `release_disclosure_index`, `impact_rules.py`, `ContactTask` 모델, 승인·업무 API, 안내문 검토·연락 업무 화면 |
+
+### 계획과 다르게 한 것 (이유와 다음 담당)
+| 항목 | 이번에 한 것 | 이유 | 다음 |
+| --- | --- | --- | --- |
+| `risk_rules.py`를 `red`·`orange`·`yellow`·`stage`로 분리 | **이동만** (분리 안 함) | 지금 코드는 A·B그룹 구조라 쪼개는 일이 곧 다시 쓰는 일이다 | R4가 새 규칙을 쓸 때 분리 |
+| `score_risk`·`extract_facts`·프롬프트·`alerts.py`→`states.py`·`AlertList`→`RiskList` 같은 **이름 변경** | 안 함 | 새 그래프·새 규칙과 함께 바뀌는 것이라 지금 이름만 바꾸면 어긋난다 | R2·R4·R5 |
+| `rag_docs/companies/`, `data/disclosures/`, `data/demo_companies.json`, `scripts/data/{fetch_dart,build_rag_docs,compute_base_score}.py` **삭제** | 안 함 (유지) | RAG 색인·`seed_db`·여러 테스트가 아직 이 데이터를 쓴다. 수집기와 `eval/cases/`가 생기기 전에 지우면 재현 수단이 없다 | R3가 수집기를 만든 뒤 삭제 |
+| `Disclosure.content_hash`·`processed_at`·`purged_at` 칸, `RAG_INDEX_MODE`와 `ensure_indexed` | 유지 | 처리 후 삭제 도구는 지웠지만 "필요할 때 임시 색인을 만드는" 부분은 R3의 메모리 색인 작업의 출발점이다 | R3 |
+| `harness/guardrails.py`의 안내문 금지 표현 검사 | 유지 | 설명문 검사로 바꾸는 것은 R2의 일이다 (`eval/experiments/guardrail.py`도 안내문 샘플 기준) | R2 |
+| `tests/harness/test_harness.py` 분리 | 안 함 | 파일이 작고 R2·R4 테스트가 한 파일에 섞여 있어도 충돌이 드물다 | 필요해지면 |
+| `contact_tasks` 표 | 모델만 삭제 | 이미 만들어진 `data/app.db`에는 표가 남는다(데이터는 건드리지 않음) | 마이그레이션(R4) |
+| `WAITING_APPROVAL` 상태 | 새 저장은 막음(`save_assessment`가 거절), 화면은 옛 기록을 "완료(이전 방식)"으로 표시 | 기존 DB에 옛 기록이 있다 | 새 DB에서는 사라짐 |
+
+### 아직 안 되는 것
+- `scripts/ops/verify_all.py`, `scripts/demo/check_scenario_a.py`, `scripts/demo/smoke.py`는 연락·승인 시나리오 기준이라 끝까지 돌지 않는다 (파일 머리에 표시). `scripts/demo/replay_all.py`의 공시 재생은 쓸 수 있지만 영향 고객 기대 비교(`judge`)는 맞지 않는다.
+- `docs/architecture.md`·`docs/contracts/*`는 이전 프로젝트 기준이다. 각 문서 머리에 DARTCH에서 바뀌는 곳을 적어 두었고, 담당이 개발하면서 고친다.
+- `CODEOWNERS`의 `@R?-github-id`를 실제 아이디로 바꿔야 리뷰어 자동 지정이 동작한다.

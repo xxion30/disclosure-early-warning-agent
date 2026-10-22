@@ -1,4 +1,7 @@
-"""시나리오 A 8~12단계를 실행 중인 API 서버에 대고 확인한다 (합치기·데모 전 점검용).
+"""⚠ 이전 프로젝트(Capstone)의 시나리오(고객 연락·PB 승인 포함) 기준이라 DARTCH에서는 끝까지 돌지 않는다.
+새 시나리오(🔴/🟠/🟡 판정, 수집기)에 맞춰 다시 쓴다 — 담당은 파일 구성 계획(docs/dartch_file_plan.md)을 본다.
+
+시나리오 A 8~12단계를 실행 중인 API 서버에 대고 확인한다 (합치기·데모 전 점검용).
 
     uv run python scripts/demo/smoke.py --rcept-no <감사의견 거절 공시 접수번호>
     uv run python scripts/demo/smoke.py --rcept-no 20250401000001        # 가짜 Graph면 형식만 맞으면 됨

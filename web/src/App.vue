@@ -25,7 +25,6 @@ function logout() {
       <nav aria-label="주 메뉴">
         <RouterLink to="/alerts">경보</RouterLink>
         <RouterLink to="/customers">고객 현황</RouterLink>
-        <RouterLink to="/tasks">연락 업무</RouterLink>
       </nav>
       <div v-if="auth.pb" class="who">
         <span class="avatar" aria-hidden="true">{{ initial }}</span>

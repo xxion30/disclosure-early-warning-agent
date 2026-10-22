@@ -1,4 +1,7 @@
-"""데모 회사를 차례로 재생하고, 사건 공시까지 처리한 뒤 기대 결과(data/demo_companies.json)와 비교한다.
+"""⚠ 공시 재생(run_company)은 그대로 쓸 수 있지만, 영향 고객·P1/P2 기대 비교(judge)는 고객 연락 기능 삭제로 더 이상 맞지 않는다.
+새 기대 결과(🔴/🟠/🟡 단계)에 맞춰 judge를 고친다 — 담당은 docs/dartch_file_plan.md를 본다.
+
+데모 회사를 차례로 재생하고, 사건 공시까지 처리한 뒤 기대 결과(data/demo_companies.json)와 비교한다.
 
     # 서버가 떠 있어야 한다: uv run python scripts/ops/run_stack.py  (진짜 모드)
     uv run python scripts/demo/replay_all.py                 # 금양을 뺀 4개 회사 (위니아·오스템·CGV·SK)

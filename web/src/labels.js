@@ -6,30 +6,19 @@ export const NODE_LABELS = {
   extract_facts: '원문 분석',
   score_risk: '위험 점수',
   explain_risk: '근거 설명',
-  route_by_level: '등급 분기',
   save_and_summarize: '저장·요약',
-  find_customers: '영향 고객',
-  draft_messages: '안내문 초안',
-  guardrail_check: '가드레일',
-  pb_approval: 'PB 승인',
-  create_tasks: '업무 생성',
-  save_rejection: '반려 저장',
-  prepare_approval: '승인 준비',
-  finalize: '결정 반영',
   completed: '완료 처리',
   handle_failure: '실패 기록',
 }
 
-// High·Critical 경로의 기본 순서 (진행 단계 표시)
+// 공시 1건이 지나가는 기본 순서 (진행 단계 표시). 고객 연락(안내문·승인·업무)은 삭제됐다.
 export const MAIN_PATH = [
-  'receive', 'classify', 'extract_facts', 'score_risk', 'explain_risk',
-  'find_customers', 'draft_messages', 'guardrail_check', 'prepare_approval', 'pb_approval',
-  'save_rejection', 'create_tasks', 'finalize',
+  'receive', 'classify', 'extract_facts', 'score_risk', 'explain_risk', 'save_and_summarize',
 ]
 
 export const ASSESSMENT_STATUS = {
   RUNNING: '처리 중',
-  WAITING_APPROVAL: '승인 대기',
+  WAITING_APPROVAL: '완료(이전 방식)', // 승인 단계 삭제 전에 저장된 옛 기록
   DONE: '완료',
   FAILED: '실패',
   MANUAL_CHECK: '수동 확인 필요',
@@ -53,7 +42,7 @@ export const STATUS_GUIDE = {
   FAILED: {
     tone: 'bad',
     title: '자동 처리에 실패했어요',
-    text: '점수·안내문이 끝까지 만들어지지 않았어요. 공시 원문을 직접 확인하고, 필요하면 공시 처리를 다시 시작해 주세요.',
+    text: '점수와 설명이 끝까지 만들어지지 않았어요. 공시 원문을 직접 확인하고, 필요하면 공시 처리를 다시 시작해 주세요.',
   },
   MANUAL_CHECK: {
     tone: 'warn',
@@ -63,7 +52,7 @@ export const STATUS_GUIDE = {
   RUNNING: {
     tone: 'info',
     title: '아직 처리 중이에요',
-    text: '단계가 끝나면 점수와 영향 고객이 채워져요.',
+    text: '단계가 끝나면 점수와 설명이 채워져요.',
   },
 }
 

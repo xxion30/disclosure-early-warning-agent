@@ -70,21 +70,13 @@ watch(tab, () => {
 watch([statusFilter, levelFilter, summaryDate], load)
 onMounted(load)
 
-// 진짜 모드에서 MCP 서버가 꺼져 있으면 영향 고객 수를 못 센다. 목록은 DB 내용으로 계속 보여준다
-const graphError = computed(() => rows.value.find((r) => r.graph_error)?.graph_error || '')
-
-const waitingCount = computed(() => rows.value.filter((r) => r.status === 'WAITING_APPROVAL').length)
-
 const today = computed(() => new Date().toLocaleDateString('ko-KR', {
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
 }))
 const stats = computed(() => ({
-  pending: rows.value.reduce((sum, r) => sum + Number(r.my_pending_count || 0), 0),
-  pendingAlerts: rows.value.filter((r) => r.my_pending_count > 0).length,
   critical: rows.value.filter((r) => r.level === 'Critical').length,
   high: rows.value.filter((r) => r.level === 'High').length,
-  // 끝난 경보의 P1까지 더하면 이미 결정한 고객이 다시 세진다. 승인 대기 경보만 센다
-  p1: rows.value.filter((r) => r.status === 'WAITING_APPROVAL').reduce((sum, r) => sum + Number(r.p1_count || 0), 0),
+  medium: rows.value.filter((r) => r.level === 'Medium').length,
 }))
 
 // ---- 공시 1건 처리 시작 (데모용) ----
@@ -101,7 +93,7 @@ async function startRun() {
     connect(rceptNo.value.trim(), {
       onEnd: (name, data) => {
         load()
-        if (name === 'waiting_approval' && data.assessment_id) {
+        if (name === 'done' && data.assessment_id) {
           router.push({ name: 'alert-detail', params: { assessmentId: data.assessment_id } })
         }
       },
@@ -126,11 +118,6 @@ async function startRun() {
   </div>
 
   <div class="stat-grid">
-    <div class="stat dark">
-      <span class="stat-label">내 승인 대기</span>
-      <div class="stat-value"><strong>{{ stats.pending }}</strong><span>명</span></div>
-      <span class="stat-note">{{ stats.pendingAlerts ? `경보 ${stats.pendingAlerts}건에 걸쳐 있어요` : '지금은 결정할 고객이 없어요' }}</span>
-    </div>
     <div class="stat">
       <span class="stat-label"><span class="dot dot-critical" aria-hidden="true"></span>Critical</span>
       <div class="stat-value"><strong>{{ stats.critical }}</strong><span>건</span></div>
@@ -139,12 +126,12 @@ async function startRun() {
     <div class="stat">
       <span class="stat-label"><span class="dot dot-high" aria-hidden="true"></span>High</span>
       <div class="stat-value"><strong>{{ stats.high }}</strong><span>건</span></div>
-      <span class="stat-note">고객 영향도 계산 대상</span>
+      <span class="stat-note">경보</span>
     </div>
     <div class="stat">
-      <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>P1 연락 대상</span>
-      <div class="stat-value"><strong>{{ stats.p1 }}</strong><span>명</span></div>
-      <span class="stat-note">승인 대기 경보 기준</span>
+      <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>Medium</span>
+      <div class="stat-value"><strong>{{ stats.medium }}</strong><span>건</span></div>
+      <span class="stat-note">일일 요약 대상</span>
     </div>
   </div>
 
@@ -218,7 +205,6 @@ async function startRun() {
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="graphError" class="notice">{{ graphError }} 영향 고객 수는 연결되면 다시 보입니다.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -227,9 +213,6 @@ async function startRun() {
             <th>공시</th>
             <th>등급</th>
             <th class="num">점수</th>
-            <th class="num">영향 고객</th>
-            <th class="num">P1</th>
-            <th class="num">내 승인 대기</th>
             <th>상태</th>
             <th>생성</th>
           </tr>
@@ -264,14 +247,11 @@ async function startRun() {
               </div>
             </td>
             <td class="num score">{{ isUnscored(r) ? '-' : r.total_score ?? '-' }}</td>
-            <td class="num">{{ r.affected_count }}명</td>
-            <td class="num p1">{{ r.p1_count }}</td>
-            <td class="num"><span v-if="r.my_pending_count > 0" class="count-pill">{{ r.my_pending_count }}</span><span v-else class="muted">-</span></td>
             <td><StatusBadge :status="r.status" /></td>
             <td class="created-at">{{ formatTime(r.created_at) }}</td>
           </tr>
           <tr v-if="!rows.length && !loading">
-            <td colspan="9" class="empty">표시할 경보가 없습니다.</td>
+            <td colspan="6" class="empty">표시할 경보가 없습니다.</td>
           </tr>
         </tbody>
       </table>
@@ -298,7 +278,6 @@ async function startRun() {
 .disclosure-title { font-weight: 500; }
 .level-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .alert-list .score { font-size: 16px; font-weight: 700; }
-.p1 { color: var(--bad); font-weight: 700; }
 .alert-list .created-at { font-size: 13px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 540px) {
   .run-start { width: 100%; border-radius: var(--radius); }

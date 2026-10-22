@@ -139,7 +139,6 @@ uv run python scripts/demo/replay_all.py --stock 048260  # 한 회사만
 | `GRAPH_ADAPTER` | `fake`(기본) \| `real` |
 | `RAG_INDEX_MODE` | `persistent`(기본, 데모·평가): `rag_docs/`를 `ingest`로 미리 색인해 둔다. `ephemeral`(운영): 공시 1건을 처리할 때 그 원문만 임시로 색인하고(DB 본문 → rag_docs 파일 → DART 순서로 원문을 찾음), 경보를 저장한 직후 색인과 DB 본문을 지운다. 해시·처리 시각만 남는다. 참고 문서 4개의 색인은 그대로 둔다 |
 | `FAKE_LLM_ERROR` | `503`이면 기본 모델 호출만 실패시킨다 (재시도 → 대체 모델 시연) |
-| `FAKE_UNSAFE_DRAFT` | `true`면 첫 안내문 초안에 금지 표현을 섞는다 (가드레일 → 다시 쓰기 시연). 발표 증빙 trace는 [docs/evidence/traces.md](docs/evidence/traces.md) |
 | `JWT_SECRET` | 32자 이상 권장 |
 | `DB_URL`, `CHECKPOINT_DB`, `CHROMA_DIR` | 기본값 `data/app.db`, `data/checkpoints.db`, `data/chroma` |
 | `RULES_PATH` | 다른 규칙표를 쓸 때(평가용 복사본). 기본은 `risk_engine/rules.yaml` |

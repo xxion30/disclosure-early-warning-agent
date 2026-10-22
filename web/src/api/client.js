@@ -51,13 +51,8 @@ export const api = {
 
   listAlerts: (params) => http.get('/alerts', { params }).then((r) => r.data),
   getAlert: (id) => http.get(`/alerts/${id}`).then((r) => r.data),
-  getDrafts: (id) => http.get(`/alerts/${id}/drafts`).then((r) => r.data),
-  decide: (id, decisions) => http.post(`/alerts/${id}/decision`, { decisions }).then((r) => r.data),
 
   listCustomers: () => http.get('/customers').then((r) => r.data),
-
-  listTasks: (params) => http.get('/tasks', { params }).then((r) => r.data),
-  updateTask: (id, body) => http.patch(`/tasks/${id}`, body).then((r) => r.data),
 }
 
 // axios의 params 배열을 ?level=High&level=Critical 형태로 (FastAPI 방식)

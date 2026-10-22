@@ -1,5 +1,5 @@
 <script setup>
-// 진행 단계 표시. MAIN_PATH 순서로 보여주고, 그 밖의 노드(save_and_summarize 등)는 온 순서대로 뒤에 붙인다.
+// 진행 단계 표시. MAIN_PATH 순서로 보여주고, 그 밖의 노드는 온 순서대로 뒤에 붙인다.
 import { computed } from 'vue'
 
 import { MAIN_PATH, NODE_LABELS } from '../labels'
@@ -16,9 +16,9 @@ const steps = computed(() => {
   }))
 })
 
-// 막대: PB 승인까지를 100%로 본다 (반려·업무 생성은 승인 뒤 단계라 빼고 셈)
+// 막대: 기본 단계 전체를 100%로 본다
 const percent = computed(() => {
-  const upto = MAIN_PATH.indexOf('pb_approval') + 1
+  const upto = MAIN_PATH.length
   const reached = steps.value.slice(0, upto).filter((s) => s.status !== 'todo').length
   return Math.round((reached / upto) * 100)
 })
