@@ -1,7 +1,5 @@
-"""Synthetic fixtures only; these are not real DART disclosures or rule tests."""
+"""Synthetic fixtures only; these are not real DART disclosures or rule tests. (담당: R2)"""
 import copy
-import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,9 +14,6 @@ EVIDENCE = {"source": "synthetic.md", "quote": "테스트 감사의견은 거절
 
 class FakeTools:
     def __init__(self, level="Critical"):
-        data = json.loads((Path(__file__).parents[2] / "data/seed/customers.json").read_text())
-        self.customers = [{k: row[k] for k in ("customer_id", "impact_score", "impact_level", "priority")}
-                          | {"reasons": {}} for row in data["expected_impact_001570_critical"]]
         self.level = level
         self.calls = []
         self.error = None
@@ -37,8 +32,7 @@ class FakeTools:
             "calculate_risk_score": {"total_score": 2.5, "level": self.level, "combo_upgraded": False,
                 "signals": [{"signal_type": "TEST", "points": 2.5, "detail": {}}],
                 "breakdown": [{"signal_type": "TEST", "points": 2.5, "evidence": [EVIDENCE]}]},
-            "compute_customer_impact": self.customers,
-            "search_reference": {"chunks": [{"text": "상담 안내만 작성한다.", "source": "test-guide"}]},
+            "search_reference": {"chunks": [{"text": "참고 문서 조각.", "source": "test-guide"}]},
         }
         value = copy.deepcopy(responses[name])
         if self.bad_chunks and name == "search_disclosure_text":
@@ -50,8 +44,6 @@ class FakeModel:
     def __init__(self):
         self.calls = []
         self.bad_evidence = False
-        self.unsafe = False
-        self.invalid_drafts = False
         self.failure = None
         self.tool_requests = []
 
@@ -70,13 +62,8 @@ class FakeModel:
         elif prompt == "extract_facts":
             evidence = {**EVIDENCE, "quote": "지어낸 인용"} if self.bad_evidence else EVIDENCE
             value = {"facts": [{"signal_type": "TEST", "values": {"opinion": "거절"}, "evidence": [evidence]}]}
-        elif prompt == "explain_risk":
+        else:  # explain_risk
             value = {"items": [{"breakdown_index": 0, "explanation": "규칙 도구의 테스트 결과다.", "evidence": [EVIDENCE]}]}
-        else:
-            message = "{고객명}님, 매도하세요." if self.unsafe else "{고객명}님, 공시 내용을 확인하시고 PB에게 문의해 주세요."
-            value = {"drafts": {c["customer_id"]: message for c in payload["customers"]}}
-            if self.invalid_drafts:
-                value["drafts"] = {}
         return schema.model_validate(value)
 
 
@@ -113,10 +100,6 @@ class FakeStore:
     def __init__(self):
         self.saved = []
         self.audits = {}
-        self.tasks = {}
-        self.create_attempts = []
-        self.fail_customer = None
-        self.fail_after_write = False
 
     async def save(self, state, status):
         self.saved.append((copy.deepcopy(state), status))
@@ -126,17 +109,6 @@ class FakeStore:
         key = payload.get("idempotency_key", str(len(self.audits)))
         self.audits[key] = (action, payload, state["trace_id"])
 
-    async def create_task(self, payload):
-        self.create_attempts.append(payload)
-        if payload["customer_id"] == self.fail_customer:
-            raise RuntimeError("test create failure")
-        key = payload["idempotency_key"]
-        self.tasks.setdefault(key, {**payload, "task_id": len(self.tasks) + 1})
-        if self.fail_after_write:
-            self.fail_after_write = False
-            raise RuntimeError("crash after write")
-        return self.tasks[key]["task_id"]
-
 
 @pytest.fixture
 def kit():
@@ -145,6 +117,5 @@ def kit():
                         classify=lambda title: "AUDIT" if "감사" in title else None,
                         signal_input=lambda extracted: [
                             {"signal_type": fact["signal_type"], "detail": fact["values"]}
-                            for fact in extracted["facts"]],
-                        create_task=store.create_task)
+                            for fact in extracted["facts"]])
     return SimpleNamespace(deps=deps, tools=tools, model=model, harness=harness, store=store)

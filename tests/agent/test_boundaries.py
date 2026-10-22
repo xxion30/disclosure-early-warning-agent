@@ -6,7 +6,7 @@ from langchain_core.messages import ToolMessage
 from agent.llm import StructuredLLM, read_prompt
 from agent.adapters.mcp_client import normalize_response, MCPTools
 from agent.adapters.store import ToolAssessmentStore
-from agent.state import DraftsOutput
+from agent.state import ExplanationOutput
 from shared.schemas import ok
 
 
@@ -18,9 +18,11 @@ def test_mcp_normalization_and_tool_allowlist():
         normalize_response({"ok": False})
     with pytest.raises(ValueError):
         asyncio.run(MCPTools({}).call("update_task_status", {}))
+    with pytest.raises(ValueError):  # 연락 업무 도구는 삭제됐고, 허용 목록에도 없다
+        asyncio.run(MCPTools({}).call("create_contact_task", {}))
 
 
-@pytest.mark.parametrize("name", ["system", "select_tools", "extract_facts", "explain_risk", "draft_message", "rewrite_message"])
+@pytest.mark.parametrize("name", ["system", "select_tools", "extract_facts", "explain_risk"])
 def test_versioned_prompts(name):
     version, body = read_prompt(name)
     # 프롬프트를 바꾸면 버전을 올린다. extract_facts v5: B의 signal_type·values 이름, 신호 없음 처리, 인용은 한 곳을 그대로 복사
@@ -34,18 +36,18 @@ def test_model_503_uses_d_recovery_and_same_schema(kit):
         def __init__(self):
             self.calls = 0
         def with_structured_output(self, schema):
-            assert schema is DraftsOutput
+            assert schema is ExplanationOutput
             return self
         async def ainvoke(self, messages, config):
             self.calls += 1
-            assert config["metadata"]["prompt_version"]["draft_message"] == "v1"
-            return {"drafts": {"C001": "{고객명}님, 상담 부탁드립니다."}}
+            assert config["metadata"]["prompt_version"]["explain_risk"] == "v2"
+            return {"items": [{"breakdown_index": 0, "explanation": "설명", "evidence": [{"source": "s", "quote": "q", "rcept_no": "1", "location": "chunk-0"}]}]}
 
     async def scenario():
         primary, fallback = Model(), Model()
         model = StructuredLLM(primary, fallback, kit.harness, fake_error="503")
-        result = await model.generate("draft_message", DraftsOutput, {})
-        assert result.drafts["C001"].startswith("{고객명}")
+        result = await model.generate("explain_risk", ExplanationOutput, {})
+        assert result.items[0].explanation == "설명"
         assert primary.calls == 0
         assert fallback.calls == 1
     asyncio.run(scenario())
@@ -72,34 +74,6 @@ def test_unsafe_tool_message_cannot_be_success():
         normalize_response(message)
 
 
-def test_task_binding_checks_authority_and_shared_input(kit):
-    from agent.adapters.store import ToolTaskCreator
-    from agent.execution import Execution, current_execution
-    from shared.schemas import ToolResponse
-
-    class Tools:
-        async def call(self, name, arguments):
-            assert name == "create_contact_task"
-            assert set(arguments) == {"assessment_id", "customer_id", "priority", "draft_message"}
-            return ToolResponse.model_validate(ok({"task_id": 5}))
-
-    async def scenario():
-        async def allowed(pb, cid, assessment):
-            return pb == "P01" and cid == "C001" and assessment == 1
-        token = current_execution.set(Execution(120, 8))
-        try:
-            creator = ToolTaskCreator(Tools(), kit.harness, allowed, idempotency_confirmed=True)
-            payload = {"pb_id": "P01", "customer_id": "C001", "assessment_id": 1,
-                       "priority": "P1", "draft_message": "{고객명}님, 상담 부탁드립니다.",
-                       "idempotency_key": "1:C001", "trace_id": "test"}
-            assert await creator(payload) == 5
-            with pytest.raises(PermissionError):
-                await creator({**payload, "pb_id": "P02"})
-        finally:
-            current_execution.reset(token)
-    asyncio.run(scenario())
-
-
 def test_model_primary_retries_then_falls_back(kit):
     class Model:
         model_name = "synthetic"
@@ -113,11 +87,11 @@ def test_model_primary_retries_then_falls_back(kit):
                 exc = RuntimeError("synthetic outage")
                 exc.status_code = 503
                 raise exc
-            return {"drafts": {"C001": "{고객명}님, 상담 부탁드립니다."}}
+            return {"items": [{"breakdown_index": 0, "explanation": "설명", "evidence": [{"source": "s", "quote": "q", "rcept_no": "1", "location": "chunk-0"}]}]}
 
     async def scenario():
         primary, fallback = Model(True), Model()
-        await StructuredLLM(primary, fallback, kit.harness).generate("draft_message", DraftsOutput, {})
+        await StructuredLLM(primary, fallback, kit.harness).generate("explain_risk", ExplanationOutput, {})
         assert primary.calls == 3
         assert fallback.calls == 1
     asyncio.run(scenario())

@@ -10,8 +10,8 @@ API(`api/graph_adapter.default_dependencies`)는 여기서 만든 deps를 받기
 from __future__ import annotations
 
 from agent.adapters.harness_tools import default_harness
-from agent.adapters.store import AssessmentStore, ToolTaskCreator, audit, authorize_task
-from agent.model_adapter import KnownSignalsModel, UnsafeDraftInjector, build_model
+from agent.adapters.store import AssessmentStore, audit
+from agent.model_adapter import KnownSignalsModel, build_model
 from agent.ports import Dependencies
 from agent.rules import make_classifier, signal_input
 from harness.tracing import enable_langsmith
@@ -30,8 +30,6 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
         tools = await MCPTools.connect(settings)
     if model is None:
         model = build_model(harness, settings)
-    if settings.FAKE_UNSAFE_DRAFT:
-        model = UnsafeDraftInjector(model)
     return Dependencies(
         tools=tools,
         model=KnownSignalsModel(model),
@@ -39,6 +37,5 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
         persistence=AssessmentStore(tools, audit, harness, upsert_confirmed=True),
         classify=make_classifier(),
         signal_input=signal_input,
-        create_task=ToolTaskCreator(tools, harness, authorize_task, idempotency_confirmed=True),
         quiet_types=frozenset(load_rules().get("no_signal_ok_types", [])),
     )

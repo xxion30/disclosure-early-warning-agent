@@ -1,10 +1,10 @@
-"""Serializable graph state and validated model/API payloads.
+"""Serializable graph state and validated model payloads. (담당: R2)
 
 Additional fields are A-local; see docs/contracts/agent.md before binding other components.
 """
 from typing import Any, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrictModel(BaseModel):
@@ -42,48 +42,12 @@ class ExplanationOutput(StrictModel):
 class ToolRequest(StrictModel):
     tool: Literal["search_disclosure_text", "search_reference"]
     query: str = Field(min_length=1, max_length=200)
-    category: str | None = None  # search_reference일 때만: 상장규정 | 공시해설 | 회계용어 | 안내문가이드
+    category: str | None = None  # search_reference일 때만: 상장규정 | 공시해설 | 회계용어 | 안내문가이드(Phase 1에서 위험 항목 해설로 바뀐다)
 
 
 class ToolSelection(StrictModel):
     # 비어 있으면 추가 조회가 필요 없다는 뜻이다.
     requests: list[ToolRequest] = Field(default_factory=list, max_length=2)
-
-
-class DraftOutput(StrictModel):
-    message: str = Field(min_length=1)
-
-
-class CustomerDecision(StrictModel):
-    customer_id: str = Field(min_length=1)
-    status: Literal["approved", "rejected", "rewrite"]
-    edited_message: str | None = None
-    reject_reason: str | None = None
-
-    @model_validator(mode="after")
-    def validate_content(self):
-        if self.status == "rejected" and not (self.reject_reason or "").strip():
-            raise ValueError("반려 사유가 필요합니다")
-        if self.edited_message is not None and not self.edited_message.strip():
-            raise ValueError("수정 문안은 비어 있을 수 없습니다")
-        return self
-
-
-class ApprovalBatch(StrictModel):
-    decisions: list[CustomerDecision] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def unique_customers(self):
-        ids = [item.customer_id for item in self.decisions]
-        if len(ids) != len(set(ids)):
-            raise ValueError("같은 고객의 중복 결정")
-        return self
-
-
-class PBContext(StrictModel):
-    """Constructed by authenticated API code, never from a public request body."""
-    pb_id: str = Field(min_length=1)
-    allowed_customer_ids: frozenset[str]
 
 
 class AgentState(TypedDict, total=False):
@@ -98,11 +62,6 @@ class AgentState(TypedDict, total=False):
     risk_level: str
     combo_upgraded: bool
     ai_explanation: str
-    affected_customers: list[dict[str, Any]]
-    drafts: dict[str, str]
-    guardrail_flags: list[str]
-    approval: dict[str, Any]
-    task_ids: list[int]
     error: str | None
     # A-local execution fields, requiring no DB schema modification.
     assessment_id: int
@@ -111,11 +70,6 @@ class AgentState(TypedDict, total=False):
     trace_id: str
     trace_headers: dict[str, str]
     fact_attempts: int
-    draft_attempts: dict[str, int]
-    manual_drafts: list[str]
-    decisions: dict[str, dict[str, Any]]
-    customer_tasks: dict[str, int]
-    rewrite_customers: list[str]
     relevant: bool
     no_signal: bool
     last_node: str
@@ -125,12 +79,6 @@ class AgentState(TypedDict, total=False):
 def initial_state(rcept_no: str, trace_id: str) -> AgentState:
     return AgentState(
         disclosure={"rcept_no": rcept_no}, status="RUNNING", trace_id=trace_id,
-        retry_count=0, tool_call_counts={}, fact_attempts=0, draft_attempts={},
-        signals=[], evidence=[], affected_customers=[], drafts={}, guardrail_flags=[],
-        approval={}, decisions={}, customer_tasks={}, task_ids=[], manual_drafts=[],
-        rewrite_customers=[], error=None,
+        retry_count=0, tool_call_counts={}, fact_attempts=0,
+        signals=[], evidence=[], error=None,
     )
-
-
-class DraftsOutput(StrictModel):
-    drafts: dict[str, str]

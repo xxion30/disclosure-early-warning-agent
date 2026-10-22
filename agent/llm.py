@@ -11,7 +11,7 @@ PROMPT_DIR = Path(__file__).parent / "prompts"
 
 
 def read_prompt(name: str) -> tuple[str, str]:
-    if name not in {"system", "select_tools", "extract_facts", "explain_risk", "draft_message", "rewrite_message"}:
+    if name not in {"system", "select_tools", "extract_facts", "explain_risk"}:
         raise ValueError("알 수 없는 프롬프트")
     text = (PROMPT_DIR / f"{name}.md").read_text(encoding="utf-8")
     first, _, body = text.partition("\n")

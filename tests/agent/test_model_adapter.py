@@ -145,10 +145,10 @@ def test_model_requires_openai_key():
 def test_openai_models_use_function_calling_for_structured_output():
     """strict json_schema는 dict[str, Any]를 거부하므로 function calling을 기본으로 쓴다."""
     from agent.model_adapter import _openai_chat
-    from agent.state import DraftsOutput, FactsOutput
+    from agent.state import ExplanationOutput, FactsOutput
 
     m = _openai_chat("gpt-5.4-mini", "sk-test")
-    for schema in (FactsOutput, DraftsOutput):
+    for schema in (FactsOutput, ExplanationOutput):
         bound = m.with_structured_output(schema)
         assert "tool" in str(bound.first.kwargs).lower() or "function" in str(bound.first.kwargs).lower()
 
@@ -315,20 +315,3 @@ def test_signal_types_must_fit_the_disclosure_type():
     assert [f.signal_type for f in out.facts] == ["CB_BW"]
     out = asyncio.run(model.generate("extract_facts", FactsOutput, {"chunks": [chunk]}))  # 유형을 모르면 기존 동작
     assert len(out.facts) == 2
-
-
-def test_unsafe_draft_injector_only_touches_first_drafts():
-    """FAKE_UNSAFE_DRAFT 시연: 첫 초안에만 금지 표현을 섞고, 다시 쓰기는 그대로 둔다 (가드레일이 잡고 다시 쓰게 하려는 것)."""
-    from agent.model_adapter import UnsafeDraftInjector
-    from agent.state import DraftsOutput
-    from harness import guardrails
-
-    class Inner:
-        async def generate(self, prompt, schema, payload):
-            return schema.model_validate({"drafts": {"C001": "{고객명}님, 공시를 안내드립니다."}})
-
-    m = UnsafeDraftInjector(Inner())
-    first = asyncio.run(m.generate("draft_message", DraftsOutput, {}))
-    assert guardrails.find_forbidden(first.drafts["C001"])
-    again = asyncio.run(m.generate("rewrite_message", DraftsOutput, {}))
-    assert not guardrails.find_forbidden(again.drafts["C001"])

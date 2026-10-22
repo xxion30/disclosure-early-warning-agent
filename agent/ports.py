@@ -1,6 +1,6 @@
-"""Small integration boundaries; implementations are explicitly injected."""
+"""Small integration boundaries; implementations are explicitly injected. (담당: R2, 도구·저장 계약은 R4와 합의)"""
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from pydantic import BaseModel
 from harness.loop_limits import MAX_SECONDS, MAX_TURNS
@@ -37,7 +37,7 @@ class Persistence(Protocol):
         """Upsert by rcept_no, preserving assessment_id on status updates."""
         ...
     async def audit(self, state: AgentState, action: str, payload: dict) -> None:
-        """Durable, idempotent record including trace_id and customer decisions."""
+        """Durable, idempotent record including trace_id."""
         ...
 
 
@@ -50,8 +50,6 @@ class Dependencies:
     classify: Callable[[str], str | None]
     # Must map verified facts to B's agreed new_signals schema without assigning scores.
     signal_input: Callable[[dict], list[dict]]
-    # Authorizes actual task creation; must also implement storage idempotency.
-    create_task: Callable[[dict], Awaitable[int]]
     # 신호가 없는 것이 정상인 disclosure_type (rules.yaml no_signal_ok_types). 비어 있으면 모든 유형이 사실을 요구한다.
     quiet_types: frozenset[str] = frozenset()
     execution_seconds: float = MAX_SECONDS  # harness/loop_limits.py가 한도의 단일 출처
