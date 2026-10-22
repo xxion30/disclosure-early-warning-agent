@@ -33,7 +33,8 @@ def test_alert_list_shows_waiting(client, auth_headers, waiting):
     assert len(rows) == 1
     row = rows[0]
     assert row["status"] == "WAITING_APPROVAL" and row["level"] == "Critical"
-    assert row["affected_count"] == 7 and row["p1_count"] == 5
+    assert row["affected_count"] == 7
+    assert "total_score" not in row and "p1_count" not in row  # 점수·영향도 비노출
     assert row["my_pending_count"] == 4  # P01 담당 C001, C003, C005, C007
 
     assert client.get("/alerts?level=Low", headers=auth_headers).json() == []
@@ -43,7 +44,10 @@ def test_alert_list_shows_waiting(client, auth_headers, waiting):
 def test_alert_detail_masks_other_pb_names(client, auth_headers, waiting):
     body = client.get(f"/alerts/{waiting}", headers=auth_headers).json()
     customers = {c["customer_id"]: c for c in body["customers"]}
-    assert [c["priority"] for c in body["customers"]] == ["P1"] * 5 + ["P2"] * 2  # 우선순위순
+    assert len(body["customers"]) == 7 and "total_score" not in body and "priority" not in body["customers"][0]
+    amounts = [c["eval_amount"] for c in body["customers"]]
+    assert amounts == sorted(amounts, reverse=True)  # 보유 평가금액 큰 순
+    assert all("points" not in str(r.keys()) for r in body["reasons"])
     assert customers["C001"]["name"] == "한지우" and customers["C001"]["mine"]
     assert customers["C002"]["name"] == "고객 C002" and not customers["C002"]["mine"]
     assert body["reasons"] and body["evidence"]

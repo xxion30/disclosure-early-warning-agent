@@ -46,14 +46,15 @@ def test_only_my_customers_are_returned(client, auth_headers, p02_headers, world
     assert all(c["name"] and not c["name"].startswith("고객 ") for c in p01.values())  # 내 고객은 실명
 
 
-def test_exposure_and_priority_match_the_alert_rules(client, auth_headers, p02_headers, world):
+def test_exposure_matches_the_alert_level(client, auth_headers, p02_headers, world):
     p01 = by_id(client.get("/customers", headers=auth_headers))
-    # 시나리오 A: 금양 Critical → P1 5명(C001·C003·C005·C006·C007), P2 2명(C002·C004)
+    # 금양 Critical → 보유 고객 전원(C001~C007)이 Critical 노출. 영향도(P1~P3)와 점수는 없다
     for cid in ("C001", "C003", "C005", "C007"):
-        assert p01[cid]["exposure"]["top_priority"] == "P1", cid
+        assert p01[cid]["exposure"]["top_level"] == "Critical", cid
     p02 = by_id(client.get("/customers", headers=p02_headers))
-    assert p02["C006"]["exposure"]["top_priority"] == "P1"
-    assert p02["C002"]["exposure"]["top_priority"] == "P2" and p02["C004"]["exposure"]["top_priority"] == "P2"
+    for cid in ("C002", "C004", "C006"):
+        assert p02[cid]["exposure"]["top_level"] == "Critical", cid
+    assert "top_priority" not in p01["C001"]["exposure"]
     # 경보와 연결: 가장 최근의 High·Critical 평가(2번)를 가리킨다
     h = next(x for x in p01["C001"]["holdings"] if x["stock_code"] == "001570")
     assert h["alert"]["assessment_id"] == 2 and h["alert"]["level"] == "Critical" and h["stock_name"] == "금양"
@@ -73,16 +74,16 @@ def test_non_alert_holdings_have_no_alert_and_known_names(client, auth_headers, 
 
 def test_sorted_by_urgency_and_summary(client, auth_headers, world):
     res = client.get("/customers", headers=auth_headers).json()
-    order = [c["exposure"]["top_priority"] for c in res["customers"]]
-    rank = {"P1": 0, "P2": 1, "P3": 2, None: 9}
-    assert [rank[o] for o in order] == sorted(rank[o] for o in order)  # P1 → P2 → 노출 없음
+    order = [c["exposure"]["top_level"] for c in res["customers"]]
+    rank = {"Critical": 0, "High": 1, None: 9}
+    assert [rank[o] for o in order] == sorted(rank[o] for o in order)  # Critical → High → 노출 없음
     s = res["summary"]
-    assert s["customers"] == len(OWN["P01"]) and s["exposed"] >= s["p1"] + s["p2"] >= 1
+    assert s["customers"] == len(OWN["P01"]) and s["exposed"] >= s["critical"] + s["high"] >= 1
 
 
 def test_contact_history_shows_tasks_and_rejections(client, auth_headers, p02_headers, world):
     with world() as s:
-        s.add(ContactTask(assessment_id=2, customer_id="C001", pb_id="P01", priority="P1", impact_score=8,
+        s.add(ContactTask(assessment_id=2, customer_id="C001", pb_id="P01",
                           draft_message="{고객명}님, 공시 안내드립니다.", status="연락완료", result_note="통화 완료",
                           created_at="2025-03-21T11:00:00+09:00", updated_at="2025-03-22T09:00:00+09:00"))
         s.add(AuditLog(actor="P02", action="decision.reject", target="assessment:2/customer:C002",
@@ -102,7 +103,7 @@ def test_contact_history_shows_tasks_and_rejections(client, auth_headers, p02_he
 
 def test_other_pbs_history_never_leaks(client, auth_headers, world):
     with world() as s:
-        s.add(ContactTask(assessment_id=2, customer_id="C002", pb_id="P02", priority="P2", impact_score=1,
+        s.add(ContactTask(assessment_id=2, customer_id="C002", pb_id="P02",
                           draft_message="{고객명}님", status="승인", created_at=NOW, updated_at=NOW))
         s.commit()
     body = client.get("/customers", headers=auth_headers).text
@@ -117,3 +118,9 @@ def test_read_only(client, auth_headers):
 def test_empty_when_no_data(client, auth_headers):
     res = client.get("/customers", headers=auth_headers).json()  # 보유·경보가 없어도 깨지지 않는다
     assert res["summary"]["exposed"] == 0 and all(c["holdings"] == [] and c["history"] == [] for c in res["customers"])
+
+
+def test_dashboard_alerts_are_sorted_by_priority_without_scores(client, auth_headers, world):
+    rows = client.get("/alerts?alert=true", headers=auth_headers).json()
+    assert [r["level"] for r in rows] == ["Critical", "High"]  # Medium은 알림이 아니다, 높은 등급이 위
+    assert all("total_score" not in r and "p1_count" not in r for r in rows)

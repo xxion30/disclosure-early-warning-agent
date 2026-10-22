@@ -33,8 +33,6 @@ def _task_dict(t: ContactTask, customer: Customer, corp_name: str | None, a: Ris
         "level": a.level if a else None,
         "customer_id": t.customer_id,
         "customer_name": customer.name,
-        "priority": t.priority,
-        "impact_score": t.impact_score,
         "draft_message": t.draft_message,
         "message_preview": fill_name(t.draft_message, customer.name),
         "status": t.status,
@@ -63,7 +61,7 @@ def list_tasks(
     q = _query().where(ContactTask.pb_id == pb.pb_id)
     if status_:
         q = q.where(ContactTask.status == status_)
-    q = q.order_by(ContactTask.priority, ContactTask.created_at.desc())
+    q = q.order_by(ContactTask.created_at.desc(), ContactTask.task_id.desc())
     return [_task_dict(*row) for row in db.execute(q).all()]
 
 

@@ -87,8 +87,7 @@ class DbStore:
                 return existing.task_id
             now = now_iso()
             t = ContactTask(assessment_id=payload["assessment_id"], customer_id=payload["customer_id"],
-                            pb_id=payload["pb_id"], priority=payload["priority"],
-                            impact_score=self.impacts[payload["customer_id"]]["impact_score"],
+                            pb_id=payload["pb_id"],
                             draft_message=payload["draft_message"], status="승인", created_at=now, updated_at=now)
             s.add(t)
             s.commit()
@@ -167,7 +166,7 @@ def test_scenario_a_with_agent_runtime_and_restart(session_factory, kit, tmp_pat
         assert "pb_approval" not in finished  # interrupt로 멈춘 노드
         name, last = events[-1]
         assert name == "waiting_approval", last
-        assert last["affected"] == 7 and last["p1"] == 5 and sorted(last["pending"]) == sorted(P01 + P02)
+        assert last["affected"] == 7 and sorted(last["pending"]) == sorted(P01 + P02)
         aid = last["assessment_id"]
 
         row = c.get("/alerts", headers=h1).json()[0]

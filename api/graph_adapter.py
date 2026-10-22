@@ -71,10 +71,10 @@ class GraphAdapter(Protocol):
 
 
 def pending_customers(view: dict) -> list[str]:
-    """P1·P2 중 아직 결정되지 않은 고객 (P3는 안내문 대상이 아니다)."""
+    """아직 결정되지 않은 고객 (보유 고객 전원이 안내문 대상이다)."""
     return [
         c["customer_id"] for c in view.get("affected_customers", [])
-        if c.get("priority") in ("P1", "P2") and c["customer_id"] not in view.get("decided", {})
+        if c["customer_id"] not in view.get("decided", {})
     ]
 
 
@@ -96,19 +96,11 @@ FAKE_STOCK_CODE = "001570"  # 시나리오 A 금양
 
 
 def _load_expected_impact() -> list[dict]:
-    """data/seed/customers.json의 시나리오 A 기대 결과(D가 만든 평가 정답)를 그대로 쓴다."""
+    """data/seed/customers.json에서 가짜 종목(금양)의 보유 고객 전원을 평가금액 큰 순으로 읽는다."""
     path = ROOT_DIR / "data" / "seed" / "customers.json"
-    rows = json.loads(path.read_text(encoding="utf-8"))["expected_impact_001570_critical"]
-    return [
-        {
-            "customer_id": r["customer_id"],
-            "impact_score": r["impact_score"],
-            "impact_level": r["impact_level"],
-            "priority": r["priority"],
-            "reasons": {"weight_pct": r.get("weight_pct")},
-        }
-        for r in rows
-    ]
+    rows = [h for h in json.loads(path.read_text(encoding="utf-8"))["holdings"] if h["stock_code"] == FAKE_STOCK_CODE]
+    rows.sort(key=lambda h: (-h["eval_amount"], h["customer_id"]))
+    return [{"customer_id": h["customer_id"], "eval_amount": h["eval_amount"]} for h in rows]
 
 
 class FakeGraphAdapter:
@@ -157,7 +149,6 @@ class FakeGraphAdapter:
 
     # create_contact_task 흉내 (진짜는 A의 create_tasks 노드가 business-mcp로 생성)
     def _create_tasks(self, state: dict, pb_id: str, approved: list[dict]) -> list[int]:
-        impacts = {c["customer_id"]: c for c in state["affected_customers"]}
         ids = []
         with self.session_factory() as s:
             for d in approved:
@@ -167,8 +158,6 @@ class FakeGraphAdapter:
                     assessment_id=state["assessment_id"],
                     customer_id=cid,
                     pb_id=pb_id,
-                    priority=impacts[cid]["priority"],
-                    impact_score=impacts[cid]["impact_score"],
                     draft_message=d.get("edited_draft") or state["drafts"][cid],
                     status="승인",
                     created_at=now,
@@ -191,7 +180,7 @@ class FakeGraphAdapter:
             "ai_explanation": "[FAKE] 감사의견 거절은 A그룹 확정 악재라 점수와 상관없이 Critical입니다.",
             "evidence": [{"source": "[FAKE]", "quote": "[FAKE] 원문 인용 자리 — 진짜 Graph에서 채워짐", "rcept_no": rcept_no}],
             "affected_customers": customers,
-            "drafts": {c["customer_id"]: FAKE_DRAFT for c in customers if c["priority"] in ("P1", "P2")},
+            "drafts": {c["customer_id"]: FAKE_DRAFT for c in customers},
             "guardrail_flags": [],
             "manual_drafts": [],
             "decided": {},
@@ -225,7 +214,6 @@ class FakeGraphAdapter:
             node="pb_approval",
             assessment_id=state["assessment_id"],
             affected=len(state["affected_customers"]),
-            p1=sum(c["priority"] == "P1" for c in state["affected_customers"]),
             pending=pending_customers(state),
         )
 
@@ -429,7 +417,6 @@ class RealGraphAdapter:
                 node="pb_approval",
                 assessment_id=view["assessment_id"],
                 affected=len(customers),
-                p1=sum(c.get("priority") == "P1" for c in customers),
                 pending=pending_customers(view),
                 manual=view["manual_drafts"],
             )

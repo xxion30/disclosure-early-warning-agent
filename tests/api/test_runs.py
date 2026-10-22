@@ -28,7 +28,7 @@ def test_run_streams_until_waiting_approval(client, auth_headers):
     assert "guardrail_check" in finished
 
     last = events[-1][1]
-    assert last["affected"] == 7 and last["p1"] == 5  # CLAUDE.md 9장 시나리오 A 6단계
+    assert last["affected"] == 7  # CLAUDE.md 9장 시나리오 A 6단계
     assert last["assessment_id"] == 1
 
     status = client.get(f"/runs/{RCEPT}", headers=auth_headers).json()
