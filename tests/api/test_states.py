@@ -72,7 +72,9 @@ def test_confirmed_resolution_and_time_decay_are_distinct(session_factory,states
         evidence=[{'source':'s','quote':'q','rcept_no':'20250321802001','location':'l'}]
         row=update_state(s,'TEST-CORP',result,'2025-03-22',resolution_evidence=evidence)
         assert row.resolved and row.resolution_evidence==evidence
-        update_state(s,'TEST-CORP',{'stage':'RED','breakdown':[]},'2025-03-20')
+        from risk_engine.states import StaleStateError
+        with pytest.raises(StaleStateError):
+            update_state(s,'TEST-CORP',{'stage':'RED','breakdown':[]},'2025-03-20')
         assert row.stage=='NONE'  # late historical save cannot overwrite current state
 
 

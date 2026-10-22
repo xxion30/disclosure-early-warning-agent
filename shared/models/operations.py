@@ -27,6 +27,9 @@ class RiskState(Base):
     alert_version: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[str] = mapped_column(String)
     latest_filed_at: Mapped[str] = mapped_column(String)
+    as_of: Mapped[str | None] = mapped_column(String, nullable=True)
+    rules_digest: Mapped[str | None] = mapped_column(String, nullable=True)
+    state_version: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
 
 class StateRead(Base):
@@ -64,6 +67,7 @@ class CollectRun(Base):
     fetched_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(String, nullable=True)
+    lease_expires_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class CollectCursor(Base):

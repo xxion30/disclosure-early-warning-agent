@@ -42,6 +42,7 @@ def save_assessment(
     if status not in ASSESSMENT_STATUSES:
         raise invalid(f"status는 {', '.join(ASSESSMENT_STATUSES)} 중 하나여야 합니다: {status!r}")
     group_a = load_rules()["group_a"]
+    from risk_engine.states import score_fingerprint
     with get_session() as s:
         company = require_company(s, corp_code)
         # Public analysis for a company is serialized, including first upsert.
@@ -66,6 +67,13 @@ def save_assessment(
             row = RiskAssessment(corp_code=corp_code, rcept_no=rcept_no, created_at=now_iso(), reasons=[])
             s.add(row)
 
+        fingerprint = score_fingerprint(score_result) if score_result and score_result.get('stage') else None
+        publish = fingerprint is not None and fingerprint != row.score_fingerprint
+        if publish:
+            from risk_engine.states import update_state
+            current = update_state(s, corp_code, score_result, disc.filed_at)
+            row.risk_state_version = current.state_version
+            row.score_fingerprint = fingerprint
         if score_result is not None:
             level = score_result.get("level")
             if level not in LEVELS:
@@ -104,10 +112,7 @@ def save_assessment(
                         filed_at=str(sig.get("filed_at") or disc.filed_at),
                     )
                 )
-        if score_result and score_result.get('stage'):
-            from risk_engine.states import update_state
-            update_state(s, corp_code, score_result, disc.filed_at)
         if status in PROCESSED_STATUSES:
             disc.processed = True
         s.flush()
-        return ok({"assessment_id": row.assessment_id, "created": created, "status": row.status, "level": row.level, "stage": row.stage})
+        return ok({"assessment_id": row.assessment_id, "created": created, "status": row.status, "level": row.level, "stage": row.stage, "risk_state_version": row.risk_state_version})

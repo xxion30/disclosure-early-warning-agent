@@ -455,7 +455,10 @@ class RealGraphAdapter:
             }
             for cid, d in (state.get("decisions") or {}).items()
         }
+        from risk_engine.states import score_fingerprint
+        review_fingerprint = score_fingerprint(score) if score.get('stage') else None
         return {
+            "review_fingerprint": review_fingerprint,
             "status": state.get("status"),
             "assessment_id": state.get("assessment_id"),
             "disclosure": state.get("disclosure", {}),

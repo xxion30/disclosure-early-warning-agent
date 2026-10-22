@@ -17,6 +17,8 @@ class RiskAssessment(Base):
     corp_code: Mapped[str] = mapped_column(ForeignKey("companies.corp_code"), index=True)
     rcept_no: Mapped[str] = mapped_column(String, index=True)
     stage: Mapped[str] = mapped_column(String, default='NONE', server_default='NONE')
+    risk_state_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score_fingerprint: Mapped[str | None] = mapped_column(String, nullable=True)
     total_score: Mapped[float] = mapped_column(Float, default=0)
     level: Mapped[str] = mapped_column(String, default="Low")
     combo_upgraded: Mapped[bool] = mapped_column(Boolean, default=False)

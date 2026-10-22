@@ -1,7 +1,7 @@
 """PB current risk state API. Explicit public projections prevent score leakage."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, case
 from sqlalchemy.orm import Session
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
@@ -10,6 +10,7 @@ from shared.models import Company, Disclosure, RiskState, StateRead, RiskAssessm
 from shared.models.risk import STAGES
 from risk_engine.stages import ALERT_STAGES
 from risk_engine.loader import load_rules
+from shared.presentation import public_explanation
 
 router = APIRouter(prefix='/states', tags=['states'])
 
@@ -17,13 +18,14 @@ router = APIRouter(prefix='/states', tags=['states'])
 def public_item(item):
     # Whitelist, not a blacklist: scores can hide inside arbitrary detail/extras fields.
     return {key: item.get(key) for key in ('group', 'item', 'signal_type', 'event_id', 'rcept_no',
-            'filed_at', 'active', 'resolved', 'missing', 'explanation')} | {
+            'filed_at', 'active', 'resolved', 'missing')} | {
+        'explanation': public_explanation(item.get('explanation')),
         'evidence': [{key: e.get(key) for key in ('source', 'quote', 'rcept_no', 'location')}
                      for e in item.get('evidence', []) if isinstance(e, dict)]}
 
 
 def visible_state(db, pb, stock_code):
-    row = db.scalar(select(RiskState).where(RiskState.stock_code == stock_code, RiskState.stock_code.in_(visible_stock_codes(pb))))
+    row = db.scalar(select(RiskState).where(RiskState.stock_code == stock_code, RiskState.stock_code.in_(visible_stock_codes(pb))).execution_options(populate_existing=True))
     if row is None:
         raise HTTPException(404, '종목 위험 상태를 찾을 수 없습니다.')
     return row
@@ -71,8 +73,8 @@ def state_detail(stock_code: str, pb: CurrentPB = Depends(get_current_pb), db: S
     row = visible_state(db, pb, stock_code)
     timeline = db.scalars(select(Disclosure).where(Disclosure.corp_code == row.corp_code)
                          .order_by(Disclosure.filed_at.desc(), Disclosure.rcept_no.desc()))
-    assessment = db.scalar(select(RiskAssessment).where(RiskAssessment.corp_code == row.corp_code).order_by(RiskAssessment.created_at.desc(), RiskAssessment.assessment_id.desc()))
-    return {**project(db, pb, row), 'ai_explanation': assessment.ai_explanation if assessment else None, 'items': [public_item(i) for i in row.items],
+    assessment = db.scalar(select(RiskAssessment).where(RiskAssessment.corp_code == row.corp_code, RiskAssessment.risk_state_version == row.state_version).order_by(RiskAssessment.created_at.desc(), RiskAssessment.assessment_id.desc()))
+    return {**project(db, pb, row), 'ai_explanation': public_explanation(assessment.ai_explanation) if assessment else None, 'items': [public_item(i) for i in row.items],
             'resolution_evidence': [{k: e.get(k) for k in ('source', 'quote', 'rcept_no', 'location')} for e in row.resolution_evidence],
             'timeline': [{k: getattr(d, k) for k in ('rcept_no', 'title', 'filed_at', 'url', 'event_id')} for d in timeline]}
 
@@ -86,11 +88,18 @@ def acknowledge(stock_code: str, body: Acknowledge, pb: CurrentPB = Depends(get_
     row = visible_state(db, pb, stock_code)
     if body.version > row.alert_version:
         raise HTTPException(409, '아직 존재하지 않는 알림 버전입니다.')
-    read = db.get(StateRead, (pb.pb_id, row.corp_code))
-    if read is None:
-        read = StateRead(pb_id=pb.pb_id, corp_code=row.corp_code, tenant_id=pb.tenant_id, read_version=body.version)
-        db.add(read)
+    dialect = db.get_bind().dialect.name
+    if dialect == 'sqlite':
+        from sqlalchemy.dialects.sqlite import insert
+    elif dialect == 'postgresql':
+        from sqlalchemy.dialects.postgresql import insert
     else:
-        read.read_version = max(read.read_version, body.version)
-    db.flush()
-    return {'stock_code': stock_code, 'read_version': read.read_version, 'new': row.alert_version > read.read_version and row.stage in ALERT_STAGES}
+        raise HTTPException(503, '지원하지 않는 읽음 저장소입니다.')
+    statement = insert(StateRead).values(pb_id=pb.pb_id, corp_code=row.corp_code,
+                                        tenant_id=pb.tenant_id, read_version=body.version)
+    statement = statement.on_conflict_do_update(index_elements=['pb_id', 'corp_code'],
+        set_={'read_version': case((statement.excluded.read_version > StateRead.read_version,
+                                   statement.excluded.read_version), else_=StateRead.read_version)})
+    read_version = db.execute(statement.returning(StateRead.read_version)).scalar_one()
+    return {'stock_code': stock_code, 'read_version': read_version,
+            'new': row.alert_version > read_version and row.stage in ALERT_STAGES}

@@ -50,3 +50,10 @@
 ### 재무 스냅샷 지표 형식 (R4 초안, R3 확인 필요)
 
 `indicators`는 `{signal_type: {status: "OK"|"MISSING"|"MANUAL_CHECK", detail: {규칙 입력 필드}}}`이다. `sources`는 `{source,quote,rcept_no,location}` 목록이다. `period`는 `YYYY` 또는 `YYYY-Qn`, `period_kind`는 ANNUAL/QUARTER/YTD다. 연속 적자 연수는 ANNUAL 자료에서만 사용하고, 분기 비교는 같은 누적 기준과 기간 슬롯을 사용한다. 분모가 0·음수·누락된 비율을 자동 0으로 대체하지 않는다. 수집기는 `shared.collection.reserve_stocks`/`finish_stock`을 사용해 종목별 중복 수집과 커서 누락을 방지한다.
+
+## R4 검증 후 보완 계약 (2026-10-22)
+
+- `risk_states`에 `as_of`, `rules_digest`, `state_version`을 추가한다. `state_version`은 공개 판정 내용이 바뀔 때 증가하고 `alert_version`과 구분한다. 계산 도구가 읽은 `expected_state_version`으로 저장 시 경합을 검사한다.
+- `risk_assessments.risk_state_version`은 초안이 참조한 공개 판정 버전이다. 초기 판정 저장 뒤 승인 재개 시 동일 결과를 다시 공개 상태에 쓰지 않는다. 최신 버전과 다른 초안, 해소·비경보 상태의 초안은 승인과 연락 업무 생성에서 거부한다.
+- `collect_runs.lease_expires_at`을 추가한다. 전달 전 장애로 남은 작업은 만료 후 FAILED로 전환하고 예약을 해제한다. 실제 작업자는 heartbeat로 임대를 갱신해야 한다. 만료 작업을 소생시키지 않고 새 run_id로 재실행한다.
+- financial_snapshots/collect_runs/collect_cursors의 단일 모델 정의는 `shared/models/operations.py`다. R3는 모델을 import하여 사용하고 collect.py에 같은 테이블을 재선언하지 않는다.

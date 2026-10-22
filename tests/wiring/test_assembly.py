@@ -103,6 +103,15 @@ def test_scenario_a_end_to_end_through_assembly(world):
             assert len(st["drafts"]) == 7 and st["guardrail_flags"] == []
             aid = st["assessment_id"]
 
+            # A current Graph checkpoint must pass the API's review-version gate.
+            from api.approval_validity import require_current_review
+            from api.graph_adapter import RealGraphAdapter
+            with db_module.get_session() as s:
+                assessment = s.get(RiskAssessment, aid)
+                view = RealGraphAdapter._view(st)
+                assert view['review_fingerprint'] == assessment.score_fingerprint
+                require_current_review(s, assessment, view)
+
             own = owners()
             p01 = sorted(c for c in own if own[c] == "P01" and c in st["drafts"])
             dec = [{"customer_id": c, "status": "approved"} for c in p01]

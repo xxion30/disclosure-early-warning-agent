@@ -1,6 +1,8 @@
 """DARTCH rules: no DB or Agent imports; AI supplied points are never used."""
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date
 from math import isfinite
 
@@ -172,12 +174,13 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
         sig['detail'] = {**detail, 'event_id': sig['event_id'], 'event_started_at': sig['event_started_at'], 'evidence': sig['evidence']}
         rows.append({'group': group.upper(), 'item': spec['label'], 'signal_type': st, 'event_id': sig['event_id'],
                      'rcept_no': sig.get('rcept_no'), 'filed_at': sig['filed_at'], 'points': points,
-                     'raw_points': raw_points, 'weight': weight, 'active': not excluded and not resolved and bool(weight),
+                     'raw_points': raw_points, 'weight': weight, 'active': not excluded and not resolved and bool(weight) and (group == 'red' or points > 0),
                      'excluded': excluded, 'resolved': resolved, 'quote': detail.get('quote'), 'evidence': sig['evidence'], 'missing': missing})
     incoming_ids = {id(item) for item in incoming}
     incoming = [sig for sig in versions.values() if id(sig) in incoming_ids]
     stage, active, ratio = judge(orange, yellow, red, rules)
-    return {'stage': stage, 'active_stages': active, 'orange_score': orange, 'yellow_score': yellow,
+    digest = hashlib.sha256(json.dumps(rules, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return {'as_of': today.isoformat(), 'rules_digest': digest, 'stage': stage, 'active_stages': active, 'orange_score': orange, 'yellow_score': yellow,
             'composite_ratio': ratio, 'sort_value': sort_value(stage, orange, yellow, ratio, rules),
             'manual_check': bool(manual), 'manual_reasons': manual, 'breakdown': rows, 'signals': incoming,
             'level': LEGACY_LEVEL[stage], 'total_score': orange + yellow, 'combo_upgraded': stage == 'COMPOSITE'}

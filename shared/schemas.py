@@ -51,6 +51,9 @@ class Signal(BaseModel):
 
 
 class ScoreResult(BaseModel):
+    as_of: str | None = None
+    rules_digest: str | None = None
+    expected_state_version: int | None = None
     stage: Stage | None = None
     active_stages: list[Stage] = Field(default_factory=list)
     orange_score: float = 0

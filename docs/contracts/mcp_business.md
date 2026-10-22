@@ -118,3 +118,11 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 - 구형 level은 임시 호환 필드다. 감사의견 거절은 현재 YELLOW이며 호환 level은 High다. 기존 Critical 기대값을 새 판정으로 사용하지 않는다.
 - R2는 새 YAML의 red/orange/yellow signal_type을 분류·추출하고 stage를 기준으로 분기해야 한다. 구형 group_a/group_b와 옛 프롬프트는 새 위험 항목 전체를 지원하지 않는다.
 - 이벤트 관계는 R3가 검증한 disclosures.event_id/original_rcept_no를 사용한다. 모델이 event_id를 지정해 독립 사건을 임의로 합칠 수 없다.
+
+## R4 검증 후 보완 계약 (2026-10-22)
+
+- 계산 결과에 `as_of`, `rules_digest`, `expected_state_version`을 포함한다. 저장 결과의 `risk_state_version`을 초안 판정 버전으로 보존한다. 오래된 판정과 경합 결과는 최신 공개 상태를 덮을 수 없다.
+- R4 도구 adapter는 과거 근거를 RAG에서 다시 조회하고 source/rcept_no/location/quote를 실제 반환 조각과 검증한 경우에만 source_chunks를 붙인다. 저장된 인용을 원문인 것처럼 복사해 만들지 않는다. 원문 재조회 불가 시 수동 확인한다.
+- 재무 스냅샷은 지표별 유효 기간·최신 revision·연결 우선으로 선택한다. 연간 전용 지표를 최신 분기 자료로 지우지 않는다. R3의 지표 계산식·출처 실제 확인은 계속 필요하다.
+
+과거 근거 source_chunks는 실제 RAG 반환값에 대한 재검증 뒤 추출한 인용 부분과 조각 해시만 포함한다. 전체 검색 조각을 새 체크포인트·DB에 영속 저장하지 않는다.

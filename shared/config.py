@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
     QUEUE_ENABLED: bool = False
+    COLLECTION_LEASE_SECONDS: int = 600
 
     # 공시 원문 색인 방식. persistent(기본): rag_docs/를 미리 ingest해 둔다(데모·평가).
     # ephemeral(운영): 공시 1건을 처리할 때 그 원문만 임시로 색인하고, 처리가 끝나면 색인과 본문을 지운다.

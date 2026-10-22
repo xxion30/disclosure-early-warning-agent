@@ -278,3 +278,11 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 - 같은 신호가 공시마다 쌓여 경보가 사건보다 일찍 울리고, 이후 비슷한 공시마다 경보가 반복될 수 있다 (개선 과제).
 - 사건 날짜 기준 경보 시점은 모델이 어떤 공시를 신호로 보는지에 따라 실행마다 며칠~몇 주 달라질 수 있다 (등급과 사건 공시 결과는 안정적이다).
 - SQLite 파일 하나를 서버 두 개가 쓰므로 동시에 여러 PB가 결정하는 경우는 시험하지 않았다.
+
+## 검증 후 운영 보완 (2026-10-22)
+
+`uv run alembic upgrade head`로 20261022_02 마이그레이션을 적용한다. 위험 판정 기준일·버전과 수집 임대 컬럼을 추가하며 이전 마이그레이션은 수정하지 않는다.
+
+수집 실행자는 `shared.collection.heartbeat_run(session, run_id)`가 false이면 만료된 작업이므로 중단한다. 정상 실행 중 COLLECTION_LEASE_SECONDS보다 짧은 주기로 heartbeat하고, 각 종목을 finish_stock으로 마친 후 finish_run으로 실행을 종료한다. `uv run python -m scripts.ops.recover_collections`는 만료 작업을 실패 처리하고 예약을 해제한다. 수동 수집 요청도 만료 복구를 수행한다. 스케줄러에서의 호출 연결은 R3 담당이다.
+
+새 공시 분류와 모델 결과 필터는 R4의 Phase1 adapter에 연결했다. 과거 근거는 실제 RAG 조각을 다시 조회·검증하고 검증된 인용 부분만 반환한다. RAG 재조회가 불가능하면 수동 확인으로 남긴다. R2의 프롬프트 품질 검증 및 회사별 Graph 실행은 여전히 별도 연동이 필요하다.

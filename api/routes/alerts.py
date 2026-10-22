@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
+from shared.presentation import public_explanation
+from risk_engine.loader import load_rules
+from risk_engine.stages import sort_value
 from api.tenancy import visible_stock_codes, require_assessment_access, require_legacy_runtime
 from shared.models import Holding
 from api.graph_adapter import GraphAdapter, get_graph_adapter, pending_customers
@@ -71,8 +74,18 @@ def _strip(value):
 
 
 def priority_key(a: RiskAssessment) -> tuple:
-    """경보 우선순위: 등급 높은 순 → 점수 높은 순 → 최근 순. 점수는 정렬에만 쓰고 응답에는 넣지 않는다."""
-    return (-LEVEL_ORDER.index(a.level) if a.level in LEVEL_ORDER else 0, -(a.total_score or 0))
+    rules = load_rules()
+    if a.stage and a.stage != 'NONE':
+        orange = sum(float(r.get('points') or 0) for r in (a.reasons or []) if r.get('group') == 'ORANGE')
+        yellow = sum(float(r.get('points') or 0) for r in (a.reasons or []) if r.get('group') == 'YELLOW')
+        # Proper new assessments have a full breakdown; retain deterministic ordering for minimal imported rows.
+        if not a.reasons:
+            orange = a.total_score if a.stage == 'ORANGE' else 0
+            yellow = a.total_score if a.stage == 'YELLOW' else 0
+        ratio = orange / rules['thresholds']['orange'] + yellow / rules['thresholds']['yellow']
+        return (rules['stage_priority'][a.stage], -sort_value(a.stage, orange, yellow, ratio, rules))
+    legacy = {'Critical': 'RED', 'High': 'ORANGE', 'Medium': 'WATCH', 'Low': 'NONE'}
+    return (rules['stage_priority'][legacy.get(a.level, 'NONE')], -(a.total_score or 0))
 
 
 def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers: list[dict] | None) -> dict:
@@ -83,7 +96,7 @@ def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers
     - customers: 보유 고객 수와 내가 아직 결정하지 않은 수. Graph에 붙지 못하면 None
     """
     rows = [r for r in (a.reasons or []) if isinstance(r, dict)]
-    mine = [r for r in rows if r.get("rcept_no") == a.rcept_no and not r.get("from_history") and r.get("group") in ("A", "B")]
+    mine = [r for r in rows if r.get("rcept_no") == a.rcept_no and not r.get("from_history") and r.get("group") in ("A", "B", "RED", "ORANGE", "YELLOW") and r.get("active", True)]
     items = []
     for r in mine:
         quote = r.get("quote") or next((e.get("quote") for e in r.get("evidence") or [] if isinstance(e, dict)), None)
@@ -112,6 +125,10 @@ def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers
     if customers is not None:
         cust = {"total": len(customers),
                 "my_pending": sum(1 for c in customers if c.get("mine") and c.get("decision") == "승인대기")}
+    if a.stage and a.stage != 'NONE':
+        names = '·'.join(i['item'] for i in items)
+        headline = f'이번 공시의 위험 항목: {names}.' if names else '이번 공시의 추가 위험 항목은 없습니다.'
+        headline += f' 현재 단계는 {a.stage}입니다.'
     return {
         "headline": headline,
         "previous": {"assessment_id": previous.assessment_id, "level": previous.level} if prev_ok else None,
@@ -228,11 +245,11 @@ async def get_alert(
         "rcept_no": a.rcept_no,
         "status": a.status,
         "level": a.level,
-            "stage": a.stage,
+        "stage": a.stage,
         "combo_upgraded": a.combo_upgraded,
         "summary": impact_summary(a, previous, customers if view is not None else None),
         "reasons": strip_scores(a.reasons),  # 위험 항목·근거 (점수 숫자 없음, 점수 높은 순)
-        "ai_explanation": a.ai_explanation,
+        "ai_explanation": public_explanation(a.ai_explanation),
         "created_at": a.created_at,
         "company": {"corp_code": a.corp_code, "name": company.name if company else None,
                     "stock_code": company.stock_code if company else (view or {}).get("disclosure", {}).get("stock_code"),

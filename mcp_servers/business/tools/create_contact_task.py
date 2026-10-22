@@ -45,6 +45,14 @@ def create_contact_task(assessment_id: int, customer_id: str, draft_message: str
         if existing:
             return ok({"task_id": existing.task_id, "created": False, "status": existing.status})
 
+        # A job accepted just before a newer public analysis must not create a stale contact task.
+        from shared.models import RiskState
+        from risk_engine.stages import ALERT_STAGES
+        s.scalar(select(Company).where(Company.corp_code == a.corp_code).with_for_update())
+        current = s.scalar(select(RiskState).where(RiskState.corp_code == a.corp_code).with_for_update())
+        if current and (current.resolved or current.stage not in ALERT_STAGES or a.risk_state_version is None
+                        or a.risk_state_version != current.state_version):
+            raise invalid('초안의 위험 판정이 변경되거나 해소되었습니다. 기존 승인으로 업무를 만들 수 없습니다.')
         now = now_iso()
         task = ContactTask(
             tenant_id=customer.tenant_id,

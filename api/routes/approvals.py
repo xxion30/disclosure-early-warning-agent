@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.audit import write_audit
+from api.approval_validity import require_current_review
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from api.tenancy import require_assessment_access, require_legacy_runtime
@@ -69,6 +70,8 @@ async def decide(
     if view is None or view.get("status") != "WAITING_APPROVAL":
         raise HTTPException(status.HTTP_409_CONFLICT, "승인 대기 중인 경보가 아닙니다.")
 
+    if any(d.action != "reject" for d in body.decisions):
+        require_current_review(db, a, view)
     pending = set(pending_customers(view))
     ids = [d.customer_id for d in body.decisions]
     not_pending = [cid for cid in ids if cid not in pending]

@@ -6,7 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
-from shared.collection import reserve_stocks, release_run
+from shared.collection import reserve_stocks, release_run, recover_expired_runs, lease_deadline
 from shared.models import CollectRun, Company, Customer, Holding
 
 router = APIRouter(prefix='/collect', tags=['collect'])
@@ -34,6 +34,7 @@ async def collect_run(request: Request, pb: CurrentPB = Depends(get_current_pb),
     # Serialize requests for one tenant without adding a queue.
     from shared.models import Tenant
     db.scalar(select(Tenant).where(Tenant.tenant_id == pb.tenant_id).with_for_update())
+    recover_expired_runs(db)
     stocks = sorted(set(db.scalars(select(Holding.stock_code).join(Customer, Customer.customer_id == Holding.customer_id)
                                   .join(Company, Company.stock_code == Holding.stock_code)
                                   .where(Holding.tenant_id == pb.tenant_id, Customer.tenant_id == pb.tenant_id))))
@@ -43,7 +44,7 @@ async def collect_run(request: Request, pb: CurrentPB = Depends(get_current_pb),
     if existing:
         return run_view(existing)
     row = CollectRun(run_id=str(uuid4()), tenant_id=pb.tenant_id, requested_by=pb.pb_id,
-                     stock_codes=stocks, status='PENDING', started_at=datetime.now(timezone.utc).isoformat())
+                     stock_codes=stocks, status='PENDING', started_at=datetime.now(timezone.utc).isoformat(), lease_expires_at=lease_deadline())
     db.add(row)
     db.flush()
     reserved = reserve_stocks(db, row.run_id, stocks)

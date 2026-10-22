@@ -278,3 +278,52 @@ yellow:
   EQUITY_INVESTMENT:
     label: 타법인 출자
     manual_only: true
+
+# Current Agent uses this Phase 1 catalog through the R4 adapter. Legacy metadata above is evaluation-only.
+phase1_classification:
+  - {type: PAYMENT_DEFAULT, keywords: [원리금미지급]}
+  - {type: DEFAULT, keywords: [부도발생]}
+  - {type: REHABILITATION, keywords: [회생절차개시신청]}
+  - {type: BANK_MANAGEMENT_END, keywords: [관리절차중단]}
+  - {type: BANK_MANAGEMENT, keywords: [관리절차개시]}
+  - {type: DISSOLUTION, keywords: [해산사유발생]}
+  - {type: BUSINESS_SUSPENSION, keywords: [영업정지]}
+  - {type: EMBEZZLEMENT, keywords: [횡령ㆍ배임, 횡령·배임, 횡령배임]}
+  - {type: TRADING_HALT, keywords: [매매거래정지, 거래정지]}
+  - {type: OVERSEAS_DELISTING, keywords: [해외상장폐지, 해외증권시장상장폐지], all_keywords: [해외, 상장폐지]}
+  - {type: DELISTING, keywords: [상장폐지]}
+  - {type: ADMIN_ISSUE, keywords: [관리종목]}
+  - {type: AUDIT_REPORT, keywords: [감사보고서]}
+  - {type: LAWSUIT, keywords: [소송등의제기, 소송제기]}
+  - {type: CAPITAL_REDUCTION, keywords: [감자결정]}
+  - {type: RIGHTS_OFFERING, keywords: [유상증자결정, 유무상증자결정]}
+  - {type: CB_BW, keywords: [전환사채권발행결정, 신주인수권부사채권발행결정, 교환사채권발행결정]}
+  - {type: ASSET_TRANSFER, keywords: [영업양수, 영업양도, 자산양수, 자산양도, 타법인주식및출자증권양수, 타법인주식및출자증권양도, 풋백옵션]}
+  - {type: MERGER, keywords: [합병결정, 분할결정, 주식교환, 주식이전]}
+  - {type: TREASURY_DISPOSAL, keywords: [자기주식처분, 신탁계약해지]}
+  - {type: OWNERSHIP, keywords: [주식등의대량보유, 최대주주등소유주식변동]}
+  - {type: PERIODIC_REPORT, keywords: [사업보고서, 반기보고서, 분기보고서]}
+phase1_quiet_types: [OWNERSHIP]
+phase1_allowed_signals_by_type:
+  DEFAULT: [DEFAULT]
+  PAYMENT_DEFAULT: [PAYMENT_DEFAULT]
+  REHABILITATION: [REHABILITATION]
+  BANK_MANAGEMENT: [BANK_MANAGEMENT]
+  DISSOLUTION: [DISSOLUTION]
+  BUSINESS_SUSPENSION: [BUSINESS_SUSPENSION]
+  EMBEZZLEMENT: [EMBEZZLEMENT]
+  TRADING_HALT: [TRADING_HALT]
+  DELISTING: [DELISTING]
+  ADMIN_ISSUE: [ADMIN_ISSUE]
+  AUDIT_REPORT: [AUDIT_OPINION, CAPITAL_IMPAIRMENT]
+  LAWSUIT: [LAWSUIT]
+  CAPITAL_REDUCTION: [CAPITAL_REDUCTION]
+  RIGHTS_OFFERING: [RIGHTS_OFFERING]
+  CB_BW: [CB_BW]
+  ASSET_TRANSFER: [ASSET_TRANSFER, PUTBACK_OPTION]
+  MERGER: [MERGER]
+  TREASURY_DISPOSAL: [TREASURY_DISPOSAL]
+  BANK_MANAGEMENT_END: [BANK_MANAGEMENT_END]
+  OVERSEAS_DELISTING: [OVERSEAS_DELISTING]
+  OWNERSHIP: []
+  PERIODIC_REPORT: [AUDIT_OPINION, DEBT_ISSUANCE, FUND_USAGE, LARGEST_SHAREHOLDER_CHANGE, EQUITY_INVESTMENT]

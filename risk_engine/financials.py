@@ -1,4 +1,5 @@
 """Validate financial period/value contracts; collection/formulas are R3's responsibility."""
+import re
 from risk_engine.stages import number
 
 
@@ -38,3 +39,25 @@ def snapshot_signals(snapshot, filed_at):
                         'rcept_no': snapshot.rcept_no, 'filed_at': filed_at,
                         'evidence': snapshot.sources, 'detail': detail})
     return signals
+
+
+def select_snapshot_signals(snapshots, filing_dates):
+    """Select per-indicator periods, then consolidated basis, then latest correction."""
+    candidates = {}
+    for snapshot in snapshots:
+        if snapshot.basis not in ('CONSOLIDATED', 'SEPARATE') or snapshot.period_kind not in ('ANNUAL', 'QUARTER', 'YTD'):
+            continue
+        match = re.fullmatch(r'(\d{4})(?:-Q([1-4]))?', snapshot.period)
+        if match is None or (snapshot.period_kind == 'ANNUAL') != (match.group(2) is None):
+            raise ValueError('재무 스냅샷 기간 형식이 기준과 일치하지 않습니다.')
+        period_end = (int(match.group(1)), int(match.group(2) or '4'), snapshot.period_kind == 'ANNUAL')
+        for signal in snapshot_signals(snapshot, filing_dates[snapshot.rcept_no]):
+            st = signal['signal_type']
+            if st == 'OPERATING_CASH_FLOW' and snapshot.period_kind != 'ANNUAL':
+                continue
+            # For the same reporting period choose consolidated before separate, even if ingested earlier.
+            key = (period_end, snapshot.basis == 'CONSOLIDATED', snapshot.revision,
+                   filing_dates[snapshot.rcept_no], snapshot.rcept_no)
+            if st not in candidates or key > candidates[st][0]:
+                candidates[st] = (key, signal)
+    return [candidates[st][1] for st in sorted(candidates)]
