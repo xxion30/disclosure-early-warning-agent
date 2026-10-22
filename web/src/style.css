@@ -216,3 +216,67 @@ button.block { width: 100%; }
 .success { color: var(--ok); background: var(--ok-soft); }
 blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md); background: #f4f7fe; color: #2a3554; line-height: 1.6; }
 .message { white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; line-height: 1.6; }
+.message mark { background: var(--blue-soft); color: var(--blue-strong); font-weight: 700; border-radius: 6px; padding: 0 4px; }
+
+/* ---------- 뒤로 가기 (알약 링크) ---------- */
+.back-link { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px 0 12px; margin-bottom: 20px; border-radius: var(--pill); background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 14px; font-weight: 500; }
+.back-link:hover { background: var(--surface-2); text-decoration: none; }
+
+/* ---------- 작은 숫자 칸 (카드 안) ---------- */
+.mini-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mini-stat { background: var(--surface-2); border-radius: 20px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mini-stat-label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.mini-stat-value { display: flex; align-items: baseline; gap: 4px; }
+.mini-stat-value strong { font-size: 26px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.mini-stat-value span, .mini-stat-note { font-size: 13px; color: var(--muted); }
+.mini-stat.bad { background: var(--bad-soft); }
+.mini-stat.bad .mini-stat-label, .mini-stat.bad .mini-stat-note, .mini-stat.bad strong { color: var(--bad); }
+.mini-stat.dark { background: var(--navy); color: #fff; }
+.mini-stat.dark .mini-stat-label, .mini-stat.dark .mini-stat-value span { color: #c9d3ee; }
+.mini-stat.dark .mini-stat-note { color: #a9b4d0; }
+
+/* ---------- 원문 인용 ---------- */
+.quote { margin: 0; background: #f4f7fe; border-radius: var(--radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.quote blockquote { margin: 0; padding: 0; background: none; border-radius: 0; font-size: 14px; line-height: 1.65; color: #2a3554; }
+.quote figcaption { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.quote-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 800px) { .quote-grid { grid-template-columns: 1fr; } }
+.chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--pill); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.chip.strong { color: var(--blue-strong); font-weight: 700; }
+.chip.soft { background: var(--neutral-soft); }
+
+/* ---------- 우선순위 알약 ---------- */
+.prio-pill { display: inline-block; padding: 5px 12px; border-radius: var(--pill); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.prio-pill.prio-P1 { background: var(--bad-soft); color: var(--bad); }
+.prio-pill.prio-P2 { background: var(--warn-soft); color: var(--warn); }
+.prio-pill.prio-P3 { background: var(--neutral-soft); color: var(--muted); }
+
+/* ---------- 영향도 막대 ---------- */
+.impact { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.impact-track { flex: 1; height: 8px; border-radius: var(--pill); background: var(--neutral-soft); overflow: hidden; }
+.impact-track > span { display: block; height: 100%; border-radius: var(--pill); background: var(--faint); }
+.impact-높음 .impact-track > span { background: var(--critical); }
+.impact-보통 .impact-track > span { background: var(--warn-dot); }
+.impact-text { font-size: 13px; white-space: nowrap; }
+
+/* ---------- 안내 배너 ---------- */
+.banner { display: flex; align-items: center; gap: 14px; border-radius: 20px; padding: 16px 20px; margin-bottom: 16px; }
+.banner-icon { width: 40px; height: 40px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; color: #fff; }
+.banner-text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.banner-text strong { font-size: 15px; }
+.banner.ok { background: var(--ok-soft); color: var(--ok); }
+.banner.ok .banner-icon { background: var(--ok-dot); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.banner.warn .banner-icon { background: var(--warn-dot); }
+
+/* ---------- 결정 버튼 (안내문 검토) ---------- */
+.choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.choice { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); font-weight: 500; font-size: 14px; padding: 0 18px; }
+.choice:hover:not(:disabled) { background: var(--surface-2); }
+.choice.reject { color: var(--bad); }
+.choice.selected { font-weight: 700; }
+.choice.selected.approve { background: var(--blue); border-color: var(--blue); color: #fff; }
+.choice.selected.edit { background: var(--navy); border-color: var(--navy); color: #fff; }
+.choice.selected.rewrite { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-strong); }
+.choice.selected.reject { background: var(--bad-soft); border-color: var(--bad-soft); color: var(--bad); }
