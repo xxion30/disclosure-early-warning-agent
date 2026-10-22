@@ -26,6 +26,7 @@
 | [docs/architecture.md](docs/architecture.md) | 아키텍처와 품질 목표 (이전 프로젝트 기준, R1이 갱신 예정) |
 | [docs/run.md](docs/run.md) | 실행 방법·환경 변수 (R4) |
 | [docs/verification.md](docs/verification.md) | 검증 결과·시연 절차 (R5) |
+| [docs/tasks/](docs/tasks/) | **역할별 업무 카드** (R1~R5) — 각자 먼저 읽는다 |
 | [docs/legacy/](docs/legacy/) | 이전 프로젝트 기록 (참고용) |
 
 ## 2. 역할과 담당
