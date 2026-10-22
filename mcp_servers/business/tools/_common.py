@@ -72,8 +72,6 @@ def task_dict(t) -> dict:
         "assessment_id": t.assessment_id,
         "customer_id": t.customer_id,
         "pb_id": t.pb_id,
-        "priority": t.priority,
-        "impact_score": t.impact_score,
         "draft_message": t.draft_message,
         "status": t.status,
         "reject_reason": t.reject_reason,

@@ -1,9 +1,9 @@
-// SSE 진행 이벤트 구독. 서버는 done / failed 뒤 스트림을 닫는다.
+// SSE 진행 이벤트 구독. 서버는 waiting_approval / done / failed 뒤 스트림을 닫는다.
 import { onBeforeUnmount, reactive } from 'vue'
 
 import { API_BASE, tokenStorage } from '../api/client'
 
-const TERMINAL = ['done', 'failed']
+const TERMINAL = ['waiting_approval', 'done', 'failed']
 const EVENTS = ['queued', 'node_started', 'node_finished', ...TERMINAL]
 
 export function useRunEvents() {
@@ -37,6 +37,7 @@ export function useRunEvents() {
     if (data.node && !state.order.includes(data.node)) state.order.push(data.node)
     if (name === 'node_started') state.nodes[data.node] = 'running'
     if (name === 'node_finished') state.nodes[data.node] = 'done'
+    if (name === 'waiting_approval') state.nodes.pb_approval = 'waiting'
     if (name === 'failed') {
       state.manual = data.status === 'MANUAL_CHECK'
       // 이유가 없으면 서버가 상태 코드(MANUAL_CHECK 등)를 message로 보낸다. 코드가 그대로 보이지 않게 거른다
@@ -50,7 +51,7 @@ export function useRunEvents() {
 
   /**
    * onEvent(name, data)는 이벤트마다, 끝나면 onEnd(name, data).
-   * doneBefore: 이벤트가 중간 노드부터 오는 경우, 그 앞 단계를 이미 끝난 것으로 표시한다.
+   * doneBefore: 재개 구간은 pb_approval부터 이벤트가 오므로, 그 앞 단계는 이미 끝난 것으로 표시한다.
    */
   function connect(rceptNo, { onEvent, onEnd, doneBefore = [] } = {}) {
     close()

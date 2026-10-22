@@ -8,9 +8,11 @@ import RunProgress from '../components/RunProgress.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { formatTime, isUnscored, STATUS_GUIDE } from '../labels'
+import { formatTime, isUnscored, MAIN_PATH, STATUS_GUIDE } from '../labels'
+import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
+const auth = useAuthStore()
 
 const alert = ref(null)
 const error = ref('')
@@ -33,10 +35,14 @@ async function loadProgress() {
   try {
     const run = await api.getRun(alert.value.rcept_no)
     hasRunHistory.value = true
+    // 서버는 마지막 실행 구간만 기억한다. 재개 구간이면 pb_approval 앞 단계는 이미 끝난 것
+    const resumed = run.events[0]?.data.node === 'pb_approval'
+    const doneBefore = resumed ? MAIN_PATH.slice(0, MAIN_PATH.indexOf('pb_approval')) : []
     if (run.running) {
-      connect(alert.value.rcept_no, { onEnd: load })
+      connect(alert.value.rcept_no, { onEnd: load, doneBefore })
     } else {
       reset()
+      doneBefore.forEach((n) => (runState.nodes[n] = 'done'))
       run.events.forEach((e) => apply(e.event, e.data))
     }
   } catch {
@@ -58,15 +64,11 @@ const evidence = computed(() => {
   })
 })
 
+const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
+const customers = computed(() => alert.value?.customers || [])
 const fixedReason = computed(() => alert.value?.reasons?.find((r) => r.fixed_level))
-const scoreTotals = computed(() => {
-  const totals = { base: 0, signals: 0 }
-  for (const reason of alert.value?.reasons || []) {
-    totals[reason.group === 'BASE' ? 'base' : 'signals'] += Number(reason.points ?? 0)
-  }
-  return { base: Number(totals.base.toFixed(2)), signals: Number(totals.signals.toFixed(2)) }
-})
 const progressNote = computed(() => ({
+  WAITING_APPROVAL: 'PB 승인에서 멈춰 있어요',
   DONE: '처리가 끝났어요',
   MANUAL_CHECK: '사람의 확인이 필요해 멈췄어요',
   FAILED: '처리 중간에 멈췄어요',
@@ -75,6 +77,8 @@ const progressNote = computed(() => ({
 // 실패·수동 확인·처리 중이면 맨 위에 안내를 띄운다. 이유(error)는 API가 주면 함께 보여준다
 const guide = computed(() => STATUS_GUIDE[alert.value?.status] || null)
 const unscored = computed(() => isUnscored(alert.value))
+// 고객 영향도는 High·Critical 경보에서만 계산한다
+const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].includes(alert.value?.level))
 </script>
 
 <template>
@@ -120,6 +124,14 @@ const unscored = computed(() => isUnscored(alert.value))
             </p>
           </div>
         </div>
+        <RouterLink
+          v-if="myPending.length"
+          :to="{ name: 'draft-review', params: { assessmentId } }"
+          class="review-link"
+        >
+          안내문 검토 <span class="count-pill">{{ myPending.length }}명</span>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        </RouterLink>
       </div>
       <div class="mini-stats">
         <div v-if="unscored" class="mini-stat">
@@ -130,18 +142,23 @@ const unscored = computed(() => isUnscored(alert.value))
         <div v-else class="mini-stat" :class="{ bad: fixedReason }">
           <span class="mini-stat-label">등급 결정</span>
           <div class="mini-stat-value level-value"><strong>{{ fixedReason ? `${fixedReason.fixed_level} 고정` : alert.level || '-' }}</strong></div>
-          <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `총점 기준 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
+          <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `규칙으로 정한 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
         </div>
         <div class="mini-stat">
-          <span class="mini-stat-label">총점</span>
-          <div class="mini-stat-value"><strong>{{ unscored ? '-' : alert.total_score ?? '-' }}</strong><span v-if="!unscored">점</span></div>
-          <span class="mini-stat-note">{{ unscored ? '점수 내역 없음' : `기본 점수 ${scoreTotals.base} + 신호 ${scoreTotals.signals}` }}</span>
+          <span class="mini-stat-label">보유 고객</span>
+          <div class="mini-stat-value"><strong>{{ customers.length }}</strong><span>명</span></div>
+          <span class="mini-stat-note">{{ customers.length ? '보유 평가금액 큰 순' : '보유 고객 없음' }}</span>
+        </div>
+        <div class="mini-stat dark">
+          <span class="mini-stat-label">내 승인 대기</span>
+          <div class="mini-stat-value"><strong>{{ myPending.length }}</strong><span>명</span></div>
+          <span class="mini-stat-note">{{ auth.pb?.pb_id || '-' }} 담당 고객</span>
         </div>
       </div>
     </section>
 
     <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
-    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" :total-score="alert.total_score" />
+    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" />
 
     <section v-if="hasRunHistory" class="card" aria-label="진행 단계">
       <div class="card-head">
@@ -151,20 +168,20 @@ const unscored = computed(() => isUnscored(alert.value))
       <RunProgress :state="runState" />
     </section>
 
-    <section class="card flush" aria-label="점수 내역">
+    <section class="card flush" aria-label="위험 항목">
       <div class="card-head">
-        <h2>점수 내역</h2>
-        <span class="muted section-note">점수는 규칙으로 계산해요. AI는 점수를 바꾸지 않아요.</span>
+        <h2>위험 항목</h2>
+        <span class="muted section-note">등급은 규칙으로 정해요. AI는 등급을 바꾸지 않아요.</span>
       </div>
       <div class="table-wrap">
-        <ScoreBreakdown :reasons="alert.reasons" :total-score="alert.total_score" :combo-upgraded="alert.combo_upgraded" />
+        <ScoreBreakdown :reasons="alert.reasons" :combo-upgraded="alert.combo_upgraded" />
       </div>
     </section>
 
     <section class="card" aria-label="AI 설명과 원문 근거">
       <div class="card-head explanation-head">
         <h2>AI 설명과 원문 근거</h2>
-        <span class="chip soft">AI가 쓴 설명 · 점수에는 영향 없음</span>
+        <span class="chip soft">AI가 쓴 설명 · 등급에는 영향 없음</span>
       </div>
       <p class="explanation">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
       <div v-if="evidence.length" class="quote-grid">
@@ -180,7 +197,47 @@ const unscored = computed(() => isUnscored(alert.value))
       <p v-else-if="!evidence.length" class="notice">원문 인용이 없어요. 추측하지 않고 수동 확인으로 남겼어요.</p>
     </section>
 
-    <p class="muted created-at"><small>생성 {{ formatTime(alert.created_at) }}</small></p>
+    <section class="card flush customers" aria-label="영향 고객">
+      <div class="card-head">
+        <h2>보유 고객 <small>{{ customers.length }}명 · 보유 평가금액 큰 순</small></h2>
+        <span class="muted section-note">다른 PB의 고객은 이름을 가려요</span>
+      </div>
+      <p v-if="impactSkipped && !customers.length" class="muted impact-skipped">
+        안내문 대상 고객은 High·Critical 경보에서만 정해져요.<template v-if="unscored"> 이 공시는 점수 계산 전에 멈췄어요.</template>
+      </p>
+      <p v-else-if="alert.graph_error" class="notice">
+        {{ alert.graph_error }} 위험 항목은 그대로 볼 수 있고, 보유 고객·안내문은 연결되면 다시 보입니다.
+      </p>
+      <p v-else-if="!alert.graph_state_available" class="notice">
+        Graph 상태를 찾을 수 없어 보유 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
+      </p>
+      <div v-else class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>고객 (보유 평가금액 순)</th>
+              <th>투자성향</th>
+              <th>담당</th>
+              <th>결정</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in customers" :key="c.customer_id">
+              <td>
+                <div class="customer">
+                  <span class="avatar sm" :class="{ soft: !c.mine }" aria-hidden="true">{{ c.mine ? (c.name || '-').slice(0, 1) : 'C' }}</span>
+                  <div class="customer-text"><strong>{{ c.name }}</strong><span v-if="c.mine" class="sub">{{ c.customer_id }}</span></div>
+                </div>
+              </td>
+              <td>{{ c.risk_profile || '-' }}</td>
+              <td><span class="chip" :class="c.mine ? 'strong mine' : 'soft'">{{ c.mine ? '내 고객' : c.pb_id }}</span></td>
+              <td><StatusBadge :status="c.decision" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted created-at"><small>생성 {{ formatTime(alert.created_at) }}</small></p>
+    </section>
   </template>
 </template>
 
@@ -189,6 +246,7 @@ const unscored = computed(() => isUnscored(alert.value))
 .detail-error { margin: 0 0 20px; }
 .status-banner { margin-bottom: 20px; }
 .status-reason { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
+.impact-skipped { margin: 0 24px 16px; font-size: 14px; }
 .hero { border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
 .hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 .hero-company { display: flex; align-items: flex-start; gap: 16px; flex: 1 1 560px; min-width: 0; }
@@ -200,16 +258,28 @@ const unscored = computed(() => isUnscored(alert.value))
 .hero-meta strong { color: var(--text); font-weight: 600; }
 .hero-meta a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-weight: 600; }
 .hero-meta > span, .hero-meta > strong { align-self: center; }
+.review-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 24px; border-radius: var(--pill); background: var(--blue); color: var(--surface); font-size: 16px; font-weight: 700; white-space: nowrap; }
+.review-link:hover { background: var(--blue-strong); text-decoration: none; }
+.review-link:focus-visible, .back-link:focus-visible, .hero-meta a:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+.review-link .count-pill { background: color-mix(in srgb, var(--surface) 22%, transparent); font-size: 14px; }
 .level-value strong { font-size: 20px; }
 .mini-stat-note { overflow-wrap: anywhere; }
 .section-note { font-size: 13px; }
 .explanation-head { justify-content: flex-start; gap: 10px; }
 .explanation { margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.75; color: #2a3554; }
 .quote { overflow-wrap: anywhere; }
+.customers h2 small { margin-left: 6px; font-size: 14px; font-weight: 500; }
+.customers > .notice { margin: 0 24px 16px; }
+.customers table { min-width: 900px; }
+.customers td { font-size: 14px; }
+.customer { display: flex; align-items: center; gap: 10px; }
+.customer-text { display: flex; flex-direction: column; line-height: 1.35; }
+.chip.mine { background: var(--blue-soft); }
 .created-at { margin: 8px 0; padding: 0 24px; }
 @media (max-width: 540px) {
   .hero-company { flex-basis: 100%; }
   .hero-title h1 { font-size: 26px; }
   .hero .mini-stats { grid-template-columns: minmax(0, 1fr); }
-  }
+  .review-link { width: 100%; }
+}
 </style>

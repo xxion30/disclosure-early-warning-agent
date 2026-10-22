@@ -1,7 +1,4 @@
-"""⚠ 이전 프로젝트(Capstone)의 시나리오(고객 연락·PB 승인 포함) 기준이라 DARTCH에서는 끝까지 돌지 않는다.
-새 시나리오(🔴/🟠/🟡 판정, 수집기)에 맞춰 다시 쓴다 — 담당은 파일 구성 계획(docs/dartch_file_plan.md)을 본다.
-
-시나리오 A(금양)를 HTTP API로 끝까지 점검한다 (CLAUDE.md 9장 3~13단계).
+"""시나리오 A(금양)를 HTTP API로 끝까지 점검한다 (CLAUDE.md 9장 3~13단계).
 
     # 서버 3개가 떠 있어야 한다: business-mcp(8001), rag-mcp(8002), api(8000, GRAPH_ADAPTER=real)
     uv run python scripts/data/seed_db.py --reset      # 깨끗한 DB에서 시작 (이미 처리한 공시는 409)

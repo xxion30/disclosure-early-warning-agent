@@ -1,7 +1,16 @@
 # DB 테이블 계약
 
-> 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `contact_tasks`와 `level`·`priority`는 연락 기능 삭제와 함께 사라지고, `tenants`·`risk_states`·`financial_snapshots`·`collect_runs`가 추가된다.
+> 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `contact_tasks`는 오후 회의로 되살아나고(`priority`·`impact_score` 제외), `level`은 `stage`로 바뀌며, `tenants`·`risk_states`·`financial_snapshots`·`collect_runs`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
+
+- `contact_tasks` 표를 **되살린다** (구조 정리 때 모델을 지웠으므로 `shared/models/`에 다시 만든다). 컬럼: task_id(PK), assessment_id, customer_id, pb_id, draft_message, status, reject_reason, result_note, created_at, updated_at. **`priority`, `impact_score`는 만들지 않는다** (영향도 폐지, 대상은 보유 고객 전원).
+- `contact_tasks.status`: 승인대기, 승인, 반려, 연락완료, 보류 (이전과 같음).
+- `risk_assessments.status`에 `WAITING_APPROVAL`을 다시 허용한다 (RUNNING, WAITING_APPROVAL, DONE, FAILED, MANUAL_CHECK).
+- `level`(Low~Critical)은 `stage`(RED/ORANGE/YELLOW/COMPOSITE/WATCH/NONE)로 바뀐다 (설계서 STEP 04).
+- 점수 컬럼(`risk_states`의 🟠·🟡 점수, 합산 비율)은 **서버 안 정렬·판정 전용**이다. PB가 보는 응답에는 내보내지 않는다 (api.md 참고).
+- 고객 순서(안내문 검토 화면): `holdings.eval_amount` 큰 순.
 
 ## 4-1. DB 테이블 (SQLite)
 

@@ -1,19 +1,17 @@
 <script setup>
-// 경보 상단 요약: 이번 공시가 위험도에 준 영향을 한눈에 본다. 숫자는 서버가 점수 내역·영향 고객에서 규칙으로 계산한 값이다(AI 문장 아님).
-// 총점·등급·영향 고객 수는 위쪽 요약 카드에 있으므로, 여기서는 "직전 평가 대비 무엇이 바뀌었나"와 이번 공시 항목만 보여준다.
+// 경보 상단 요약: 이번 공시가 위험도에 준 영향을 한눈에 본다. 내용은 서버가 위험 항목에서 규칙으로 만든 값이다(AI 문장 아님). 점수 숫자는 보여 주지 않는다.
+// 여기서는 "직전 평가 대비 무엇이 바뀌었나"와 이번 공시 항목만 보여준다.
 import { computed } from 'vue'
 
 import LevelBadge from './LevelBadge.vue'
 
-const props = defineProps({ summary: { type: Object, required: true }, level: { type: String, default: '' }, totalScore: { type: Number, default: null } })
+const props = defineProps({ summary: { type: Object, required: true }, level: { type: String, default: '' } })
 
-const change = computed(() => props.summary.score_change)
-const changeText = computed(() => (change.value == null ? '' : `${change.value > 0 ? '+' : ''}${change.value}점`))
 const prev = computed(() => props.summary.previous)
 const filing = computed(() => props.summary.this_filing)
 
 // 확정 악재: 빨강 / 이번 공시로 점수가 올라감: 주황 / 그 밖: 파랑
-const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.points > 0 ? 'warn' : 'info'))
+const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.items.length ? 'warn' : 'info'))
 </script>
 
 <template>
@@ -32,17 +30,6 @@ const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.poi
 
     <div class="changes">
       <div class="change">
-        <span class="change-label">총점</span>
-        <div class="change-value">
-          <template v-if="prev"><span class="from">{{ prev.total_score }}점</span><span class="arrow" aria-hidden="true">→</span></template>
-          <strong>{{ totalScore ?? '-' }}점</strong>
-          <span v-if="changeText && !filing.fixed_level" class="delta" :class="{ up: change > 0 }">{{ changeText }}</span>
-        </div>
-        <span v-if="filing.fixed_level && prev" class="change-note">확정 악재라 점수와 상관없이 등급이 고정돼요</span>
-        <span v-else-if="!prev" class="change-note">직전 평가 없음</span>
-        <span v-else class="change-note">직전 평가와 비교</span>
-      </div>
-      <div class="change">
         <span class="change-label">등급</span>
         <div class="change-value">
           <template v-if="prev && prev.level !== level"><LevelBadge :level="prev.level" /><span class="arrow" aria-hidden="true">→</span></template>
@@ -51,11 +38,11 @@ const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.poi
         <span class="change-note">{{ !prev ? '직전 평가 없음' : prev.level !== level ? '직전보다 등급이 바뀌었어요' : '직전과 같음' }}</span>
       </div>
       <div class="change">
-        <span class="change-label">이번 공시가 올린 점수</span>
+        <span class="change-label">이번 공시의 위험 항목</span>
         <div class="change-value">
-          <strong>{{ filing.fixed_level && !filing.points ? '등급 고정' : `+${filing.points}점` }}</strong>
+          <strong>{{ filing.fixed_level && !filing.items.length ? '등급 고정' : `${filing.items.length}건` }}</strong>
         </div>
-        <span class="change-note">기본·과거 신호 누적 {{ summary.carried_score ?? '-' }}점</span>
+        <span class="change-note">{{ filing.fixed_level ? '확정 악재라 등급이 고정돼요' : '이번 공시에서 찾은 항목' }}</span>
       </div>
     </div>
 
@@ -64,7 +51,6 @@ const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.poi
         <div class="item-head">
           <strong>{{ i.item }}</strong>
           <span v-if="i.fixed_level" class="tag fixed">확정 악재 · {{ i.fixed_level }}</span>
-          <span v-else class="tag">+{{ i.points }}점</span>
         </div>
         <blockquote v-if="i.quote">“{{ i.quote }}”</blockquote>
       </li>

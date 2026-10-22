@@ -69,6 +69,24 @@ def _ensure_columns(engine: Engine) -> None:
                     conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
 
 
+# 영향도(P1~P3) 폐지로 모델에서 뺀 옛 칸. 기존 DB에 NOT NULL로 남아 있으면 새 업무를 만들 수 없으므로 지운다.
+LEGACY_COLUMNS = {"contact_tasks": ("priority", "impact_score")}
+
+
+def _drop_legacy_columns(engine: Engine) -> None:
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in LEGACY_COLUMNS.items():
+            if not insp.has_table(table):
+                continue
+            have = {c["name"] for c in insp.get_columns(table)}
+            for col in cols:
+                if col in have:
+                    conn.execute(text(f'ALTER TABLE "{table}" DROP COLUMN "{col}"'))
+
+
 def init_db() -> None:
     """테이블이 없으면 만들고, 모델에 새로 생긴 칸이 기존 DB에 없으면 추가한다."""
     from shared.models import Base
@@ -76,3 +94,4 @@ def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _ensure_columns(engine)
+    _drop_legacy_columns(engine)

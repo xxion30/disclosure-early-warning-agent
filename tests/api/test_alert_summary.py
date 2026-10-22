@@ -39,11 +39,11 @@ def summary(client, headers, aid):
 
 def test_hidden_signal_summary_compares_with_the_previous_assessment(client, auth_headers, world):
     sm = summary(client, auth_headers, 2)
-    assert sm["previous"] == {"assessment_id": 1, "level": "Medium", "total_score": 5}
-    assert sm["score_change"] == 2 and sm["carried_score"] == 3.0       # 7점 = 이번 공시 4점 + 기본·과거 3점
-    assert sm["this_filing"]["points"] == 4.0 and sm["this_filing"]["fixed_level"] is None
+    assert sm["previous"] == {"assessment_id": 1, "level": "Medium"}
+    assert "points" not in sm["this_filing"] and "score_change" not in sm and "carried_score" not in sm  # 점수 숫자 비노출
+    assert sm["this_filing"]["fixed_level"] is None
     assert [i["item"] for i in sm["this_filing"]["items"]] == ["유상증자"]  # 과거·기본 점수는 이번 공시 항목이 아니다
-    assert "+4.0점" in sm["headline"] and "Medium → High" in sm["headline"]
+    assert "1건이 추가" in sm["headline"] and "Medium → High" in sm["headline"]
 
 
 def test_confirmed_bad_news_is_headlined_as_a_fixed_level(client, auth_headers, world):
@@ -55,5 +55,5 @@ def test_confirmed_bad_news_is_headlined_as_a_fixed_level(client, auth_headers, 
 
 def test_first_assessment_has_no_previous(client, auth_headers, world):
     sm = summary(client, auth_headers, 1)
-    assert sm["previous"] is None and sm["score_change"] is None
+    assert sm["previous"] is None
     assert "추가된 위험 신호는 없습니다" in sm["headline"]

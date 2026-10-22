@@ -17,11 +17,15 @@ def test_level_routes(kit, level):
         assert state["error"] is None, state
         assert state["total_score"] == 2.5
         assert state["risk_level"] == level
-        # 고객 연락(안내문·승인·업무)은 삭제됐다: 어떤 등급이든 분석·설명·저장 후 DONE으로 끝난다
-        assert state["status"] == "DONE"
-        assert state["ai_explanation"]
-        assert not [p for p, _ in kit.model.calls if p in ("draft_message", "rewrite_message")]
-        assert [(s, st) for s, st in kit.store.saved][-1][1] == "DONE"
+        assert not kit.store.tasks
+        if level in ("High", "Critical"):
+            assert state["status"] == "WAITING_APPROVAL"
+            assert len(state["drafts"]) == 7
+            assert len([p for p, _ in kit.model.calls if p == "draft_message"]) == 1
+            assert len(state["affected_customers"]) == 7
+        else:
+            assert state["status"] == "DONE"
+            assert "get_holders" not in [name for name, _ in kit.tools.calls]
         again = await runtime.start(RCEPT)
         assert again == state
         assert "body_text" not in state["disclosure"]
@@ -35,6 +39,15 @@ def test_irrelevant_disclosure_stops(kit):
         state = await runtime.start(RCEPT)
         assert state["status"] == "DONE"
         assert not kit.model.calls
+    asyncio.run(scenario())
+
+
+def test_no_holders(kit):
+    async def scenario():
+        kit.tools.customers = []
+        state = await AgentRuntime(kit.deps, InMemorySaver()).start(RCEPT)
+        assert state["status"] == "DONE"
+        assert state["drafts"] == {}
     asyncio.run(scenario())
 
 

@@ -141,3 +141,22 @@ class KnownSignalsModel:
                     e["quote"] = snapped
             facts.append(data)
         return schema.model_validate({"facts": facts})
+
+
+class UnsafeDraftInjector:
+    """시연용(FAKE_UNSAFE_DRAFT=true): 첫 안내문 초안에만 금지 표현을 덧붙인다. 다시 쓰기(rewrite_message)는 건드리지 않아
+    가드레일이 잡고 → 다시 쓰고 → 통과하는 흐름이 trace에 남는다."""
+
+    PHRASE = " 지금 바로 매도하세요."
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    async def generate(self, prompt, schema, payload):
+        result = await self.inner.generate(prompt, schema, payload)
+        if prompt == "draft_message":
+            return schema.model_validate({"drafts": {c: t + self.PHRASE for c, t in result.drafts.items()}})
+        return result

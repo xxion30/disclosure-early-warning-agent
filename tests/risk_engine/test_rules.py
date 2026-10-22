@@ -1,4 +1,4 @@
-"""risk_rules 순수 계산 테스트 (DB 없음). (담당: R4)"""
+"""risk_rules 순수 계산 테스트 (DB 없음)."""
 import pytest
 
 from risk_engine import risk_rules

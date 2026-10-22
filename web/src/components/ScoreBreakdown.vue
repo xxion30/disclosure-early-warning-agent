@@ -1,5 +1,5 @@
 <script setup>
-// 점수 내역 표. B의 calculate_risk_score breakdown 항목을 사람이 읽는 말로 바꿔 보여준다.
+// 위험 항목 표. 점수 숫자는 보여 주지 않는다(서버가 응답에서 뺀다). 항목은 점수 높은 순으로 이미 정렬돼 온다.
 // 항목 모양: {group: BASE|A|B, item, points, weight, raw_points, base_points, extra_points, extras[],
 //            filed_at, rcept_no, fixed_level, evidence[], note, from_history, reasons[]}
 // 가짜 모드처럼 {item, points}만 있어도 깨지지 않는다.
@@ -28,17 +28,14 @@ const rows = computed(() =>
     const evidence = Array.isArray(r.evidence) ? r.evidence : []
     const detail = []
     if (r.group === 'A') {
-      detail.push('점수와 상관없이 등급을 고정하는 사건')
+      detail.push('확정 악재: 점수와 상관없이 경보 등급이 정해지는 사건')
     } else if (r.group === 'BASE') {
       for (const x of r.reasons || []) {
         if (typeof x === 'string') detail.push(x)
-        else if (x?.reason) detail.push(`${x.reason}${x.points != null ? ` (+${x.points}점)` : ''}`)
+        else if (x?.reason) detail.push(x.reason)
       }
-    } else if (r.group === 'B' && r.raw_points != null) {
-      const parts = [`기본 ${num(r.base_points ?? r.raw_points)}점`]
-      if (r.extra_points) parts.push(`추가 ${num(r.extra_points)}점${r.extras?.length ? ` (${r.extras.join(', ')})` : ''}`)
-      detail.push(parts.join(' + '))
-      if (r.weight != null && Number(r.weight) !== 1) detail.push(`${r.from_history ? '6~12개월 전 신호' : '시간 반영'} × ${pct(r.weight)}`)
+    } else if (r.group === 'B' && r.extras?.length) {
+      detail.push(`추가 사유: ${r.extras.join(', ')}`)
     }
     return {
       group: g,
@@ -46,7 +43,6 @@ const rows = computed(() =>
       filedAt: r.filed_at,
       history: !!r.from_history,
       kind: r.group === 'BASE' ? '직전 사업보고서 기준' : r.from_history ? '과거 신호' : '이번 공시',
-      points: num(r.points),
       fixedLevel: r.fixed_level,
       detail,
       note: r.note,
@@ -57,7 +53,6 @@ const rows = computed(() =>
   }),
 )
 const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Boolean))
-const sum = computed(() => props.totalScore ?? rows.value.reduce((a, r) => a + (r.points || 0), 0))
 </script>
 
 <template>
@@ -66,8 +61,8 @@ const sum = computed(() => props.totalScore ?? rows.value.reduce((a, r) => a + (
       <tr>
         <th>구분</th>
         <th>항목</th>
-        <th class="num">점수</th>
-        <th>계산</th>
+        <th>등급 영향</th>
+        <th>설명</th>
         <th>근거 인용</th>
       </tr>
     </thead>
@@ -82,10 +77,9 @@ const sum = computed(() => props.totalScore ?? rows.value.reduce((a, r) => a + (
             <template v-if="r.filedAt">{{ r.filedAt }} · </template>{{ r.kind }}
           </div>
         </td>
-        <td class="num">
-          <template v-if="r.fixedLevel"><span class="fixed" :class="`fixed-${r.fixedLevel.toLowerCase()}`">{{ r.fixedLevel }} 고정</span></template>
-          <template v-else-if="r.points != null"><strong class="pts">{{ r.points }}</strong>점</template>
-          <template v-else>-</template>
+        <td>
+          <span v-if="r.fixedLevel" class="fixed" :class="`fixed-${r.fixedLevel.toLowerCase()}`">{{ r.fixedLevel }} 고정</span>
+          <span v-else class="muted">-</span>
         </td>
         <td>
           <div v-for="(d, j) in r.detail" :key="j" class="calc">{{ d }}</div>
@@ -109,19 +103,16 @@ const sum = computed(() => props.totalScore ?? rows.value.reduce((a, r) => a + (
         </td>
       </tr>
     </tbody>
-    <tfoot>
+    <tfoot v-if="fixedLevels.length || comboUpgraded">
       <tr>
-        <td colspan="2"><strong>합계</strong></td>
-        <td class="num"><strong class="pts">{{ num(sum) }}</strong>점</td>
-        <td colspan="2">
-          <span v-if="fixedLevels.length" class="calc fixed-note">확정 악재가 있어 총점과 상관없이 등급이 {{ fixedLevels[0] }}(으)로 고정됨</span>
-          <span v-else-if="comboUpgraded" class="calc">서로 다른 신호 3종류 이상 → 조합 규칙으로 등급 한 단계 상향</span>
-          <span v-else class="muted">등급 기준: 0~3 Low · 4~6 Medium · 7~9 High · 10 이상 Critical</span>
+        <td colspan="5">
+          <span v-if="fixedLevels.length" class="calc fixed-note">확정 악재가 있어 등급이 {{ fixedLevels[0] }}(으)로 고정됨</span>
+          <span v-else class="calc">서로 다른 신호 3종류 이상 → 조합 규칙으로 등급 한 단계 상향</span>
         </td>
       </tr>
     </tfoot>
   </table>
-  <p v-else class="muted">점수 내역이 없습니다.</p>
+  <p v-else class="muted">위험 항목이 없습니다.</p>
 </template>
 
 <style scoped>

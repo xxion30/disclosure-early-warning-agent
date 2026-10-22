@@ -4,12 +4,14 @@ import asyncio
 import pytest
 
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
+from mcp_servers.business.tools.create_contact_task import create_contact_task
 from mcp_servers.business.tools.get_company_profile import get_company_profile
 from mcp_servers.business.tools.get_disclosure import get_disclosure
 from mcp_servers.business.tools.get_holders import get_holders
 from mcp_servers.business.tools.get_signal_history import get_signal_history
 from mcp_servers.business.tools.list_new_disclosures import list_new_disclosures
 from mcp_servers.business.tools.save_assessment import save_assessment
+from mcp_servers.business.tools.update_task_status import update_task_status
 
 pytestmark = pytest.mark.usefixtures("seeded_db")
 
@@ -68,7 +70,7 @@ def test_calculate_risk_score_errors():
     assert_err(calculate_risk_score(KY_CORP, [], "bad"), "INVALID_INPUT")
 
 
-def _score_and_save(status="RUNNING"):
+def _score_and_save(status="WAITING_APPROVAL"):
     sc = calculate_risk_score(
         KY_CORP,
         [{"signal_type": "AUDIT_OPINION", "detail": {"opinion": "의견거절", "quote": "의견거절"}, "rcept_no": KY_AUDIT, "filed_at": "2025-03-21"}],
@@ -102,7 +104,7 @@ def test_save_assessment_upsert_and_validation():
     first = _score_and_save()
     assert first["ok"] and first["data"]["created"] is True
     aid = first["data"]["assessment_id"]
-    # 상태만 바꾸기 (RUNNING → DONE): 행이 늘지 않고 기존 값은 유지
+    # 상태만 바꾸기 (WAITING_APPROVAL → DONE): 행이 늘지 않고 기존 값은 유지
     again = save_assessment(KY_CORP, KY_AUDIT, status="DONE")
     assert again["ok"] and again["data"]["assessment_id"] == aid and again["data"]["created"] is False
     assert again["data"]["level"] == "Critical"
@@ -114,11 +116,38 @@ def test_save_assessment_upsert_and_validation():
 
 
 def test_save_assessment_first_save_requires_score():
-    assert_err(save_assessment(KY_CORP, KY_AUDIT, status="DONE"), "INVALID_INPUT")  # 점수 없이 첫 저장은 안 된다
-    assert_err(save_assessment(KY_CORP, KY_AUDIT, status="WAITING_APPROVAL"), "INVALID_INPUT")  # 승인 대기 상태는 삭제됐다
+    assert_err(save_assessment(KY_CORP, KY_AUDIT, status="WAITING_APPROVAL"), "INVALID_INPUT")
 
 
-def test_server_registers_all_seven_tools():
+def test_create_task_and_status_flow():
+    aid = _score_and_save()["data"]["assessment_id"]
+    t = create_contact_task(aid, "C001", "안녕하세요 {고객명}님, 수정한 문장입니다.")
+    assert t["ok"] and t["data"]["created"] and t["data"]["status"] == "승인"
+    # 멱등: 같은 고객으로 다시 불러도 새로 만들지 않는다
+    t2 = create_contact_task(aid, "C001", "다른 문장")
+    assert t2["data"]["task_id"] == t["data"]["task_id"] and t2["data"]["created"] is False
+    # 보유 고객이면 누구든 만들 수 있다(영향도 없음). 미보유 고객, 빈 문장은 거부
+    assert create_contact_task(aid, "C002", "x")["data"]["created"]
+    assert_err(create_contact_task(aid, "C020", "x"), "INVALID_INPUT")
+    assert_err(create_contact_task(aid, "C001", "  "), "INVALID_INPUT")
+    assert_err(create_contact_task(999, "C001", "x"), "NOT_FOUND")
+    assert_err(create_contact_task(aid, "C999", "x"), "NOT_FOUND")
+
+    tid = t["data"]["task_id"]
+    done = update_task_status(tid, "연락완료", "통화함")
+    assert done["ok"] and done["data"]["status"] == "연락완료" and done["data"]["result_note"] == "통화함"
+    assert_err(update_task_status(tid, "보류"), "INVALID_INPUT")  # 연락완료 → 보류는 불가
+    assert_err(update_task_status(tid, "승인"), "INVALID_INPUT")
+    assert_err(update_task_status(tid, "엉뚱"), "INVALID_INPUT")
+    assert_err(update_task_status(12345, "보류"), "NOT_FOUND")
+
+
+def test_create_task_blocked_unless_waiting_or_done():
+    aid = _score_and_save(status="RUNNING")["data"]["assessment_id"]
+    assert_err(create_contact_task(aid, "C001", "x"), "INVALID_INPUT")
+
+
+def test_server_registers_all_ten_tools():
     from fastmcp import Client
 
     from mcp_servers.business.server import mcp
@@ -132,7 +161,8 @@ def test_server_registers_all_seven_tools():
     names, data = asyncio.run(run())
     assert names == {
         "list_new_disclosures", "get_disclosure", "get_company_profile", "get_signal_history",
-        "calculate_risk_score", "get_holders", "save_assessment",
+        "calculate_risk_score", "get_holders",
+        "save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text",
     }
     assert data["ok"] is True and data["data"]["count"] == 7
 
@@ -151,7 +181,7 @@ def test_failure_can_be_saved_before_scoring():
     assert res["ok"] and res["data"]["created"] is True
     # 같은 공시를 이후 정상 저장하면 같은 행을 갱신한다
     sc = calculate_risk_score(KY_CORP, [{"signal_type": "AUDIT_OPINION", "detail": {"opinion": "의견거절"}}], "2025-03-21")["data"]
-    again = save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "x", "DONE")
+    again = save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "x", "WAITING_APPROVAL")
     assert again["data"]["assessment_id"] == res["data"]["assessment_id"] and again["data"]["level"] == "Critical"
 
 
@@ -176,7 +206,7 @@ def test_correction_is_detected_from_disclosure_title_not_from_ai():
 
 
 def test_tool_annotations_mark_mutating_tools():
-    """조회 도구는 readOnlyHint, 데이터를 바꾸는 도구(save_assessment)만 destructiveHint (수업 자료의 Harness 규칙)."""
+    """조회 도구는 readOnlyHint, 데이터를 바꾸는 도구 3개만 destructiveHint (수업 자료의 Harness 승인 규칙)."""
     from fastmcp import Client
 
     from mcp_servers.business.server import mcp
@@ -187,5 +217,5 @@ def test_tool_annotations_mark_mutating_tools():
 
     ann = asyncio.run(run())
     mutating = {n for n, a in ann.items() if a and a.destructiveHint}
-    assert mutating == {"save_assessment"}
+    assert mutating == {"save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text"}
     assert all(a.readOnlyHint for n, a in ann.items() if n not in mutating)

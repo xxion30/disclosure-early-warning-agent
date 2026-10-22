@@ -3,6 +3,36 @@
 > 상태: **초안 — 팀 확인 전.** `[가정]`은 제가 정한 가정이고, `[확인 필요]`는 아직 모르는 것입니다.
 > DARTCH는 임시 이름입니다. 회의록(10/22 오전·오후)과 이후 결정 사항을 반영했습니다.
 > 이 문서는 설계만 담고 있고, 코드는 바꾸지 않았습니다.
+> **오후 추가 회의(10/22)에서 4가지가 바뀌었습니다. 아래 "오후 추가 회의 변경"이 이 문서의 다른 내용보다 우선합니다.** 충돌하는 문장에는 `[오후 회의로 변경]`을 붙였습니다.
+
+---
+
+## 오후 추가 회의 변경 (10/22)
+
+| # | 변경 | 내용 |
+| --- | --- | --- |
+| 1 | 경보 전달 | 경보가 **하나라도** 생기면 해당 종목을 보유한 고객의 담당 PB에게 보낸다. "관찰 중"은 경보가 아니므로 보내지 않는다 |
+| 2 | 대시보드 알림 | 점수가 기준을 넘으면 **메인 대시보드에 알림**으로 띄운다. 기준은 새로 만들지 않고 **이전에 경보를 보내던 기준 그대로** 쓴다 (🔴 한 가지, 🟠 4점, 🟡 5점, 복합 1.5 — `rules.yaml`) |
+| 3 | 점수 표시 | 알림·상세 화면에서 **항목별 점수는 보여 주지 않는다.** 대신 **점수가 높은 순으로 우선순위를 정해 줄을 세운다** (이 방식은 그대로 둔다). PB는 위에서부터 보면 된다 |
+| 4 | 고객 메시지 | **고객에게 메시지를 보내는 기능을 다시 넣는다.** (안내문 초안 → 검사 → PB 확인 → 연락 업무) |
+
+**[가정] 제가 정한 해석 — 아니면 알려 주세요**
+- 1과 2는 같은 기준을 쓴다: 경보 기준을 넘으면 그 경보가 PB의 메인 대시보드 알림이 된다. 이메일·메신저는 여전히 Phase 2.
+- 줄 세우는 순서: ① 단계(🔴 → 🟠·복합 → 🟡) ② 같은 단계에서는 점수 높은 순 ③ 같으면 최근 공시 순. 🔴은 점수가 없으므로 맨 위. 점수 숫자는 **계산·정렬에만** 쓰고 화면에는 단계 배지와 순서로만 보여 준다. (총점 숫자까지 숨기기로 결정)
+- 근거(원문 인용·DART 링크)는 그대로 보여 준다. 점수 내역 표만 없어지고, 항목별 설명 문장과 인용은 남는다.
+- 고객 메시지는 **이전 Capstone 방식을 되살린다**: AI 초안(고객 이름은 `{고객명}` 자리표시), 금지 표현 검사(매수·매도 권유 금지), **PB 승인 후에만** 연락 업무 생성, 반려 사유 기록. 이전 코드는 git 이력(구조 정리 PR 이전 커밋)에 남아 있어 새로 짜지 않고 되살린다.
+
+**결정됨 (R1 확인, 10/22)**
+1. 메시지는 시스템이 직접 발송하지 않는다. **PB가 보낼 초안을 승인하고 연락 업무로 남기는 형태**(이전 방식).
+2. **PB 승인 단계 유지.** 승인 전에는 연락 업무가 만들어지지 않는다.
+3. 연락 대상은 **해당 종목을 보유한 담당 고객 전원**이다. 고객 영향도(P1~P3)는 되살리지 않는다. 그래서 `compute_customer_impact`·`impact_rules.py`는 복원하지 않고, 연락 업무의 `priority`는 쓰지 않는다. 고객 순서는 보유 평가금액이 큰 순 `[가정]`.
+4. **총점 숫자는 화면 어디에도 보이지 않는다.** 단계 배지와 정렬 순서만 보여 준다. API 응답에서도 PB 화면용 응답에는 점수를 내리지 않는다(점수는 서버 안에서 정렬에만 사용).
+
+**이 변경이 닿는 곳** (구현은 결정 확정 후, 구조 변경이므로 기능 PR과 분리해 한 사람이 되살립니다)
+- R2: 안내문·검사 노드와 프롬프트(`draft_message.md`, `rewrite_message.md`), 설명문 금지 표현 검사
+- R4: `create_contact_task`·`update_task_status`·(영향도)·승인/업무 API, `contact_tasks` 표, 대시보드 알림용 조회, 정렬 규칙
+- R5: 메인 대시보드 알림, 점수 내역 표 제거, 안내문 검토·연락 업무 화면 복원
+- 계약 문서(`docs/contracts/`)와 CLAUDE.md는 이 변경에 맞게 먼저 고친다 (CLAUDE.md는 이미 고침)
 
 ---
 
@@ -21,7 +51,7 @@ PB가 고객 보유 종목의 위험을 판단하려고 공시를 일일이 열�
 - PB는 자기 고객이 보유한 종목의 위험만 본다.
 
 ### 하지 않는 것 (Phase 1)
-- 고객에게 연락하는 기능(안내문 초안, 연락 업무, PB 승인 단계) — **삭제**
+- ~~고객에게 연락하는 기능(안내문 초안, 연락 업무, PB 승인 단계) — 삭제~~ **[오후 회의로 변경] 다시 넣는다** (맨 위 "오후 추가 회의 변경" 참고)
 - 뉴스·SNS 수집, 선행성 검증 — **제외** (SNS는 현업에서 유료로 확장하는 후속 과제)
 - 채권(회사채 등) 분석 — **제외**, 주식만
 - 주가 상승·매수·매도 추천, 주가 예측
@@ -109,6 +139,7 @@ PB가 고객 보유 종목의 위험을 판단하려고 공시를 일일이 열�
 | 4 | 위에 모두 해당 안 함 + 🟠 3점 이상 또는 🟡 4점 이상 | 관찰 중 (알림 없음, 화면 표시만) |
 | 5 | 그 밖 | 경보 없음 |
 - 화면 맨 위에는 가장 심한 단계(🔴 > 🟠 > 🟡)를 보여 준다.
+- **[오후 회의로 변경]** 판정 결과가 "경보"(순서 1~3)이면 PB 메인 대시보드에 알림으로 올린다. 항목별 점수는 화면에 표시하지 않고, 점수는 **우선순위 정렬에만** 쓴다.
 - 기준값(4, 5, 1.5, 75%)은 **초안**이다. 기존 5개 회사 공시와 새 테스트 사례로 경보 빈도를 보고 조정한다.
 
 **🟠 점수표 (초안)** — 점수 = 기본점수 + 내용 보정 + 반복 보정. 12개월 동안만 유효, 6개월이 지나면 50% 반영.
@@ -234,7 +265,8 @@ PB가 고객 보유 종목의 위험을 판단하려고 공시를 일일이 열�
 | 화면 | 내용 |
 | --- | --- |
 | 위험 목록 | 종목, 단계 배지(🔴🟠🟡/복합/관찰), 점수, 보유 고객 수, 새 경보 표시, 마지막 수집 시각 / 단계·상태 필터 |
-| 종목 상세 | 상단 요약 카드(이번에 무엇이 바뀌었나), 점수 내역 표, 근거(API 값·원문 인용+DART 링크), 공시 타임라인, 해소 표시 |
+| 메인 대시보드 **[오후 회의로 추가]** | 경보 알림을 우선순위(단계 → 점수 높은 순) 순서로 표시. 점수 숫자는 보여 주지 않음 |
+| 종목 상세 | 상단 요약 카드(이번에 무엇이 바뀌었나), ~~점수 내역 표~~ **[오후 회의로 변경] 항목별 점수 없이 항목·설명·**근거(API 값·원문 인용+DART 링크), 공시 타임라인, 해소 표시 |
 | 고객 현황 | 내 고객이 보유한 종목과 위험 노출(조회 전용) |
 | 오류 표시 | 수집 실패·엔진 연결 실패를 화면에 알림 |
 
@@ -258,7 +290,8 @@ receive(공시·API 값 불러오기) → classify(위험 항목 매핑)
                                                       → save_state → END
 오류·한도 초과 → handle_failure → MANUAL_CHECK
 ```
-- 이전 그래프에서 **삭제**: `find_customers`(연락 우선순위), `draft_messages`, `guardrail_check`(안내문), `pb_approval`(interrupt), `create_tasks`, `save_rejection`, `finalize`.
+- **[오후 회의로 변경]** 아래 삭제 목록은 철회됨: 고객 메시지 기능이 돌아오므로 `find_customers`·`draft_messages`·`guardrail_check`·`pb_approval`·`create_tasks`·`save_rejection`은 되살린다 (위치는 경보 저장 뒤, 🔴·🟠·🟡·복합 경보일 때만). 단 `find_customers`는 영향도 계산 없이 보유 고객 전원을 고르는 노드로 단순화한다.
+- 이전 그래프에서 삭제했던 것: `find_customers`(연락 우선순위), `draft_messages`, `guardrail_check`(안내문), `pb_approval`(interrupt), `create_tasks`, `save_rejection`, `finalize`.
 
 ### AI가 하는 일과 출력 형식
 | 단계 | AI 입력 | AI 출력(Pydantic) |
@@ -342,48 +375,11 @@ receive(공시·API 값 불러오기) → classify(위험 항목 매핑)
 
 ## 이전 코드에서 바꿀 것
 
-> 기준: 현재 `main` 코드. 이름과 위치는 현재 저장소 기준이다.
+파일별 이동·분리·수정·삭제와 담당은 **[dartch_file_plan.md](dartch_file_plan.md)** 와 `.github/CODEOWNERS`가 정본이다. 이 설계서에는 파일 경로를 적지 않는다(폴더 구조가 바뀌어도 두 문서가 어긋나지 않게).
 
-### 그대로 쓰는 것 (재사용)
-| 대상 | 이유 |
-| --- | --- |
-| `api/auth.py`, JWT·bcrypt, `api/routes/events.py`(SSE), `api/run_manager.py` | 로그인과 진행 이벤트는 그대로 필요 |
-| `api/worker/`, `docker-compose.yml` (RabbitMQ) | 종목별 수집 작업을 큐로 처리 |
-| `agent/runtime.py`, `agent/execution.py`, 체크포인트 | 상태 저장·재개·반복 한도 |
-| `agent/tool_loop.py`, `agent/evidence.py` | 읽기 전용 도구 선택, 근거 인용 검증 |
-| `harness/*` (masking, recovery, context, loop_limits, tracing) | Harness 8요소 |
-| `mcp_servers/rag/` (임시 색인 모드 포함) | 공시 원문 임시 색인, 참고 문서 |
-| 규칙 엔진 구조: 시간 반영, 정정 공시 처리, `rules.yaml` 단일 출처 | 점수표만 새로 구성 |
-| `scripts/verify_all.py`, `eval/`, 근거 카드(`ScoreBreakdown`) 등 UI 컴포넌트 | 시나리오와 입력 형식만 교체 |
-
-### 고쳐 쓰는 것 (수정)
-| 대상 | 무엇을 |
-| --- | --- |
-| `mcp_servers/business/rules/rules.yaml` | A·B그룹과 고객 영향도 표를 **🔴/🟠/🟡 구조**로 재작성 (항목, 가중치, 기준 점수, 복합 비율, 관찰 비율). 🔴에는 **거래정지·관리종목·국내 상장폐지·횡령·배임**의 기존 감지 규칙(제목 분류, 행정적 거래정지 제외, 해제 공시 무시, 종속회사 제외)을 옮겨 쓴다. 제출 지연·감사인 변경·호재 정정·최대주주 담보·정정 3회 신호는 Phase 1에서 뺀다 |
-| `mcp_servers/business/rules/risk_rules.py` | `calculate()`를 단계 판정(🔴 즉시, 🟠·🟡 점수, 복합, 관찰)으로 교체. 시간 반영·정정 처리는 재사용 |
-| `calculate_risk_score` 도구 | 단계 판정 결과를 돌려주도록 변경(이름 변경 여부는 계약 변경이라 팀 합의 필요) |
-| `save_assessment`, `shared/models.py` | `level`→`stage`, `risk_states` 연동. 기존 DB 칸 추가 방식(init_db의 칸 추가) 재사용 |
-| `classify` 노드와 `rules.yaml classification` | 제목 키워드 대신 **API 항목 이름**으로 위험 항목 매핑 |
-| `agent/prompts/extract_facts.md`, `explain_risk.md` | 새 위험 항목 기준으로 재작성 (`extract_flags`로 개명 검토) |
-| `agent/assembly.py` | `signal_input`, 허용 신호 표(`allowed_signals_by_type`), 모델 보정 로직을 새 항목에 맞게 |
-| `agent/graph.py`, `agent/state.py` | 위 그래프로 재구성, 승인·초안 관련 State 제거 |
-| `harness/guardrails.py` | 금지 표현을 설명문 기준으로 축소·변경 |
-| `api/routes/alerts.py` | `/alerts` → `/states` 중심으로, 상단 요약 카드(`impact_summary`)를 "이번에 무엇이 바뀌었나"로 재작성 |
-| `api/routes/customers.py` | 연락 우선순위·이력 제거, 보유와 노출만 |
-| `web/src/views/AlertList.vue`, `AlertDetail.vue`, `AlertSummary.vue`, `LevelBadge.vue` | 단계 배지(🔴🟠🟡/복합/관찰), 종목 상태·타임라인, 확인함 버튼 |
-| `scripts/fetch_dart.py`, `scripts/compute_base_score.py` | 수집기의 출발점으로 확장(항목별 API, 증분, 재무 지표) |
-| `eval/`, `scripts/replay_*.py`, `scripts/verify_all.py` | 새 테스트 사례 세트와 시나리오로 교체 |
-
-### 없애는 것 (고객 연락 기능)
-| 대상 |
-| --- |
-| `agent/nodes/draft_messages.py`, `guardrail_check.py`(안내문), `pb_approval.py`, `create_tasks.py`, `save_rejection.py`, `find_customers.py` |
-| `agent/prompts/draft_message.md`, `rewrite_message.md` |
-| `mcp_servers/business/tools/create_contact_task.py`, `update_task_status.py`, `compute_customer_impact.py` 및 `impact_rules.py` |
-| `api/routes/approvals.py`, `api/routes/tasks.py` |
-| `web/src/views/DraftReview.vue`, `TaskList.vue`와 메뉴 |
-| `contact_tasks` 테이블과 `decision.*` 감사 기록 |
-| 관련 테스트 (`tests/agent/test_approval.py`, `tests/api/test_scenario_a.py` 일부 등) |
+- 구조 정리(이동·분리)는 이미 끝났다 (file_plan 9장).
+- 규칙 엔진은 `risk_engine/`으로 옮겨졌고, 점수표는 이 설계서의 🔴/🟠/🟡 구조로 새로 쓴다.
+- 고객 연락 기능은 구조 정리 때 지웠고, 오후 회의로 다시 넣는다. **복원 범위**: 안내문 초안, 금지 표현 검사, PB 승인(interrupt), 연락 업무 생성, 승인·업무 API, 안내문 검토·연락 업무 화면. **복원하지 않는 것**: 고객 영향도(P1~P3)와 `priority`. 복원은 git 이력에서 가져온다.
 
 ### 새로 만드는 것
 | 대상 | 내용 |
@@ -399,56 +395,9 @@ receive(공시·API 값 불러오기) → classify(위험 항목 매핑)
 
 ---
 
-## 역할별 분담 (R1~R6)
+## 역할별 분담
 
-> 이전 프로젝트의 A·B·C·D 역할과의 대응: A(Agent)→R2, B(MCP·shared)→R4, C(서버·화면)→R4(서버)·R5(화면), D(데이터·Harness·문서)→R3(데이터)·R2(Harness)·R5/R6(평가·README).
-> R6은 R5가 겸임하므로 R5의 업무가 많다. 테스트 사례 수집은 R3·R1이 나누어 돕는 것을 권장한다.
-
-### R1 PM·PO
-| 할 일 | 산출물 |
-| --- | --- |
-| 문제·범위 확정, 이 설계서의 **결정 대기 항목** 정리와 팀 결정 | 설계서 STEP 01·02 |
-| 가중치·기준 점수 초안을 팀과 검토하고 확정 (PB·회계 자문이 가능하면 받기) | 확정된 점수표 |
-| 중간 점검, 일정 관리, 의존 관계 조율 (아래 "작업 순서") | 일정표 |
-| DART 호출 한도·약관, 컴플라이언스 확인 담당 지정 | 확인 결과 메모 |
-| 발표자료 (문제, 흐름, 한계, 데모 시나리오) | 발표자료 |
-
-### R2 AI 엔지니어 (흐름)
-| 할 일 | 산출물 |
-| --- | --- |
-| LangGraph를 새 그래프로 재구성 (노드·분기), State 정리 | `agent/graph.py`, `agent/state.py`, `agent/nodes/*` |
-| 프롬프트 작성: `extract_flags`, `explain_risk`, `system` (버전 관리) | `agent/prompts/*.md`, 설계서 STEP 05 |
-| AI 출력 형식(Pydantic)과 근거 인용 검증 유지 | `agent/state.py`, `agent/evidence.py` |
-| Harness 변경: 설명문 금지 표현, DART 오류 재시도 | `harness/guardrails.py`, `harness/recovery.py` |
-| 이전 코드에서 연락 관련 노드·프롬프트 삭제 | 삭제 목록 반영 |
-| 체크포인트를 Postgres로 전환(langgraph-checkpoint-postgres) | `agent/runtime.py` |
-
-### R3 AI 엔지니어 (RAG·데이터)
-| 할 일 | 산출물 |
-| --- | --- |
-| **가장 먼저**: OpenDART API 확인(항목별 필드, 회사 단위 조회, 한도, 시차, 정정 방식) | **데이터 출처표**, API 확인 메모 |
-| 수집기 구현: 보유 종목 읽기(ETF 제외), 증분 커서, 백필, 재시도, 수집 이력. httpx(async)+tenacity+호출 속도 제한, APScheduler로 매일 09:05 실행 | `collector/`, 스케줄러 연결 |
-| 재무 지표 계산 모듈(🟡) | 지표 모듈, `financial_snapshots` 채우기 |
-| rag-mcp: Chroma 영속 저장을 없애고 **메모리 안 임시 색인**으로 전환, 참고 문서를 새 위험 항목에 맞게 재작성 | `mcp_servers/rag/`, `rag_docs/reference/` |
-| 실제 과거 사례 수집(단계별) | 테스트 사례 원자료 |
-
-### R4 백엔드·도구
-| 할 일 | 산출물 |
-| --- | --- |
-| 점수 규칙 엔진 재작성: `rules.yaml`, `risk_rules.py`(단계·복합·관찰) | 규칙 코드와 단위 테스트 |
-| business-mcp 도구: 위험 상태 조회·저장, 수집 이력, 노출 조회. 연락 도구 삭제 | `mcp_servers/business/` |
-| DB 모델 변경과 기존 DB 마이그레이션(칸 추가) | `shared/models.py`, `shared/db.py` |
-| API: `/states`, `/collect/*`, `/customers`, 잘못된 입력 막기·오류 형식 | `api/`, **API 명세** |
-| 큐·스케줄러 연결(작업 접수 202, 재시도·DLQ). Phase 1에서 큐는 끄고 코드는 보존 | `api/worker/`, `docker-compose.yml` |
-| **스택 변경**: PostgreSQL + Alembic 마이그레이션, `tenants`·`tenant_id`와 API 자동 필터(로그인은 기존 JWT 유지), docker compose(postgres·api·collector·mcp·web) | `shared/`, `api/`, `docker-compose.yml`, 마이그레이션 |
-
-### R5 프론트엔드·데모 (+ R6 QA·평가 겸임)
-| 할 일 | 산출물 |
-| --- | --- |
-| 화면: 위험 목록, 종목 상세(근거·타임라인·해소 표시), 고객 현황, 수집 상태, 오류 메시지 | `web/` |
-| 근거 보여 주기: API 값·원문 인용·DART 링크 | 근거 컴포넌트 |
-| 시연 시나리오와 영상 촬영 | 시연 영상 |
-| (R6) 기능 테스트(pytest), 테스트 사례 세트 만들기, 개선 전후 비교, README | 검증 결과서, README |
+역할(R1~R5)과 담당 폴더는 **[CLAUDE.md](../CLAUDE.md) 2장**과 `.github/CODEOWNERS`가 정본이다. (설계 초안의 R6 QA·평가는 R5가 겸한다.)
 
 ### 작업 순서와 의존 (일정은 R1이 정한다)
 1. **0단계 — 계약 확정(모두, 짧게)**: 위험 항목 표 확정, `rules.yaml` 구조, State, API 응답 형식, DB 스키마. 이게 있어야 아래가 병렬로 돈다.
@@ -494,7 +443,7 @@ receive(공시·API 값 불러오기) → classify(위험 항목 매핑)
 | 최대주주 주식 담보 | 숨은 신호 2점 | 없음 (🟡 "최대주주 변동"과 다름) | **Phase 2** |
 | 같은 공시 3회 이상 정정 | 숨은 신호 2점 | 별도 신호가 아니라 "정정·철회·후속 공시 추적" 원칙으로 바뀜 | 원칙으로 대체 |
 | 사업보고서 기본 점수 중 영업손실 2년 연속, 영업이익 3년 연속 감소, 일회성 이익 30%, 회계 제재, 강조사항 | 기본 점수 | 🟡 "전체 재무제표"에 일부(영업현금흐름 적자, 자본잠식, 이자 부담)만 있음 | 새 🟡 지표로 대체, 나머지는 Phase 2 |
-| 고객 영향도·우선순위(P1~P3) | 연락 우선순위 | 연락 기능 삭제로 불필요 | 삭제 |
+| 고객 영향도·우선순위(P1~P3) | 연락 우선순위 | ~~연락 기능 삭제로 불필요~~ 오후 회의로 연락 기능이 돌아옴 | **되살리지 않음** (보유 고객 전원에게 초안) |
 
 **겹치거나 새로 들어간 것**: 감사의견, CB·BW(EB 추가), 유상증자, 자본잠식(🟡 재무제표에 포함).
 

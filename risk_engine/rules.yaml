@@ -141,6 +141,11 @@ base_score:
     one_off_profit_30pct: 1
     key_audit_matter: 0
 
+# ---------------------------------------------------------------- 연락 업무 상태 전이
+task_transitions:                # update_task_status: 현재 상태 → 바꿀 수 있는 상태
+  승인: [연락완료, 보류]
+  보류: [연락완료, 보류]
+
 # ---------------------------------------------------------------- classify 노드용 제목 키워드 표
 # agent/rules.py의 load_classifier(path)가 읽는 모양이다. 위에서부터 제목에 keywords 중 하나가 들어 있는
 # 첫 항목의 type이 disclosure_type이 된다. 맞는 것이 없으면 None → 해당 없음으로 종료.
