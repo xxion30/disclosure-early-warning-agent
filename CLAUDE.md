@@ -75,6 +75,6 @@ tests/         소스와 같은 모양, 같은 담당
 ## 5. 지금 상태 (2026-10-22 구조 정리 직후)
 
 - 구조 정리 완료: 규칙 엔진 `risk_engine/`, `shared/models/` 패키지, `assembly.py`·`recovery.py`·`run_eval.py` 분리, 스크립트·테스트 재배치, 문서 계약 분리.
-- **고객 연락 기능은 구조 정리 때 삭제했으나, 오후 회의로 다시 넣기로 했다(아직 코드에 없음)**: 삭제한 것은 안내문·승인·연락 업무 노드·도구·API·화면, `ContactTask` 표 모델, 영향도(P1~P3) 규칙이며 git 이력에서 복원한다. 지금 코드는 분석 → 설명 → 저장 → `done`으로 끝난다. 범위: 직접 발송 없음, PB 승인 유지, 대상은 보유 고객 전원(영향도 P1~P3는 복원하지 않음).
+- **고객 연락 기능 복원 완료 (브랜치 `dartch/restore-contact`)**: 안내문·승인·연락 업무 노드·도구·API·화면, `ContactTask` 표를 git 이력에서 되살렸다. 영향도(P1~P3)는 되살리지 않았고 대상은 보유 고객 전원(평가금액 큰 순)이다. PB 화면·API 응답에는 점수 숫자가 없고 `/alerts?alert=true`가 우선순위(등급→점수→최근)로 정렬된 대시보드 알림을 준다. 되살릴 때 `purge_disclosure_text`·`release_disclosure_index`도 함께 돌아왔으며 R3의 수집기 작업 때 정리한다. 규칙 엔진은 아직 이전 Low~Critical 등급이라 "경보"는 High·Critical이다(🔴/🟠/🟡 전환은 R4). 범위: 직접 발송 없음, PB 승인 유지, 대상은 보유 고객 전원(영향도 P1~P3는 복원하지 않음).
 - **아직 이전 프로젝트 그대로인 것(이후 개발에서 바꾼다)**: 위험 규칙(A·B그룹, Low~Critical)은 🔴/🟠/🟡로, 데모 데이터(`data/demo_companies.json`, `data/disclosures/`, `rag_docs/companies/`)는 수집기와 테스트 사례(`eval/cases/`)로, RAG 색인은 메모리 임시 색인으로, 체크포인트·DB는 PostgreSQL로.
 - **돌지 않는 옛 스크립트**: `scripts/ops/verify_all.py`, `scripts/demo/check_scenario_a.py`, `scripts/demo/smoke.py`는 연락·승인 시나리오 기준이라 다시 써야 한다 (파일 머리에 표시했다).

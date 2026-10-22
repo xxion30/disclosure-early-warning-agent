@@ -120,3 +120,29 @@ def test_new_columns_are_added_to_an_existing_database(tmp_path, monkeypatch):
     db_module._engine = None
     db_module._SessionLocal = None
     get_settings.cache_clear()
+
+
+def test_legacy_priority_columns_are_dropped_from_contact_tasks(tmp_path, monkeypatch):
+    """영향도 폐지: 옛 DB의 contact_tasks.priority·impact_score(NOT NULL)를 지워야 새 업무를 만들 수 있다."""
+    import sqlite3
+
+    path = tmp_path / "legacy.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE contact_tasks (task_id INTEGER PRIMARY KEY, assessment_id INTEGER NOT NULL, customer_id TEXT NOT NULL, "
+                "pb_id TEXT NOT NULL, priority TEXT NOT NULL, impact_score INTEGER NOT NULL, draft_message TEXT NOT NULL, "
+                "status TEXT NOT NULL, reject_reason TEXT, result_note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+    con.execute("INSERT INTO contact_tasks VALUES (1,1,'C001','P01','P1',8,'안내','승인',NULL,NULL,'t','t')")
+    con.commit(); con.close()
+    monkeypatch.setenv("DB_URL", f"sqlite:///{path}")
+    get_settings.cache_clear()
+    db_module._engine = None
+    db_module._SessionLocal = None
+    db_module.init_db()
+    con = sqlite3.connect(path)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(contact_tasks)")}
+    assert "priority" not in cols and "impact_score" not in cols
+    assert con.execute("SELECT draft_message FROM contact_tasks").fetchone()[0] == "안내"  # 기존 데이터는 그대로
+    con.close()
+    db_module._engine = None
+    db_module._SessionLocal = None
+    get_settings.cache_clear()

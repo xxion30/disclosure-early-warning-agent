@@ -145,7 +145,8 @@ dartch/
 | `business/server.py`, `tools/_common.py` | 수정·유지 | 새 도구 목록 등록 | R4 |
 | `tools/calculate_risk_score.py` | 수정 | 단계 판정 결과를 돌려줌 (이름 변경 여부는 계약 변경이라 합의) | R4 |
 | `tools/get_company_profile.py`, `get_disclosure.py`, `get_holders.py`, `get_signal_history.py`, `list_new_disclosures.py`, `save_assessment.py` | 수정 | 새 모델(tenant, risk_states)에 맞춤 | R4 |
-| `tools/compute_customer_impact.py`, `purge_disclosure_text.py` | **삭제 유지** | 영향도는 복원하지 않음(보유 고객 전원), 원문 저장 폐지 | — |
+| `tools/compute_customer_impact.py` | **삭제 유지** | 영향도는 복원하지 않음(보유 고객 전원) | — |
+| `tools/purge_disclosure_text.py`, rag `release_disclosure_index` | **복원 때 함께 돌아옴** | 구조 정리 커밋을 되돌리며 같이 복원됨. 원문 저장 폐지는 R3 수집기 작업 때 다시 정리 | R3·R4 |
 | `tools/create_contact_task.py`, `update_task_status.py` | **복원 예정 (오후 회의)** | 연락 기능 재도입. git 이력에서 복원 | R4 |
 | — | 신규 | `get_risk_state`, `save_risk_state`, `get_financial_snapshot` (예상) | R4 |
 | `rag/server.py`, `tools.py` | 수정 | `release_disclosure_index` 삭제 | R3 |
