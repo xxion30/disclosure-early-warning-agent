@@ -10,7 +10,6 @@ async def create_tasks(state, deps):
     if not pending:
         return {}
     cid, decision = pending[0]
-    customer = next(c for c in state["affected_customers"] if c["customer_id"] == cid)
     message = state["drafts"][cid]
     if await message_flags(message, deps):
         raise AgentError("업무 생성 전 최종 문안 검사 실패")
@@ -20,7 +19,7 @@ async def create_tasks(state, deps):
     before = scope.tool_counts.get("create_contact_task", 0)
     task_id = await deps.create_task({
         "assessment_id": state["assessment_id"], "customer_id": cid,
-        "priority": customer["priority"], "draft_message": message,
+        "draft_message": message,
         "pb_id": decision["pb_id"], "trace_id": state["trace_id"],
         "idempotency_key": f'{state["assessment_id"]}:{cid}',
     })

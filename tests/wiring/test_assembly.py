@@ -16,7 +16,6 @@ from agent.harness_llm import prepare_input, recover_llm
 from agent.rules import signal_input
 from harness import recovery_llm as recovery
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
-from mcp_servers.business.tools.compute_customer_impact import compute_customer_impact
 from mcp_servers.business.tools.create_contact_task import create_contact_task
 from mcp_servers.business.tools.get_company_profile import get_company_profile
 from mcp_servers.business.tools.get_disclosure import get_disclosure
@@ -34,7 +33,7 @@ from shared.schemas import ToolResponse
 RCEPT = "20250321802001"
 TOOLS = {f.__name__: f for f in (
     list_new_disclosures, get_disclosure, get_company_profile, get_signal_history, calculate_risk_score,
-    get_holders, compute_customer_impact, save_assessment, create_contact_task,
+    get_holders, save_assessment, create_contact_task,
     search_disclosure_text, search_reference,
 )}
 
@@ -100,8 +99,7 @@ def test_scenario_a_end_to_end_through_assembly(world):
             st = await rt.start(RCEPT)
             assert st["status"] == "WAITING_APPROVAL" and st["risk_level"] == "Critical" and not st.get("error")
             assert st["evidence"] and st["ai_explanation"]
-            pr = {p: sorted(c["customer_id"] for c in st["affected_customers"] if c["priority"] == p) for p in ("P1", "P2")}
-            assert pr == {"P1": ["C001", "C003", "C005", "C006", "C007"], "P2": ["C002", "C004"]}
+            assert sorted(c["customer_id"] for c in st["affected_customers"]) == [f"C00{i}" for i in range(1, 8)]
             assert len(st["drafts"]) == 7 and st["guardrail_flags"] == []
             aid = st["assessment_id"]
 

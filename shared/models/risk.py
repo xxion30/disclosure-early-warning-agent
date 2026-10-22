@@ -7,7 +7,6 @@ from shared.models.base import Base
 ASSESSMENT_STATUSES = ("RUNNING", "WAITING_APPROVAL", "DONE", "FAILED", "MANUAL_CHECK")
 TASK_STATUSES = ("승인대기", "승인", "반려", "연락완료", "보류")
 LEVELS = ("Low", "Medium", "High", "Critical")
-PRIORITIES = ("P1", "P2", "P3")
 
 
 class RiskAssessment(Base):
@@ -32,8 +31,6 @@ class ContactTask(Base):
     assessment_id: Mapped[int] = mapped_column(ForeignKey("risk_assessments.assessment_id"), index=True)
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.customer_id"), index=True)
     pb_id: Mapped[str] = mapped_column(ForeignKey("pbs.pb_id"), index=True)
-    priority: Mapped[str] = mapped_column(String)
-    impact_score: Mapped[int] = mapped_column(Integer)
     draft_message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String, default="승인대기")
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

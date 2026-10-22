@@ -25,7 +25,7 @@ def test_level_routes(kit, level):
             assert len(state["affected_customers"]) == 7
         else:
             assert state["status"] == "DONE"
-            assert "compute_customer_impact" not in [name for name, _ in kit.tools.calls]
+            assert "get_holders" not in [name for name, _ in kit.tools.calls]
         again = await runtime.start(RCEPT)
         assert again == state
         assert "body_text" not in state["disclosure"]
@@ -42,9 +42,9 @@ def test_irrelevant_disclosure_stops(kit):
     asyncio.run(scenario())
 
 
-def test_no_eligible_customers(kit):
+def test_no_holders(kit):
     async def scenario():
-        kit.tools.customers = [{**kit.tools.customers[0], "priority": "P3"}]
+        kit.tools.customers = []
         state = await AgentRuntime(kit.deps, InMemorySaver()).start(RCEPT)
         assert state["status"] == "DONE"
         assert state["drafts"] == {}

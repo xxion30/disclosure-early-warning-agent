@@ -5,7 +5,6 @@
 from fastmcp import FastMCP
 
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
-from mcp_servers.business.tools.compute_customer_impact import compute_customer_impact
 from mcp_servers.business.tools.create_contact_task import create_contact_task
 from mcp_servers.business.tools.get_company_profile import get_company_profile
 from mcp_servers.business.tools.get_disclosure import get_disclosure
@@ -32,7 +31,6 @@ for _tool, _hints in (
     (get_signal_history, READ_ONLY),
     (calculate_risk_score, READ_ONLY),  # 규칙 계산이지만 DB를 바꾸지 않는다
     (get_holders, READ_ONLY),
-    (compute_customer_impact, READ_ONLY),
     (save_assessment, MUTATING),  # rcept_no 기준 upsert (같은 입력이면 같은 결과)
     (create_contact_task, MUTATING),  # PB 승인 뒤에만, (평가, 고객)당 1건 (멱등)
     (update_task_status, MUTATING),  # PB가 화면에서만

@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from risk_engine.impact_rules import ImpactInputError
 from risk_engine.risk_rules import RuleInputError
 from shared.schemas import ErrorCode, fail
 
@@ -42,7 +41,7 @@ def guarded(fn):
             return fn(*args, **kwargs)
         except ToolFail as e:
             return fail(e.code, e.message)
-        except (RuleInputError, ImpactInputError) as e:
+        except RuleInputError as e:
             return fail(ErrorCode.INVALID_INPUT, str(e))
         except TimeoutError as e:
             return fail(ErrorCode.TIMEOUT, str(e) or "시간 초과")
@@ -73,8 +72,6 @@ def task_dict(t) -> dict:
         "assessment_id": t.assessment_id,
         "customer_id": t.customer_id,
         "pb_id": t.pb_id,
-        "priority": t.priority,
-        "impact_score": t.impact_score,
         "draft_message": t.draft_message,
         "status": t.status,
         "reject_reason": t.reject_reason,

@@ -5,7 +5,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 Level = Literal["Low", "Medium", "High", "Critical"]
-Priority = Literal["P1", "P2", "P3"]
 AssessmentStatus = Literal["RUNNING", "WAITING_APPROVAL", "DONE", "FAILED", "MANUAL_CHECK"]
 TaskStatus = Literal["승인대기", "승인", "반려", "연락완료", "보류"]
 RefCategory = Literal["상장규정", "공시해설", "회계용어", "안내문가이드"]
@@ -54,13 +53,10 @@ class ScoreResult(BaseModel):
     breakdown: list[dict] = Field(default_factory=list)
 
 
-# ---- 고객 영향도 ----
-class CustomerImpact(BaseModel):
+# ---- 연락 대상 고객 (보유 고객 전원, 영향도 없음) ----
+class AffectedCustomer(BaseModel):
     customer_id: str
-    impact_score: int
-    impact_level: Literal["낮음", "보통", "높음"]
-    priority: Priority
-    reasons: dict = Field(default_factory=dict)  # 요소별 점수
+    eval_amount: int
 
 
 # ---- 도구 입력 (4-2장) ----
@@ -76,7 +72,6 @@ class SaveAssessmentInput(BaseModel):
 class CreateContactTaskInput(BaseModel):
     assessment_id: int
     customer_id: str
-    priority: Priority
     draft_message: str
 
 

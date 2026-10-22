@@ -141,35 +141,6 @@ base_score:
     one_off_profit_30pct: 1
     key_audit_matter: 0
 
-# ---------------------------------------------------------------- 5-5 고객 영향도
-impact:
-  holding_ratio:                 # 평가금액 ÷ 총자산. 위에서부터 ratio >= min 인 첫 점수.
-    - {min: 0.30, score: 3}
-    - {min: 0.15, score: 2}
-    - {min: 0.05, score: 1}
-    - {min: 0.0, score: 0}
-  eval_amount:                   # 원
-    - {min: 200000000, score: 3}
-    - {min: 50000000, score: 2}
-    - {min: 10000000, score: 1}
-    - {min: 0, score: 0}
-  risk_profile:
-    공격투자형: 0
-    적극투자형: 1
-    위험중립형: 1
-    안정추구형: 2
-    안정형: 3
-  on_credit_score: 3
-  levels:                        # 위에서부터 합계 >= min 인 첫 등급. 신용거래가 있으면 무조건 높음.
-    - {min: 7, level: 높음}
-    - {min: 4, level: 보통}
-    - {min: 0, level: 낮음}
-  credit_forces_level: 높음
-  priority:                      # 회사 등급 → 영향 등급 → 우선순위
-    Critical: {높음: P1, 보통: P1, 낮음: P2}
-    High: {높음: P1, 보통: P2, 낮음: P3}
-  contact_priorities: [P1, P2]   # P1·P2만 안내문과 연락 업무를 만든다. P3는 목록에만.
-
 # ---------------------------------------------------------------- 연락 업무 상태 전이
 task_transitions:                # update_task_status: 현재 상태 → 바꿀 수 있는 상태
   승인: [연락완료, 보류]

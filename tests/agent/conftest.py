@@ -17,8 +17,8 @@ EVIDENCE = {"source": "synthetic.md", "quote": "테스트 감사의견은 거절
 class FakeTools:
     def __init__(self, level="Critical"):
         data = json.loads((Path(__file__).parents[2] / "data/seed/customers.json").read_text())
-        self.customers = [{k: row[k] for k in ("customer_id", "impact_score", "impact_level", "priority")}
-                          | {"reasons": {}} for row in data["expected_impact_001570_critical"]]
+        self.customers = [{"customer_id": h["customer_id"], "eval_amount": h["eval_amount"]}
+                          for h in data["holdings"] if h["stock_code"] == "001570"]
         self.level = level
         self.calls = []
         self.error = None
@@ -37,7 +37,7 @@ class FakeTools:
             "calculate_risk_score": {"total_score": 2.5, "level": self.level, "combo_upgraded": False,
                 "signals": [{"signal_type": "TEST", "points": 2.5, "detail": {}}],
                 "breakdown": [{"signal_type": "TEST", "points": 2.5, "evidence": [EVIDENCE]}]},
-            "compute_customer_impact": self.customers,
+            "get_holders": {"stock_code": "001570", "count": len(self.customers), "holders": self.customers},
             "search_reference": {"chunks": [{"text": "상담 안내만 작성한다.", "source": "test-guide"}]},
         }
         value = copy.deepcopy(responses[name])

@@ -9,8 +9,7 @@ async def draft_messages(state, deps):
     attempts = dict(state.get("draft_attempts", {}))
     manual = set(state.get("manual_drafts", []))
     rewrite = set(state.get("rewrite_customers", []))
-    customers = [c for c in state["affected_customers"] if c["priority"] in ("P1", "P2")
-                 and c["customer_id"] not in state["decisions"]
+    customers = [c for c in state["affected_customers"] if c["customer_id"] not in state["decisions"]
                  and c["customer_id"] not in manual
                  and (c["customer_id"] not in drafts or c["customer_id"] in rewrite)]
     if not customers:

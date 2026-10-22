@@ -8,7 +8,7 @@ from agent.state import ApprovalBatch, PBContext
 
 def pending_customers(state):
     return [c["customer_id"] for c in state["affected_customers"]
-            if c["priority"] in ("P1", "P2") and c["customer_id"] not in state["decisions"]]
+            if c["customer_id"] not in state["decisions"]]
 
 
 async def validate_batch(state, batch, pb, deps):

@@ -80,7 +80,7 @@ def test_task_binding_checks_authority_and_shared_input(kit):
     class Tools:
         async def call(self, name, arguments):
             assert name == "create_contact_task"
-            assert set(arguments) == {"assessment_id", "customer_id", "priority", "draft_message"}
+            assert set(arguments) == {"assessment_id", "customer_id", "draft_message"}
             return ToolResponse.model_validate(ok({"task_id": 5}))
 
     async def scenario():
@@ -90,7 +90,7 @@ def test_task_binding_checks_authority_and_shared_input(kit):
         try:
             creator = ToolTaskCreator(Tools(), kit.harness, allowed, idempotency_confirmed=True)
             payload = {"pb_id": "P01", "customer_id": "C001", "assessment_id": 1,
-                       "priority": "P1", "draft_message": "{고객명}님, 상담 부탁드립니다.",
+                       "draft_message": "{고객명}님, 상담 부탁드립니다.",
                        "idempotency_key": "1:C001", "trace_id": "test"}
             assert await creator(payload) == 5
             with pytest.raises(PermissionError):
