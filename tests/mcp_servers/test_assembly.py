@@ -10,7 +10,10 @@ from sqlalchemy import select
 
 import shared.db as db_module
 from agent import ApprovalBatch, PBContext, open_runtime
-from agent.assembly import build_dependencies, prepare_input, recover_llm, recover_tool, signal_input
+from agent.adapters.assembly import build_dependencies
+from agent.adapters.harness_tools import recover_tool
+from agent.harness_llm import prepare_input, recover_llm
+from agent.rules import signal_input
 from harness import recovery
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
 from mcp_servers.business.tools.compute_customer_impact import compute_customer_impact
@@ -197,7 +200,7 @@ def test_recover_llm_retries_then_falls_back(monkeypatch):
         return None
 
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
-    monkeypatch.setattr("agent.assembly._audit_system", noop)
+    monkeypatch.setattr("agent.harness_llm.audit_system", noop)
 
     class E503(Exception):
         status_code = 503
@@ -237,7 +240,7 @@ def test_recover_tool_retries_timeout_once(monkeypatch):
     async def noop(*a, **k):
         return None
 
-    monkeypatch.setattr("agent.assembly._audit_system", noop)
+    monkeypatch.setattr("agent.adapters.harness_tools.audit_system", noop)
     results = [ToolResponse(ok=False, error={"code": "TIMEOUT", "message": "t"}), ToolResponse(ok=True, data={"x": 1})]
 
     async def op():
@@ -268,28 +271,28 @@ def _name(m):
 
 
 def test_model_openai_only_when_no_anthropic_key():
-    from agent.assembly import build_model
+    from agent.model_adapter import build_model
 
     m = build_model(None, _settings())
     assert _name(m.primary) == "gpt-5.4-mini" and _name(m.fallback) == "gpt-5.4-mini"
 
 
 def test_model_openai_primary_by_name():
-    from agent.assembly import build_model
+    from agent.model_adapter import build_model
 
     m = build_model(None, _settings(LLM_PRIMARY="gpt-5.4", ANTHROPIC_API_KEY="x"))
     assert _name(m.primary) == "gpt-5.4" and _name(m.fallback) == "gpt-5.4-mini"
 
 
 def test_model_anthropic_primary_when_key_present():
-    from agent.assembly import build_model
+    from agent.model_adapter import build_model
 
     m = build_model(None, _settings(ANTHROPIC_API_KEY="sk-ant-test"))
     assert _name(m.primary) == "claude-haiku-5-5" and _name(m.fallback) == "gpt-5.4-mini"
 
 
 def test_model_requires_openai_key():
-    from agent.assembly import build_model
+    from agent.model_adapter import build_model
 
     with pytest.raises(ValueError):
         build_model(None, _settings(OPENAI_API_KEY=""))
@@ -297,7 +300,7 @@ def test_model_requires_openai_key():
 
 def test_openai_models_use_function_calling_for_structured_output():
     """strict json_schema는 dict[str, Any]를 거부하므로 function calling을 기본으로 쓴다."""
-    from agent.assembly import _openai_chat
+    from agent.model_adapter import _openai_chat
     from agent.state import DraftsOutput, FactsOutput
 
     m = _openai_chat("gpt-5.4-mini", "sk-test")
@@ -381,7 +384,7 @@ def test_unknown_signal_types_are_dropped_before_scoring(world):
 
 def test_explain_risk_citations_are_replaced_by_verified_evidence():
     """AI가 인용을 바꿔 써도(말줄임, 요약) 점수 내역의 검증된 근거로 대체된다."""
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import ExplanationOutput
 
     ev = {"source": "s", "quote": "원문 그대로의 긴 인용문", "rcept_no": "1", "location": "chunk-0"}
@@ -398,7 +401,7 @@ def test_explain_risk_citations_are_replaced_by_verified_evidence():
 
 def test_explain_risk_gets_exactly_one_item_per_breakdown():
     """AI가 항목을 빠뜨리거나 중복해도 점수 내역 개수만큼 하나씩 채워진다."""
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import ExplanationOutput
 
     ev = lambda n: {"source": "s", "quote": f"인용{n}", "rcept_no": "1", "location": f"chunk-{n}"}  # noqa: E731
@@ -419,7 +422,7 @@ def test_explain_risk_gets_exactly_one_item_per_breakdown():
 def test_langsmith_env_is_exported_only_outside_pytest(monkeypatch):
     from types import SimpleNamespace
 
-    from agent.assembly import enable_langsmith
+    from harness.tracing import enable_langsmith
 
     s = SimpleNamespace(LANGSMITH_TRACING=True, LANGSMITH_API_KEY="ls-test", LANGSMITH_PROJECT="p")
     for k in ("LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_PROJECT"):
@@ -436,7 +439,7 @@ def test_langsmith_env_is_exported_only_outside_pytest(monkeypatch):
 
 # ---------------------------------------------------------------- 인용 보정
 def test_snap_quote_keeps_exact_and_repairs_stitched_quotes():
-    from agent.assembly import snap_quote
+    from agent.model_adapter import snap_quote
 
     text = "1. 신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 2. 1주당 액면가액 (원) 5,000 3. 증자전 발행주식총수 (주) 47,728,537"
     assert snap_quote("1주당 액면가액 (원) 5,000", text) == "1주당 액면가액 (원) 5,000"  # 이미 원문 그대로
@@ -447,7 +450,7 @@ def test_snap_quote_keeps_exact_and_repairs_stitched_quotes():
 
 
 def test_extract_facts_evidence_is_snapped_to_verbatim_text():
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import FactsOutput
 
     text = "신주의 종류와 수 보통주식 (주) 74,700,000 기타주식 (주) - 2. 1주당 액면가액 (원) 5,000 3. 증자전 발행주식총수 (주) 47,728,537"
@@ -465,7 +468,7 @@ def test_extract_facts_evidence_is_snapped_to_verbatim_text():
 
 
 def test_attachment_only_corrections_are_not_analyzed():
-    from agent.assembly import make_classifier
+    from agent.rules import make_classifier
 
     classify = make_classifier()
     assert classify("[첨부정정]감사보고서제출") is None and classify("[첨부추가]감사보고서제출") is None
@@ -474,7 +477,7 @@ def test_attachment_only_corrections_are_not_analyzed():
 
 def test_evidence_metadata_is_repaired_from_the_search_chunk():
     """AI가 접수번호·출처·위치를 잘못 베껴도(마스킹된 값 등) 검색 조각의 값으로 바로잡힌다."""
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import FactsOutput
 
     text = "횡령 등 금액 발생금액(원) 188,000,000,000 자기자본(원) 204,760,579,444 자기자본대비(%) 91.81"
@@ -495,7 +498,7 @@ def test_evidence_metadata_is_repaired_from_the_search_chunk():
 
 def test_explain_risk_passes_through_when_a_breakdown_item_has_no_evidence():
     """근거가 없는 점수 항목이 있으면 지어내지 않고 그대로 넘겨 A의 검증이 수동 확인으로 처리하게 한다."""
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import ExplanationOutput
 
     ev = {"source": "s", "quote": "q", "rcept_no": "1", "location": "l"}
@@ -512,7 +515,7 @@ def test_explain_risk_passes_through_when_a_breakdown_item_has_no_evidence():
 
 def test_signal_types_must_fit_the_disclosure_type():
     """대량보유보고서(OWNERSHIP)에서 AI가 CB_BW 신호를 올려도 걸러진다. 주식 담보(PLEDGE)만 허용."""
-    from agent.assembly import KnownSignalsModel
+    from agent.model_adapter import KnownSignalsModel
     from agent.state import FactsOutput
 
     text = "전환사채권 - 10,479,375 보유 현황"
@@ -537,7 +540,7 @@ def test_signal_types_must_fit_the_disclosure_type():
 
 def test_unsafe_draft_injector_only_touches_first_drafts():
     """FAKE_UNSAFE_DRAFT 시연: 첫 초안에만 금지 표현을 섞고, 다시 쓰기는 그대로 둔다 (가드레일이 잡고 다시 쓰게 하려는 것)."""
-    from agent.assembly import UnsafeDraftInjector
+    from agent.model_adapter import UnsafeDraftInjector
     from agent.state import DraftsOutput
     from harness import guardrails
 
@@ -573,7 +576,7 @@ class PassHarness:
 
 
 def _save(status, mode, tools):
-    from agent.assembly import AssessmentStore
+    from agent.adapters.store import AssessmentStore
     from agent.execution import Execution, current_execution
 
     async def run():

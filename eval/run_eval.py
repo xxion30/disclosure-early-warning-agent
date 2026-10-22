@@ -128,7 +128,7 @@ def exp_rag_k() -> list[dict]:
     import json
     from collections import defaultdict
 
-    from agent.assembly import make_classifier
+    from agent.rules import make_classifier
     from mcp_servers.rag.tools import search_disclosure_text
 
     data = _fixture()
@@ -176,7 +176,8 @@ def exp_model() -> list[dict]:
 
     from langchain_core.callbacks import get_usage_metadata_callback
 
-    from agent.assembly import KnownSignalsModel, _openai_chat, make_classifier
+    from agent.model_adapter import KnownSignalsModel, _openai_chat
+    from agent.rules import make_classifier
     from agent.llm import StructuredLLM
     from agent.state import FactsOutput
     from mcp_servers.rag.tools import search_disclosure_text

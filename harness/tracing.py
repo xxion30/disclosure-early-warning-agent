@@ -1,10 +1,14 @@
 """Harness 8 — Observability: LangSmith 메타데이터와 audit_logs 기록."""
+import asyncio
+import logging
+import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+log = logging.getLogger("harness.tracing")
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "agent" / "prompts"
 KST = timezone(timedelta(hours=9))
 
@@ -77,3 +81,34 @@ def write_audit_log(
                 created_at=datetime.now(KST).isoformat(timespec="seconds"),
             )
         )
+
+
+def current_trace_id() -> str | None:
+    """진행 중인 LangSmith trace의 root id (없으면 None)."""
+    try:
+        from langsmith.run_helpers import get_current_run_tree
+
+        run = get_current_run_tree()
+        return str(run.trace_id) if run is not None else None
+    except Exception:  # noqa: BLE001 — 관측 실패가 본 작업을 막으면 안 된다
+        return None
+
+
+async def audit_system(action: str, target: str | None, error: Any, **extra: Any) -> None:
+    try:
+        await asyncio.to_thread(
+            write_audit_log, "system", action, target, {"error": str(error), **extra}, current_trace_id()
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("audit_logs 기록 실패: %s", action)
+
+
+def enable_langsmith(settings) -> bool:
+    """`.env`의 LangSmith 설정을 환경 변수로 내보낸다. LangChain·LangGraph는 환경 변수만 읽기 때문에
+    이걸 하지 않으면 키가 있어도 trace가 전송되지 않는다. 테스트(pytest)에서는 전송하지 않는다."""
+    if os.environ.get("PYTEST_CURRENT_TEST") or not (settings.LANGSMITH_TRACING and settings.LANGSMITH_API_KEY):
+        return False
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGSMITH_API_KEY", settings.LANGSMITH_API_KEY)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.LANGSMITH_PROJECT)
+    return True

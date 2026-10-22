@@ -315,7 +315,7 @@ async def default_dependencies():
 
     business-mcp(8001)·rag-mcp(8002)가 떠 있고 모델 API 키가 .env에 있어야 한다.
     """
-    from agent.assembly import build_dependencies
+    from agent.adapters.assembly import build_dependencies
 
     try:
         return await build_dependencies()

@@ -4,8 +4,8 @@ import pytest
 from langchain_core.messages import ToolMessage
 
 from agent.llm import StructuredLLM, read_prompt
-from agent.mcp_client import normalize_response, MCPTools
-from agent.persistence import ToolAssessmentStore
+from agent.adapters.mcp_client import normalize_response, MCPTools
+from agent.adapters.store import ToolAssessmentStore
 from agent.state import DraftsOutput
 from shared.schemas import ok
 
@@ -73,7 +73,7 @@ def test_unsafe_tool_message_cannot_be_success():
 
 
 def test_task_binding_checks_authority_and_shared_input(kit):
-    from agent.persistence import ToolTaskCreator
+    from agent.adapters.store import ToolTaskCreator
     from agent.execution import Execution, current_execution
     from shared.schemas import ToolResponse
 
