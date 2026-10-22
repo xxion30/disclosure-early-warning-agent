@@ -67,17 +67,6 @@ const evidence = computed(() => {
 const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
 const customers = computed(() => alert.value?.customers || [])
 const fixedReason = computed(() => alert.value?.reasons?.find((r) => r.fixed_level))
-const scoreTotals = computed(() => {
-  const totals = { base: 0, signals: 0 }
-  for (const reason of alert.value?.reasons || []) {
-    totals[reason.group === 'BASE' ? 'base' : 'signals'] += Number(reason.points ?? 0)
-  }
-  return { base: Number(totals.base.toFixed(2)), signals: Number(totals.signals.toFixed(2)) }
-})
-const priorityNote = computed(() => ['P1', 'P2'].map((priority) => {
-  const count = customers.value.filter((c) => c.priority === priority).length
-  return count ? `${priority} ${count}명` : ''
-}).filter(Boolean).join(' · ') || '영향 고객 없음')
 const progressNote = computed(() => ({
   WAITING_APPROVAL: 'PB 승인에서 멈춰 있어요',
   DONE: '처리가 끝났어요',
@@ -153,17 +142,12 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
         <div v-else class="mini-stat" :class="{ bad: fixedReason }">
           <span class="mini-stat-label">등급 결정</span>
           <div class="mini-stat-value level-value"><strong>{{ fixedReason ? `${fixedReason.fixed_level} 고정` : alert.level || '-' }}</strong></div>
-          <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `총점 기준 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
+          <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `규칙으로 정한 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
         </div>
         <div class="mini-stat">
-          <span class="mini-stat-label">총점</span>
-          <div class="mini-stat-value"><strong>{{ unscored ? '-' : alert.total_score ?? '-' }}</strong><span v-if="!unscored">점</span></div>
-          <span class="mini-stat-note">{{ unscored ? '점수 내역 없음' : `기본 점수 ${scoreTotals.base} + 신호 ${scoreTotals.signals}` }}</span>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat-label">영향 고객</span>
+          <span class="mini-stat-label">보유 고객</span>
           <div class="mini-stat-value"><strong>{{ customers.length }}</strong><span>명</span></div>
-          <span class="mini-stat-note">{{ priorityNote }}</span>
+          <span class="mini-stat-note">{{ customers.length ? '보유 평가금액 큰 순' : '보유 고객 없음' }}</span>
         </div>
         <div class="mini-stat dark">
           <span class="mini-stat-label">내 승인 대기</span>
@@ -174,7 +158,7 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
     </section>
 
     <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
-    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" :total-score="alert.total_score" />
+    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" />
 
     <section v-if="hasRunHistory" class="card" aria-label="진행 단계">
       <div class="card-head">
@@ -184,20 +168,20 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
       <RunProgress :state="runState" />
     </section>
 
-    <section class="card flush" aria-label="점수 내역">
+    <section class="card flush" aria-label="위험 항목">
       <div class="card-head">
-        <h2>점수 내역</h2>
-        <span class="muted section-note">점수는 규칙으로 계산해요. AI는 점수를 바꾸지 않아요.</span>
+        <h2>위험 항목</h2>
+        <span class="muted section-note">등급은 규칙으로 정해요. AI는 등급을 바꾸지 않아요.</span>
       </div>
       <div class="table-wrap">
-        <ScoreBreakdown :reasons="alert.reasons" :total-score="alert.total_score" :combo-upgraded="alert.combo_upgraded" />
+        <ScoreBreakdown :reasons="alert.reasons" :combo-upgraded="alert.combo_upgraded" />
       </div>
     </section>
 
     <section class="card" aria-label="AI 설명과 원문 근거">
       <div class="card-head explanation-head">
         <h2>AI 설명과 원문 근거</h2>
-        <span class="chip soft">AI가 쓴 설명 · 점수에는 영향 없음</span>
+        <span class="chip soft">AI가 쓴 설명 · 등급에는 영향 없음</span>
       </div>
       <p class="explanation">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
       <div v-if="evidence.length" class="quote-grid">
@@ -215,33 +199,30 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
 
     <section class="card flush customers" aria-label="영향 고객">
       <div class="card-head">
-        <h2>영향 고객 <small>{{ customers.length }}명 · 우선순위순</small></h2>
+        <h2>보유 고객 <small>{{ customers.length }}명 · 보유 평가금액 큰 순</small></h2>
         <span class="muted section-note">다른 PB의 고객은 이름을 가려요</span>
       </div>
       <p v-if="impactSkipped && !customers.length" class="muted impact-skipped">
-        고객 영향도는 High·Critical 경보에서만 계산해요.<template v-if="unscored"> 이 공시는 점수 계산 전에 멈췄어요.</template>
+        안내문 대상 고객은 High·Critical 경보에서만 정해져요.<template v-if="unscored"> 이 공시는 점수 계산 전에 멈췄어요.</template>
       </p>
       <p v-else-if="alert.graph_error" class="notice">
-        {{ alert.graph_error }} 점수 내역은 그대로 볼 수 있고, 영향 고객·안내문은 연결되면 다시 보입니다.
+        {{ alert.graph_error }} 위험 항목은 그대로 볼 수 있고, 보유 고객·안내문은 연결되면 다시 보입니다.
       </p>
       <p v-else-if="!alert.graph_state_available" class="notice">
-        Graph 상태를 찾을 수 없어 영향 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
+        Graph 상태를 찾을 수 없어 보유 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
       </p>
       <div v-else class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>우선순위</th>
-              <th>고객</th>
+              <th>고객 (보유 평가금액 순)</th>
               <th>투자성향</th>
-              <th>영향도</th>
               <th>담당</th>
               <th>결정</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="c in customers" :key="c.customer_id">
-              <td><span class="prio-pill" :class="`prio-${c.priority}`">{{ c.priority }}</span></td>
               <td>
                 <div class="customer">
                   <span class="avatar sm" :class="{ soft: !c.mine }" aria-hidden="true">{{ c.mine ? (c.name || '-').slice(0, 1) : 'C' }}</span>
@@ -249,12 +230,6 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
                 </div>
               </td>
               <td>{{ c.risk_profile || '-' }}</td>
-              <td>
-                <div class="impact" :class="`impact-${c.impact_level}`">
-                  <span class="impact-track" aria-hidden="true"><span :style="{ width: `${(c.impact_score ?? 0) / 12 * 100}%` }"></span></span>
-                  <span class="impact-text">{{ c.impact_score }}점 · {{ c.impact_level }}</span>
-                </div>
-              </td>
               <td><span class="chip" :class="c.mine ? 'strong mine' : 'soft'">{{ c.mine ? '내 고객' : c.pb_id }}</span></td>
               <td><StatusBadge :status="c.decision" /></td>
             </tr>

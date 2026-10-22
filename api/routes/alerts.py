@@ -57,7 +57,15 @@ def strip_scores(rows: list | None) -> list:
     """점수 내역에서 점수 숫자 필드를 지운다. 순서는 점수 높은 순으로 먼저 맞춘다."""
     items = [r for r in (rows or []) if isinstance(r, dict)]
     items.sort(key=lambda r: -float(r.get("points") or 0))
-    return [{k: v for k, v in r.items() if not any(w in k.lower() for w in SCORE_KEYS)} for r in items]
+    return [_strip(r) for r in items]
+
+
+def _strip(value):
+    if isinstance(value, dict):
+        return {k: _strip(v) for k, v in value.items() if not any(w in k.lower() for w in SCORE_KEYS)}
+    if isinstance(value, list):
+        return [_strip(v) for v in value]
+    return value
 
 
 def priority_key(a: RiskAssessment) -> tuple:

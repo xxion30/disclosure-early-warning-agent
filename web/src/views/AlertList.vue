@@ -57,6 +57,8 @@ async function loadAttention() {
     // 안내용이라 실패해도 목록은 그대로 둔다
   }
 }
+// 메인 대시보드 알림 = 경보 등급 + 처리 실패가 아닌 것. 서버가 이미 우선순위로 정렬해 준다
+const notifications = computed(() => rows.value.filter((r) => ['High', 'Critical'].includes(r.level) && r.status !== 'FAILED').slice(0, 8))
 const showAttention = computed(() => !statusFilter.value && (attention.value.MANUAL_CHECK || attention.value.FAILED))
 function showStatus(status) {
   tab.value = 'all'
@@ -83,8 +85,8 @@ const stats = computed(() => ({
   pendingAlerts: rows.value.filter((r) => r.my_pending_count > 0).length,
   critical: rows.value.filter((r) => r.level === 'Critical').length,
   high: rows.value.filter((r) => r.level === 'High').length,
-  // 끝난 경보의 P1까지 더하면 이미 결정한 고객이 다시 세진다. 승인 대기 경보만 센다
-  p1: rows.value.filter((r) => r.status === 'WAITING_APPROVAL').reduce((sum, r) => sum + Number(r.p1_count || 0), 0),
+  // 끝난 경보까지 더하면 이미 결정한 고객이 다시 세진다. 승인 대기 경보만 센다
+  holders: rows.value.filter((r) => r.status === 'WAITING_APPROVAL').reduce((sum, r) => sum + Number(r.affected_count || 0), 0),
 }))
 
 // ---- 공시 1건 처리 시작 (데모용) ----
@@ -139,11 +141,11 @@ async function startRun() {
     <div class="stat">
       <span class="stat-label"><span class="dot dot-high" aria-hidden="true"></span>High</span>
       <div class="stat-value"><strong>{{ stats.high }}</strong><span>건</span></div>
-      <span class="stat-note">고객 영향도 계산 대상</span>
+      <span class="stat-note">안내문 대상 경보</span>
     </div>
     <div class="stat">
-      <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>P1 연락 대상</span>
-      <div class="stat-value"><strong>{{ stats.p1 }}</strong><span>명</span></div>
+      <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>경보 종목 보유 고객</span>
+      <div class="stat-value"><strong>{{ stats.holders }}</strong><span>명</span></div>
       <span class="stat-note">승인 대기 경보 기준</span>
     </div>
   </div>
@@ -182,6 +184,22 @@ async function startRun() {
       <button v-if="attention.FAILED" type="button" class="ghost small" @click="showStatus('FAILED')">실패 보기</button>
     </span>
   </div>
+
+  <!-- 메인 대시보드 알림: 경보 등급(High·Critical)을 우선순위(등급 → 점수 순)로. 점수 숫자는 보여 주지 않는다 -->
+  <section v-if="notifications.length" class="card notifications" aria-label="새 경보 알림">
+    <div class="card-head">
+      <h2>경보 알림 <small>{{ notifications.length }}건 · 우선순위순</small></h2>
+    </div>
+    <ol class="notice-list">
+      <li v-for="(r, n) in notifications" :key="r.assessment_id" class="clickable" @click="router.push({ name: 'alert-detail', params: { assessmentId: r.assessment_id } })">
+        <span class="rank">{{ n + 1 }}</span>
+        <LevelBadge :level="r.level" />
+        <strong>{{ r.corp_name || '-' }}</strong>
+        <span class="sub">{{ r.title || r.rcept_no }}</span>
+        <span class="notice-meta">보유 고객 {{ r.affected_count }}명<template v-if="r.my_pending_count > 0"> · 내 승인 대기 {{ r.my_pending_count }}명</template></span>
+      </li>
+    </ol>
+  </section>
 
   <section class="card flush alert-list" aria-label="경보 목록">
     <div class="card-head">
@@ -226,9 +244,7 @@ async function startRun() {
             <th>회사</th>
             <th>공시</th>
             <th>등급</th>
-            <th class="num">점수</th>
-            <th class="num">영향 고객</th>
-            <th class="num">P1</th>
+            <th class="num">보유 고객</th>
             <th class="num">내 승인 대기</th>
             <th>상태</th>
             <th>생성</th>
@@ -263,15 +279,13 @@ async function startRun() {
                 <span v-if="r.combo_upgraded" class="sub">조합 상향</span>
               </div>
             </td>
-            <td class="num score">{{ isUnscored(r) ? '-' : r.total_score ?? '-' }}</td>
             <td class="num">{{ r.affected_count }}명</td>
-            <td class="num p1">{{ r.p1_count }}</td>
             <td class="num"><span v-if="r.my_pending_count > 0" class="count-pill">{{ r.my_pending_count }}</span><span v-else class="muted">-</span></td>
             <td><StatusBadge :status="r.status" /></td>
             <td class="created-at">{{ formatTime(r.created_at) }}</td>
           </tr>
           <tr v-if="!rows.length && !loading">
-            <td colspan="9" class="empty">표시할 경보가 없습니다.</td>
+            <td colspan="7" class="empty">표시할 경보가 없습니다.</td>
           </tr>
         </tbody>
       </table>
@@ -297,12 +311,15 @@ async function startRun() {
 .disclosure { display: flex; flex-direction: column; line-height: 1.4; }
 .disclosure-title { font-weight: 500; }
 .level-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-.alert-list .score { font-size: 16px; font-weight: 700; }
-.p1 { color: var(--bad); font-weight: 700; }
 .alert-list .created-at { font-size: 13px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 540px) {
   .run-start { width: 100%; border-radius: var(--radius); }
   .run-start input { flex: 1 1 160px; }
   .run-start button { flex: 1 1 auto; }
 }
+.notice-list { list-style: none; margin: 0; padding: 0 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+.notice-list li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); flex-wrap: wrap; }
+.notice-list li:hover { background: var(--bg); }
+.notice-list .rank { width: 24px; height: 24px; border-radius: 50%; background: var(--neutral-soft); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.notice-meta { margin-left: auto; font-size: 13px; color: var(--muted); }
 </style>

@@ -168,14 +168,12 @@ async function submit() {
 
       <article v-for="d in pending" :key="d.customer_id" class="card draft" :class="[form[d.customer_id].choice, { manual: d.manual && !form[d.customer_id].choice }]" :aria-label="`${d.name} 안내문 검토`">
         <div class="draft-head">
-          <span class="prio-pill" :class="`prio-${d.priority}`">{{ d.priority }}</span>
           <span class="avatar sm" aria-hidden="true">{{ (d.name || '-').slice(0, 1) }}</span>
           <div class="customer-text">
             <strong>{{ d.name }}</strong>
             <span class="sub">{{ d.customer_id }} · {{ d.risk_profile }}</span>
           </div>
           <span v-if="d.manual" class="badge tone-warn">직접 작성 필요</span>
-          <span class="impact-pill" :class="`impact-${d.impact_level}`">영향 {{ d.impact_level }} · {{ d.impact_score }}점</span>
         </div>
 
         <p v-if="d.manual" class="notice">
@@ -277,9 +275,6 @@ async function submit() {
 .draft-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .customer-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
 .customer-text strong { font-size: 16px; }
-.impact-pill { margin-left: auto; padding: 5px 12px; border-radius: var(--pill); background: var(--neutral-soft); color: var(--muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
-.impact-pill.impact-높음 { background: var(--bad-soft); color: var(--bad); }
-.impact-pill.impact-보통 { background: var(--warn-soft); color: var(--warn); }
 .draft > .notice { margin: 0; }
 .edit-body { display: flex; flex-direction: column; gap: 8px; }
 .edit-body label { margin: 0; }
@@ -321,6 +316,5 @@ code { background: var(--neutral-soft); padding: 1px 6px; border-radius: 6px; fo
   .summary { position: static; }
 }
 @media (max-width: 540px) {
-  .impact-pill { margin-left: 0; }
 }
 </style>

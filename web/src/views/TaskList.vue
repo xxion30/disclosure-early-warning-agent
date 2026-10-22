@@ -90,8 +90,6 @@ async function change(task, status) {
   <div class="task-list">
     <article v-for="t in filteredTasks" :key="t.task_id" class="card task-card" :class="{ held: t.status === '보류', completed: t.status === '연락완료' }" :aria-label="`${t.customer_name} 연락 업무`">
       <div class="task-head">
-        <span v-if="t.priority" class="prio-pill" :class="[`prio-${t.priority}`, { 'completed-priority': t.status === '연락완료' }]">{{ t.priority }}</span>
-        <span v-else class="muted">-</span>
         <span class="avatar" :class="{ soft: t.status === '연락완료' }" aria-hidden="true">{{ (t.customer_name || '-').slice(0, 1) }}</span>
         <div class="customer-text"><strong>{{ t.customer_name }}</strong><span class="sub">{{ t.customer_id }}</span></div>
         <div class="task-corp">
@@ -178,7 +176,6 @@ button.message-toggle:hover { background: var(--blue-soft); }
 .compact-toggle { align-self: flex-start; min-height: 44px; font-size: 13px; }
 .task-card.completed { background: #fafbfd; padding: 18px 24px; gap: 12px; }
 .completed .customer-text strong, .completed .task-corp strong { color: var(--muted); }
-.prio-pill.completed-priority { background: var(--neutral-soft); color: var(--muted); }
 .completed .task-corp { background: #f1f4f9; }
 .result-note { margin: 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: #2a3554; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 540px) {

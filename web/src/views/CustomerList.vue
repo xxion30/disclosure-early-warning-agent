@@ -9,13 +9,13 @@ import { formatTime, formatWon } from '../labels'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-const customerTabs = { all: '전체', exposed: '경보 종목 보유', p1: 'P1 연락 대상' }
+const customerTabs = { all: '전체', exposed: '경보 종목 보유', critical: 'Critical 노출' }
 const historyTone = (status) => ({ 연락완료: 'ok', 승인: 'ok', 보류: 'warn', 반려: 'bad' }[status] || '')
 
-const data = ref({ summary: { customers: 0, exposed: 0, p1: 0, p2: 0, tasks: {} }, customers: [] })
+const data = ref({ summary: { customers: 0, exposed: 0, critical: 0, high: 0, tasks: {} }, customers: [] })
 const error = ref('')
 const loading = ref(false)
-const filter = ref('all') // all | exposed | p1
+const filter = ref('all') // all | exposed | critical
 const query = ref('')
 const open = reactive({}) // customer_id → 펼침
 
@@ -36,7 +36,7 @@ const rows = computed(() => {
   const q = query.value.trim().toLowerCase()
   return data.value.customers.filter((c) => {
     if (filter.value === 'exposed' && !c.exposure.alert_count) return false
-    if (filter.value === 'p1' && c.exposure.top_priority !== 'P1') return false
+    if (filter.value === 'critical' && c.exposure.top_level !== 'Critical') return false
     return !q || c.name.toLowerCase().includes(q) || c.customer_id.toLowerCase().includes(q)
   })
 })
@@ -83,8 +83,8 @@ const toggle = (id) => (open[id] = !open[id])
       <span class="stat-note">High·Critical 경보 종목</span>
     </div>
     <div class="stat">
-      <span class="stat-label"><span class="dot dot-critical" aria-hidden="true"></span>P1 / P2</span>
-      <div class="stat-value"><strong>{{ data.summary.p1 }} / {{ data.summary.p2 }}</strong><span>명</span></div>
+      <span class="stat-label"><span class="dot dot-critical" aria-hidden="true"></span>Critical / High</span>
+      <div class="stat-value"><strong>{{ data.summary.critical }} / {{ data.summary.high }}</strong><span>명</span></div>
       <span class="stat-note">우선 연락 대상</span>
     </div>
     <div class="stat dark">
@@ -122,7 +122,7 @@ const toggle = (id) => (open[id] = !open[id])
           <template v-for="c in rows" :key="c.customer_id">
             <tr class="clickable" :class="{ expanded: open[c.customer_id] }" @click="toggle(c.customer_id)">
               <td>
-                <span v-if="c.exposure.top_priority" class="prio-pill" :class="`prio-${c.exposure.top_priority}`">{{ c.exposure.top_priority }}</span>
+                <LevelBadge v-if="c.exposure.top_level" :level="c.exposure.top_level" />
                 <span v-else class="muted">-</span>
               </td>
               <td>
@@ -171,7 +171,6 @@ const toggle = (id) => (open[id] = !open[id])
                         <div class="holding-alert">
                           <template v-if="h.alert">
                             <LevelBadge :level="h.alert.level" />
-                            <span v-if="h.alert.priority" class="prio-pill" :class="`prio-${h.alert.priority}`">{{ h.alert.priority }}</span>
                             <RouterLink :to="{ name: 'alert-detail', params: { assessmentId: String(h.alert.assessment_id) } }" @click.stop>경보 보기</RouterLink>
                           </template>
                           <span v-else class="muted">경보 없음</span>
@@ -192,7 +191,6 @@ const toggle = (id) => (open[id] = !open[id])
                         <div class="timeline-body">
                           <div class="row history-head">
                             <StatusBadge :status="x.status" />
-                            <span v-if="x.priority" class="prio-pill" :class="`prio-${x.priority}`">{{ x.priority }}</span>
                             <strong>{{ x.corp_name || '-' }}</strong>
                             <span class="sub">{{ formatTime(x.when) }}</span>
                           </div>
