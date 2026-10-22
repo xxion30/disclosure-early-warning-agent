@@ -1,7 +1,6 @@
-"""운영(RAG_INDEX_MODE=ephemeral)의 공시별 임시 색인. (담당: R3)
+"""운영(RAG_INDEX_MODE=ephemeral)의 공시별 임시 색인.
 
-공시 1건을 처리할 때 원문을 읽어 그 공시의 조각만 색인에 넣는다(ensure_indexed).
-처리 후 삭제(release)는 도구를 삭제했다: 메모리 안 임시 색인으로 바꾸는 작업(docs/dartch_phase1_mvp.md)에서 다시 정한다.
+공시 1건을 처리할 때 원문을 읽어 그 공시의 조각만 색인에 넣고(ensure_indexed), 처리가 끝나면 지운다(release).
 원문은 이 순서로 찾는다: ① DB disclosures.body_text → ② rag_docs/ 파일(데모·평가) → ③ DART (운영).
 """
 from __future__ import annotations
@@ -87,3 +86,16 @@ def ensure_indexed(rcept_no: str) -> None:
         part = records[i:i + 64]
         col.upsert(ids=[r["id"] for r in part], documents=[r["text"] for r in part],
                    metadatas=[r["meta"] for r in part], embeddings=embed([r["text"] for r in part]))
+
+
+def release(rcept_no: str) -> dict:
+    """이 공시의 조각을 색인에서 지운다. 원문 sha256은 DB에 남기려고 돌려준다."""
+    try:
+        col = store.get_collection(store.DISCLOSURES)
+    except Exception:  # noqa: BLE001 — 색인 자체가 없으면 지울 것도 없다
+        return {"rcept_no": rcept_no, "released_chunks": 0, "content_sha256": None}
+    got = col.get(where={"rcept_no": rcept_no}, include=["metadatas"])
+    sha = next((m.get("content_sha256") for m in got["metadatas"] if m.get("content_sha256")), None)
+    if got["ids"]:
+        col.delete(ids=got["ids"])
+    return {"rcept_no": rcept_no, "released_chunks": len(got["ids"]), "content_sha256": sha}

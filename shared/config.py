@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     RAG_INDEX_MODE: str = "persistent"
 
     FAKE_LLM_ERROR: str = ""  # 예: "503" — 실패 시나리오용
+    FAKE_UNSAFE_DRAFT: bool = False  # true면 첫 안내문 초안에 금지 표현을 섞는다 (가드레일 → 다시 쓰기 시연용)
 
     GRAPH_ADAPTER: str = "fake"  # fake | real — API가 쓰는 Graph (C 제안, CLAUDE.md 4-7장)
     FAKE_GRAPH_DELAY: float = 0.4

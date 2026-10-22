@@ -1,7 +1,4 @@
-"""⚠ 이전 프로젝트(Capstone)의 시나리오(고객 연락·PB 승인 포함) 기준이라 DARTCH에서는 끝까지 돌지 않는다.
-새 시나리오(🔴/🟠/🟡 판정, 수집기)에 맞춰 다시 쓴다 — 담당은 파일 구성 계획(docs/dartch_file_plan.md)을 본다.
-
-전체 검증을 한 번에: 테스트 → 시나리오 A → 안전장치 → (선택) 시나리오 B → 결과표.
+"""전체 검증을 한 번에: 테스트 → 시나리오 A → 안전장치 → (선택) 시나리오 B → 결과표.
 
     uv run python scripts/ops/verify_all.py                 # 테스트 + 시나리오 A + 안전장치 (약 10분, 모델 비용 소액)
     uv run python scripts/ops/verify_all.py --with-b        # + 위니아·오스템·CGV·SK (30분 이상)

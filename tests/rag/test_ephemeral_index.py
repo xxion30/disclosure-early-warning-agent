@@ -1,6 +1,4 @@
-"""운영 모드(RAG_INDEX_MODE=ephemeral): 공시마다 필요할 때 임시 색인을 만든다 (DB 본문 → 파일 → DART). (담당: R3)
-
-처리 후 삭제(release·purge)는 도구를 삭제해 테스트도 뺐다. 메모리 안 임시 색인으로 바꿀 때 다시 쓴다."""
+"""운영 모드(RAG_INDEX_MODE=ephemeral): 공시마다 임시 색인을 만들고, 처리가 끝나면 색인과 본문을 지운다."""
 import asyncio
 import hashlib
 
@@ -9,7 +7,8 @@ from sqlalchemy import select
 
 import shared.db as db_module
 from mcp_servers.rag import filing, store
-from mcp_servers.rag.tools import search_disclosure_text
+from mcp_servers.rag.tools import release_disclosure_index, search_disclosure_text
+from mcp_servers.business.tools.purge_disclosure_text import purge_disclosure_text
 from shared.config import get_settings
 from shared.models import Disclosure
 
@@ -31,11 +30,6 @@ def ephemeral(seeded_db, tmp_path, monkeypatch):
     get_settings.cache_clear()
 
 
-def _blank_body():
-    with db_module.get_session() as s:
-        s.get(Disclosure, RCEPT).body_text = None
-
-
 def chunk_count():
     try:
         return len(store.get_collection(store.DISCLOSURES).get(where={"rcept_no": RCEPT})["ids"])
@@ -43,15 +37,37 @@ def chunk_count():
         return 0
 
 
-def test_index_is_built_on_demand_from_the_db_text(ephemeral):
+def test_index_is_built_on_demand_from_the_db_text_and_released_after(ephemeral):
     assert chunk_count() == 0                         # 미리 적재하지 않는다
     res = search_disclosure_text(RCEPT, "감사의견 의견거절", 3)
     assert res["ok"] and res["data"]["count"] == 3 and chunk_count() >= 3
     assert all(c["rcept_no"] == RCEPT and c["location"].startswith("chunk-") for c in res["data"]["chunks"])
 
+    out = release_disclosure_index(RCEPT)["data"]
+    assert out["mode"] == "ephemeral" and out["released_chunks"] >= 3
+    assert out["content_sha256"] == hashlib.sha256(BODY.strip().encode()).hexdigest()
+    assert chunk_count() == 0                         # 색인이 비워졌다
 
-def test_without_a_stored_body_the_text_is_fetched_from_dart(ephemeral, monkeypatch):
-    _blank_body()
+
+def test_purge_clears_the_body_and_keeps_hash_and_times(ephemeral):
+    sha = hashlib.sha256(BODY.strip().encode()).hexdigest()
+    out = purge_disclosure_text(RCEPT, sha)["data"]
+    assert out["purged"] is True and out["content_hash"] == sha and out["processed_at"] and out["purged_at"]
+    with db_module.get_session() as s:
+        d = s.get(Disclosure, RCEPT)
+        assert d.body_text is None and d.content_hash == sha and d.processed is True
+        assert d.title and d.url  # 제목·DART 주소 같은 메타는 남는다
+    again = purge_disclosure_text(RCEPT, "다른값")["data"]  # 되풀이해도 같은 결과 (해시를 덮어쓰지 않는다)
+    assert again["content_hash"] == sha and again["purged_at"] == out["purged_at"]
+
+
+def test_purge_computes_the_hash_when_not_given(ephemeral):
+    out = purge_disclosure_text(RCEPT)["data"]
+    assert out["content_hash"] == hashlib.sha256(BODY.strip().encode()).hexdigest()
+
+
+def test_after_purge_the_text_is_fetched_from_dart(ephemeral, monkeypatch):
+    purge_disclosure_text(RCEPT)
     monkeypatch.setattr(filing, "_from_file", lambda rcept: None)  # 운영에는 rag_docs 파일이 없다
     monkeypatch.setattr("mcp_servers.rag.dart_source.fetch_text", lambda rcept, timeout=60: BODY)
     res = search_disclosure_text(RCEPT, "계속기업", 2)
@@ -60,7 +76,7 @@ def test_without_a_stored_body_the_text_is_fetched_from_dart(ephemeral, monkeypa
 
 
 def test_dart_failure_is_returned_as_a_tool_error_not_an_exception(ephemeral, monkeypatch):
-    _blank_body()
+    purge_disclosure_text(RCEPT)
     monkeypatch.setattr(filing, "_from_file", lambda rcept: None)
 
     def boom(rcept, timeout=60):
@@ -69,6 +85,18 @@ def test_dart_failure_is_returned_as_a_tool_error_not_an_exception(ephemeral, mo
     monkeypatch.setattr("mcp_servers.rag.dart_source.fetch_text", boom)
     res = search_disclosure_text(RCEPT, "계속기업", 2)
     assert res["ok"] is False and res["error"]["code"] == "NOT_FOUND"
+
+
+def test_persistent_mode_never_deletes_anything(seeded_db, monkeypatch):
+    monkeypatch.setenv("RAG_INDEX_MODE", "persistent")
+    get_settings.cache_clear()
+    with db_module.get_session() as s:
+        s.get(Disclosure, RCEPT).body_text = BODY
+    assert release_disclosure_index(RCEPT)["data"] == {"rcept_no": RCEPT, "released_chunks": 0, "content_sha256": None, "mode": "persistent"}
+    assert purge_disclosure_text(RCEPT)["data"]["purged"] is False
+    with db_module.get_session() as s:
+        assert s.get(Disclosure, RCEPT).body_text == BODY  # 데모·평가 데이터는 그대로
+    get_settings.cache_clear()
 
 
 def test_new_columns_are_added_to_an_existing_database(tmp_path, monkeypatch):

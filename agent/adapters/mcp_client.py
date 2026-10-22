@@ -7,8 +7,10 @@ from shared.schemas import ToolResponse
 
 ALLOWED_TOOLS = frozenset({
     "list_new_disclosures", "get_disclosure", "get_company_profile", "get_signal_history",
-    "calculate_risk_score", "get_holders", "save_assessment",
-    "search_disclosure_text", "search_reference",
+    "calculate_risk_score", "get_holders", "compute_customer_impact", "save_assessment",
+    "create_contact_task", "search_disclosure_text", "search_reference",
+    # 처리가 끝난 공시의 색인·본문 정리 (운영 모드 전용). 코드(assembly.AssessmentStore)만 부르고 모델 선택지(tool_loop)에는 없다.
+    "release_disclosure_index", "purge_disclosure_text",
 })
 
 

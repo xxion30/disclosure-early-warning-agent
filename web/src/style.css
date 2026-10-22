@@ -181,6 +181,10 @@ button.block { width: 100%; }
 .tone-info { background: var(--blue-soft); color: var(--blue-strong); }
 .tone-muted { background: var(--neutral-soft); color: var(--muted); }
 .count-pill { display: inline-block; min-width: 28px; padding: 3px 10px; border-radius: var(--pill); background: var(--blue); color: #fff; font-weight: 700; font-size: 13px; text-align: center; }
+.prio { font-weight: 800; }
+.prio-P1 { color: var(--bad); }
+.prio-P2 { color: var(--warn); }
+.prio-P3 { color: var(--muted); }
 
 /* ---------- 진행 단계 ---------- */
 .progress-bar { height: 8px; border-radius: var(--pill); background: var(--neutral-soft); overflow: hidden; margin-bottom: 16px; }
@@ -242,6 +246,20 @@ blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md);
 .chip.strong { color: var(--blue-strong); font-weight: 700; }
 .chip.soft { background: var(--neutral-soft); }
 
+/* ---------- 우선순위 알약 ---------- */
+.prio-pill { display: inline-block; padding: 5px 12px; border-radius: var(--pill); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.prio-pill.prio-P1 { background: var(--bad-soft); color: var(--bad); }
+.prio-pill.prio-P2 { background: var(--warn-soft); color: var(--warn); }
+.prio-pill.prio-P3 { background: var(--neutral-soft); color: var(--muted); }
+
+/* ---------- 영향도 막대 ---------- */
+.impact { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.impact-track { flex: 1; height: 8px; border-radius: var(--pill); background: var(--neutral-soft); overflow: hidden; }
+.impact-track > span { display: block; height: 100%; border-radius: var(--pill); background: var(--faint); }
+.impact-높음 .impact-track > span { background: var(--critical); }
+.impact-보통 .impact-track > span { background: var(--warn-dot); }
+.impact-text { font-size: 13px; white-space: nowrap; }
+
 /* ---------- 안내 배너 ---------- */
 .banner { display: flex; align-items: center; gap: 14px; border-radius: 20px; padding: 16px 20px; margin-bottom: 16px; }
 .banner-icon { width: 40px; height: 40px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; color: #fff; }
@@ -266,6 +284,17 @@ blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md);
 /* 점수 계산 전에 멈춘 평가의 등급 자리 */
 .unscored { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: var(--pill); border: 1px dashed var(--border-strong); color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 
+/* ---------- 결정 버튼 (안내문 검토) ---------- */
+.choices { display: flex; gap: 8px; flex-wrap: wrap; }
+.choice { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); font-weight: 500; font-size: 14px; padding: 0 18px; }
+.choice:hover:not(:disabled) { background: var(--surface-2); }
+.choice.reject { color: var(--bad); }
+.choice.selected { font-weight: 700; }
+.choice.selected.approve { background: var(--blue); border-color: var(--blue); color: #fff; }
+.choice.selected.edit { background: var(--navy); border-color: var(--navy); color: #fff; }
+.choice.selected.rewrite { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-strong); }
+.choice.selected.reject { background: var(--bad-soft); border-color: var(--bad-soft); color: var(--bad); }
+
 /* ---------- 검색창 (돋보기 아이콘) ---------- */
 .search-field { position: relative; display: inline-flex; align-items: center; }
 .search-field svg { position: absolute; left: 16px; color: var(--muted); pointer-events: none; }
@@ -280,6 +309,19 @@ button.icon-button.active { background: var(--blue-soft); border-color: var(--bl
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip.stock { background: #f1f4f9; color: #2a3554; }
 .chip.alert { background: var(--bad-soft); color: var(--bad); font-weight: 700; }
+
+/* ---------- 타임라인 (연락 이력) ---------- */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline > li { display: flex; gap: 12px; }
+.timeline-rail { display: flex; flex-direction: column; align-items: center; flex: none; }
+.timeline-dot { width: 12px; height: 12px; border-radius: var(--pill); margin-top: 6px; background: var(--blue); }
+.timeline-dot.ok { background: var(--ok-dot); }
+.timeline-dot.warn { background: var(--warn-dot); }
+.timeline-dot.bad { background: var(--critical); }
+.timeline-line { flex: 1; width: 2px; background: var(--border); margin: 4px 0; }
+.timeline > li:last-child .timeline-line { display: none; }
+.timeline-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 16px; min-width: 0; }
+.timeline > li:last-child .timeline-body { padding-bottom: 0; }
 
 /* ---------- 네이비 요약 띠 ---------- */
 .summary-band { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--navy); color: #fff; border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px; }

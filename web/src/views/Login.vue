@@ -43,7 +43,7 @@ function fill(e) {
       <div class="intro-copy">
         <span class="intro-label">PB를 위한 공시 조기경보</span>
         <h1>공시 속 숨은 위험 신호,<br />터지기 전에 먼저 알려 드려요</h1>
-        <p>신호를 점수로 쌓아 경보를 띄우고, 보유 종목의 위험을 근거와 함께 보여 드립니다. 점수는 규칙이 계산하고, AI는 설명만 해요.</p>
+        <p>신호를 점수로 쌓아 경보를 띄우고, 보유 고객의 연락 우선순위와 안내문 초안까지 준비합니다. 연락은 PB가 승인한 뒤에만 만들어져요.</p>
       </div>
 
       <div class="features">
@@ -71,8 +71,8 @@ function fill(e) {
               <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <strong>추측하지 않아요</strong>
-          <span>근거를 못 찾으면 수동 확인으로 남겨요</span>
+          <strong>PB 승인 후 연락</strong>
+          <span>매수·매도 권유는 넣지 않아요</span>
         </div>
       </div>
     </section>
@@ -81,7 +81,7 @@ function fill(e) {
       <form class="card login" @submit.prevent="submit">
         <div class="login-heading">
           <h2>PB 로그인</h2>
-          <p class="muted">담당 고객 보유 종목의 경보를 확인하세요</p>
+          <p class="muted">담당 고객의 경보와 안내문을 확인하세요</p>
         </div>
         <div class="field">
           <label for="email">이메일</label>

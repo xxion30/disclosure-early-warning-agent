@@ -1,7 +1,7 @@
-"""risk_rules 순수 계산 테스트 (DB 없음). (담당: R4)"""
+"""risk_rules / impact_rules 순수 계산 테스트 (DB 없음)."""
 import pytest
 
-from risk_engine import risk_rules
+from risk_engine import impact_rules, risk_rules
 from risk_engine.loader import load_rules
 
 AS_OF = "2025-03-01"
@@ -143,6 +143,36 @@ def test_bad_date_rejected():
 def test_ai_supplied_points_are_ignored():
     r = calc([{"signal_type": "FILING_DELAY", "points": 99, "detail": {}, "filed_at": AS_OF}])
     assert r["total_score"] == 4
+
+
+# ---------------------------------------------------------------- impact
+def test_impact_examples_from_scenario_a():
+    c001 = impact_rules.customer_impact(
+        eval_amount=90_000_000, total_assets=300_000_000, risk_profile="안정형", on_credit=False, company_level="Critical"
+    )
+    assert (c001["impact_score"], c001["impact_level"], c001["priority"]) == (8, "높음", "P1")
+    c002 = impact_rules.customer_impact(
+        eval_amount=10_000_000, total_assets=500_000_000, risk_profile="공격투자형", on_credit=False, company_level="Critical"
+    )
+    assert (c002["impact_level"], c002["priority"]) == ("낮음", "P2")
+
+
+def test_credit_forces_high_and_high_company_level_table():
+    r = impact_rules.customer_impact(
+        eval_amount=1_000_000, total_assets=900_000_000, risk_profile="공격투자형", on_credit=True, company_level="High"
+    )
+    assert r["impact_level"] == "높음" and r["priority"] == "P1"
+    low = impact_rules.customer_impact(
+        eval_amount=1_000_000, total_assets=900_000_000, risk_profile="공격투자형", on_credit=False, company_level="High"
+    )
+    assert low["priority"] == "P3"
+
+
+def test_impact_rejects_low_levels():
+    with pytest.raises(impact_rules.ImpactInputError):
+        impact_rules.customer_impact(
+            eval_amount=1, total_assets=1, risk_profile="안정형", on_credit=False, company_level="Medium"
+        )
 
 
 # ---------------------------------------------------------------- A(Agent)와 맞춘 계약

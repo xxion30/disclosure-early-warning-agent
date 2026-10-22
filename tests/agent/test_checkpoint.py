@@ -1,22 +1,67 @@
-"""체크포인트: 재시작 뒤에도 같은 thread_id로 이어서 실행되는가. (담당: R2)"""
 import asyncio
 
 from agent.runtime import open_runtime
 from conftest import RCEPT
+from test_approval import P01, P02, approve
 
 
-def test_restart_keeps_the_finished_state_and_does_not_rerun(kit, tmp_path):
+def test_restart_retains_pending_approvals_and_trace(kit, tmp_path):
     async def scenario():
         path = tmp_path / "checkpoints.db"
         async with open_runtime(kit.deps, path) as runtime:
             first = await runtime.start(RCEPT)
-        assert first["status"] == "DONE" and first["error"] is None, first
-        calls_before = len(kit.tools.calls)
+            trace_id = first["trace_id"]
         async with open_runtime(kit.deps, path) as runtime:
-            assert (await runtime.get_state(RCEPT))["status"] == "DONE"
-            again = await runtime.start(RCEPT)       # 끝난 실행은 암묵적으로 다시 시작하지 않는다
-            assert again == first and again["trace_id"] == first["trace_id"]
-        assert len(kit.tools.calls) == calls_before  # 도구를 다시 부르지 않았다
+            assert (await runtime.get_state(RCEPT))["status"] == "WAITING_APPROVAL"
+            state = await runtime.resume(RCEPT, approve(sorted(P01.allowed_customer_ids)), P01)
+            assert len(state["task_ids"]) == 4
+        async with open_runtime(kit.deps, path) as runtime:
+            state = await runtime.resume(RCEPT, approve(sorted(P02.allowed_customer_ids)), P02)
+            assert state["status"] == "DONE", state
+            assert state["trace_id"] == trace_id
+            assert state["trace_headers"] == first["trace_headers"]
+            assert len(state["task_ids"]) == 7
+            assert len(kit.store.tasks) == 7
+    asyncio.run(scenario())
+
+
+def test_partial_creation_failure_preserves_completed_ids(kit):
+    async def scenario():
+        from langgraph.checkpoint.memory import InMemorySaver
+        from agent.runtime import AgentRuntime
+        runtime = AgentRuntime(kit.deps, InMemorySaver())
+        await runtime.start(RCEPT)
+        kit.store.fail_customer = "C003"
+        state = await runtime.resume(RCEPT, approve(["C001", "C003"]), P01)
+        assert state["status"] == "MANUAL_CHECK"
+        assert state["customer_tasks"] == {"C001": 1}
+        assert len(kit.store.tasks) == 1
+        # Replaying an already accepted decision must not silently restart failed work.
+        again = await runtime.resume(RCEPT, approve(["C001", "C003"]), P01)
+        assert again == state
+        assert len(kit.store.create_attempts) == 2
+    asyncio.run(scenario())
+
+
+def test_retry_recovers_lost_write_reply_without_duplicate(kit):
+    async def scenario():
+        from langgraph.checkpoint.memory import InMemorySaver
+        from agent.runtime import AgentRuntime
+        runtime = AgentRuntime(kit.deps, InMemorySaver())
+        await runtime.start(RCEPT)
+        kit.store.fail_after_write = True
+        state = await runtime.resume(RCEPT, approve(["C001", "C003"]), P01)
+        assert state["status"] == "MANUAL_CHECK"
+        assert len(kit.store.tasks) == 1
+        assert state["customer_tasks"] == {}
+        import pytest
+        with pytest.raises(PermissionError):
+            await runtime.retry_tasks(RCEPT, P02)
+        state = await runtime.retry_tasks(RCEPT, P01)
+        assert state["error"] is None, state
+        assert state["status"] == "WAITING_APPROVAL"
+        assert len(kit.store.tasks) == 2
+        assert len(state["customer_tasks"]) == 2
     asyncio.run(scenario())
 
 
@@ -42,7 +87,7 @@ def test_start_continues_a_run_interrupted_by_a_crash(kit, tmp_path):
             before = await runtime.get_state(RCEPT)
             assert before["status"] == "RUNNING"          # 중간에 멈춘 체크포인트
             state = await runtime.start(RCEPT)            # 큐의 재전달
-            assert state["status"] == "DONE" and state["trace_id"] == before["trace_id"]
-            again = await runtime.start(RCEPT)            # 끝난 실행은 다시 시작하지 않는다
+            assert state["status"] == "WAITING_APPROVAL" and state["trace_id"] == before["trace_id"]
+            again = await runtime.start(RCEPT)            # 승인 대기 실행은 다시 시작하지 않는다
             assert again == state
     asyncio.run(scenario())
