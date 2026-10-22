@@ -1,7 +1,7 @@
 """시나리오 A 8~12단계를 실행 중인 API 서버에 대고 확인한다 (합치기·데모 전 점검용).
 
-    uv run python -m api.smoke --rcept-no <감사의견 거절 공시 접수번호>
-    uv run python -m api.smoke --rcept-no 20250401000001        # 가짜 Graph면 형식만 맞으면 됨
+    uv run python scripts/demo/smoke.py --rcept-no <감사의견 거절 공시 접수번호>
+    uv run python scripts/demo/smoke.py --rcept-no 20250401000001        # 가짜 Graph면 형식만 맞으면 됨
 
 주의: 연락 업무를 실제로 만든다. seed_db.py로 새로 만든 DB에서 돌리고, 끝나면 다시 seed하세요.
 기대값은 data/customers.json의 expected_impact_001570_critical(D의 평가 정답)에서 읽는다.
@@ -9,10 +9,13 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
 import httpx
 
-from shared.config import ROOT_DIR
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from shared.config import ROOT_DIR  # noqa: E402
 
 EDITED = "{고객명}님, 감사의견 관련 공시 내용을 정리해 내일 오전에 직접 전화드리겠습니다."
 PASSWORD = "demo1234"  # data/customers.json의 데모 PB 비밀번호

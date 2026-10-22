@@ -1,13 +1,13 @@
 """data/disclosures/<종목코드>.json의 body_text → rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md
 
-사용법: uv run python scripts/build_rag_docs.py
+사용법: uv run python scripts/data/build_rag_docs.py
 원문(body_text)이 있는 공시만 만든다. 내용은 OpenDART 원문 그대로이며 가공하지 않는다.
 """
 import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "rag_docs" / "companies"
 
 for path in sorted((ROOT / "data" / "disclosures").glob("*.json")):

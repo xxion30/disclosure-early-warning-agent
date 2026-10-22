@@ -1,8 +1,8 @@
 """사업보고서 기본 점수(companies.base_score) 계산: DART 재무제표 수치 → CLAUDE.md 5-3장 규칙.
 
-    uv run python scripts/compute_base_score.py            # 계산해서 보여주기만
-    uv run python scripts/compute_base_score.py --write    # data/demo_companies.json에 base_score·base_reasons 기록
-    uv run python scripts/seed_db.py --reset               # DB에 반영
+    uv run python scripts/data/compute_base_score.py            # 계산해서 보여주기만
+    uv run python scripts/data/compute_base_score.py --write    # data/demo_companies.json에 base_score·base_reasons 기록
+    uv run python scripts/data/seed_db.py --reset               # DB에 반영
 
 기준 사업연도: 각 회사의 replay_window 시작일 **직전에 제출된** 사업보고서(= 그 시점에 이미 알려진 정보).
 이후 보고서를 쓰면 사건을 미리 아는 셈(look-ahead)이라 쓰지 않는다. 점수는 rules.yaml의 base_score 표에서 읽는다.
@@ -23,7 +23,7 @@ from pathlib import Path
 import requests
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from shared.config import get_settings  # noqa: E402

@@ -1,9 +1,9 @@
 """전체 검증을 한 번에: 테스트 → 시나리오 A → 안전장치 → (선택) 시나리오 B → 결과표.
 
-    uv run python scripts/verify_all.py                 # 테스트 + 시나리오 A + 안전장치 (약 10분, 모델 비용 소액)
-    uv run python scripts/verify_all.py --with-b        # + 위니아·오스템·CGV·SK (30분 이상)
-    uv run python scripts/verify_all.py --skip-tests    # pytest는 건너뜀
-    uv run python scripts/verify_all.py --ui            # 끝나면 같은 데이터로 화면을 띄워 눈으로 볼 수 있게 한다 (Ctrl+C로 종료)
+    uv run python scripts/ops/verify_all.py                 # 테스트 + 시나리오 A + 안전장치 (약 10분, 모델 비용 소액)
+    uv run python scripts/ops/verify_all.py --with-b        # + 위니아·오스템·CGV·SK (30분 이상)
+    uv run python scripts/ops/verify_all.py --skip-tests    # pytest는 건너뜀
+    uv run python scripts/ops/verify_all.py --ui            # 끝나면 같은 데이터로 화면을 띄워 눈으로 볼 수 있게 한다 (Ctrl+C로 종료)
 
 **내 data/app.db와 켜져 있는 서버는 건드리지 않는다.** 임시 폴더의 DB와 별도 포트(API 18100, MCP 18101·18102)에서 돌린다.
 진짜 모델·진짜 MCP 도구를 쓰므로 `.env`에 OPENAI_API_KEY가 있어야 한다. 결과는 ✓/✗로 출력하고 eval/results/verify_all.md에도 저장한다.
@@ -27,9 +27,10 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "demo"))
+sys.path.insert(0, str(ROOT / "scripts" / "ops"))
 
 PY = sys.executable
 PORTS = {"api": 18100, "business": 18101, "rag": 18102, "api503": 18103, "web": 5180}
@@ -146,7 +147,7 @@ def step_env(tmp: Path, env: dict) -> bool:
     s = get_settings()
     if not check(bool(s.OPENAI_API_KEY), "OPENAI_API_KEY (진짜 모델·임베딩에 필요)"):
         return False
-    r = subprocess.run([PY, "scripts/seed_db.py", "--reset"], cwd=ROOT, env=env, capture_output=True, text=True)
+    r = subprocess.run([PY, "scripts/data/seed_db.py", "--reset"], cwd=ROOT, env=env, capture_output=True, text=True)
     check(r.returncode == 0 and "[공시] 594건" in r.stdout, "임시 DB 생성: 회사 5개·공시 594건 (내 data/app.db는 그대로)")
     try:
         from mcp_servers.rag import store

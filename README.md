@@ -38,16 +38,16 @@ MCP 도구 사용법은 [mcp_servers/business/README.md](mcp_servers/business/RE
 git pull origin main
 uv sync                                  # Python 3.11 의존성 (uv.lock으로 고정)
 cp .env.example .env                     # 키를 채운다 (아래 "환경 변수"). 진짜 모드는 OPENAI_API_KEY가 필요하다
-uv run python scripts/doctor.py          # 준비가 됐는지 점검 (고칠 것은 ✗ 아래에 방법이 나온다)
+uv run python scripts/ops/doctor.py          # 준비가 됐는지 점검 (고칠 것은 ✗ 아래에 방법이 나온다)
 ```
 `.env`, `data/app.db`, `data/chroma/`, `data/checkpoints.db`는 git에 없다. **노트북마다 따로 만든다.**
 `run_stack.py`가 없는 것(DB, 색인, `npm install`)을 알아서 만들어 주므로 위 네 줄이면 된다.
 
 ### 2. 서버 전체를 한 명령으로
 ```bash
-uv run python scripts/run_stack.py            # 진짜 모드: business-mcp 8001 · rag-mcp 8002 · api 8000 · web 5173
-uv run python scripts/run_stack.py --fake     # 가짜 모드: api 8000 · web 5173 (키·MCP 서버 없이 화면과 API만)
-uv run python scripts/run_stack.py --no-web   # 화면 없이
+uv run python scripts/ops/run_stack.py            # 진짜 모드: business-mcp 8001 · rag-mcp 8002 · api 8000 · web 5173
+uv run python scripts/ops/run_stack.py --fake     # 가짜 모드: api 8000 · web 5173 (키·MCP 서버 없이 화면과 API만)
+uv run python scripts/ops/run_stack.py --no-web   # 화면 없이
 ```
 `준비됨`이 나오면 http://localhost:5173 에서 로그인한다. 끄려면 `Ctrl+C` 한 번이면 서버가 모두 꺼진다.
 - **진짜 모드**는 진짜 MCP 도구와 진짜 모델을 쓴다. 공시 1건 처리에 모델 비용이 약간 든다(10~15원 안팎).
@@ -65,20 +65,20 @@ uv run python -m mcp_servers.business.server                     # 터미널 1 (
 uv run python -m mcp_servers.rag.server                          # 터미널 2 (8002)
 GRAPH_ADAPTER=real uv run uvicorn api.main:app --port 8000       # 터미널 3 (8000). 가짜 모드는 GRAPH_ADAPTER 없이
 cd web && npm install && npm run dev                             # 화면 (5173)
-uv run python scripts/seed_db.py --reset                         # DB가 없을 때
+uv run python scripts/data/seed_db.py --reset                         # DB가 없을 때
 uv run python -m mcp_servers.rag.ingest                          # 색인이 없을 때 (OpenAI 임베딩, 약 20초)
 ```
 API는 처음 공시를 처리할 때 MCP 서버에 연결하므로 두 MCP 서버가 먼저 떠 있어야 한다.
 </details>
 
-## 전체를 한 번에 검증 (`scripts/verify_all.py`)
+## 전체를 한 번에 검증 (`scripts/ops/verify_all.py`)
 
 테스트부터 시나리오 A, 안전장치, 장애, 관측까지 **명령 하나로** 순서대로 돌리고 ✓/✗ 표로 보여 준다.
 **내 `data/app.db`와 켜져 있는 서버는 건드리지 않는다**(임시 DB와 별도 포트 18100번대에서 실행). `.env`에 `OPENAI_API_KEY`가 있어야 한다.
 ```bash
-uv run python scripts/verify_all.py            # 테스트 + 시나리오 A + 안전장치 + 장애 + LangSmith (2~10분, 모델 비용 소액)
-uv run python scripts/verify_all.py --with-b   # + 위니아·오스템·CGV·SK (30분 이상)
-uv run python scripts/verify_all.py --ui       # 끝나면 같은 데이터로 화면을 띄운다 (http://localhost:5180, Ctrl+C로 종료)
+uv run python scripts/ops/verify_all.py            # 테스트 + 시나리오 A + 안전장치 + 장애 + LangSmith (2~10분, 모델 비용 소액)
+uv run python scripts/ops/verify_all.py --with-b   # + 위니아·오스템·CGV·SK (30분 이상)
+uv run python scripts/ops/verify_all.py --ui       # 끝나면 같은 데이터로 화면을 띄운다 (http://localhost:5180, Ctrl+C로 종료)
 ```
 | 단계 | 통과 기준 |
 | --- | --- |
@@ -96,15 +96,15 @@ uv run python scripts/verify_all.py --ui       # 끝나면 같은 데이터로 �
 서버를 끈 상태에서 DB를 초기화하고, 터미널 두 개로 진행한다:
 ```bash
 # (서버를 끈 상태에서) 깨끗하게 시작
-uv run python scripts/seed_db.py --reset
+uv run python scripts/data/seed_db.py --reset
 rm -f data/checkpoints.db data/checkpoints.db-wal data/checkpoints.db-shm
-uv run python scripts/run_stack.py --no-web      # 터미널 1
-uv run python scripts/check_scenario_a.py        # 터미널 2
+uv run python scripts/ops/run_stack.py --no-web      # 터미널 1
+uv run python scripts/demo/check_scenario_a.py        # 터미널 2
 ```
 사건 전 공시 재생 → 감사의견 거절 공시 → Critical → 영향 고객 7명(P1 5, P2 2) → P01 승인(C001 문장 수정) → P02 반려·승인까지 출력한다.
 몇 분 걸리고 모델 비용이 든다. 단계별로 직접 보려면:
 ```bash
-uv run python scripts/replay_demo.py --stock 001570 --until-event   # 사건 전 공시를 날짜순으로 (첫 High에서 멈춤)
+uv run python scripts/demo/replay_demo.py --stock 001570 --until-event   # 사건 전 공시를 날짜순으로 (첫 High에서 멈춤)
 ```
 그다음 화면(5173)에서 접수번호 `20250321802001`을 실행하고, P01·P02로 로그인해 경보 상세 → 안내문 검토 → 승인·반려를 누른다.
 
@@ -115,9 +115,9 @@ uv run python scripts/replay_demo.py --stock 001570 --until-event   # 사건 전
 
 위니아·오스템임플란트·CJ CGV·SK를 같은 방식으로 재생하고 기대 결과와 비교한다 (서버가 떠 있어야 한다):
 ```bash
-uv run python scripts/replay_all.py                 # 금양을 뺀 4개 회사
-uv run python scripts/replay_all.py --all           # 금양까지 5개
-uv run python scripts/replay_all.py --stock 048260  # 한 회사만
+uv run python scripts/demo/replay_all.py                 # 금양을 뺀 4개 회사
+uv run python scripts/demo/replay_all.py --all           # 금양까지 5개
+uv run python scripts/demo/replay_all.py --stock 048260  # 한 회사만
 ```
 회사마다 사건 전 공시 → 사건 공시 → 기대 결과 비교(✓/✗)를 하고 `eval/results/scenario_b.md`에 표를 저장한다. 처리한 공시는 화면(경보 목록)에 그대로 나타난다.
 최근 실행(진짜 모델, 실제 DART 공시) 결과는 5개 회사 모두 기대와 일치했다: 금양 사건 2~3개월 전 High(실행마다 12월~1월)·사건 Critical·고객 7명(P1 5, P2 2),
@@ -169,14 +169,14 @@ uv run python scripts/replay_all.py --stock 048260  # 한 회사만
 | --- | --- |
 | 공시 목록·접수번호·제목·접수일 (`data/disclosures/`) | **실제 DART 데이터** (OpenDART). 금양 104건은 DART 조회와 전부 일치함을 확인 |
 | 공시 원문 (`rag_docs/companies/`) | **실제 DART 공시 원문** |
-| 사업보고서 기본 점수 (`data/demo_companies.json`) | DART 재무제표 API 수치로 계산 (`scripts/compute_base_score.py`). 금양 1, 위니아 2, 오스템 0, CGV 2, SK 2(D 확정) |
+| 사업보고서 기본 점수 (`data/demo_companies.json`) | DART 재무제표 API 수치로 계산 (`scripts/data/compute_base_score.py`). 금양 1, 위니아 2, 오스템 0, CGV 2, SK 2(D 확정) |
 | PB·고객·보유 종목·평가금액 (`data/customers.json`) | **가짜 데이터.** 실제 사람·계좌와 무관 |
 | 사건일·기대 결과 (`demo_companies.json`) | 팀이 정한 평가 정답 |
 
 ```bash
-uv run python scripts/fetch_dart.py              # OpenDART → data/disclosures/<종목코드>.json
-uv run python scripts/fetch_dart.py --with-text  # 원문 텍스트까지 (느림)
-uv run python scripts/compute_base_score.py      # 기본 점수 계산 결과 보기 (--write로 기록)
+uv run python scripts/data/fetch_dart.py              # OpenDART → data/disclosures/<종목코드>.json
+uv run python scripts/data/fetch_dart.py --with-text  # 원문 텍스트까지 (느림)
+uv run python scripts/data/compute_base_score.py      # 기본 점수 계산 결과 보기 (--write로 기록)
 ```
 - 공시 내용과 접수번호는 OpenDART에서 받은 것만 쓴다. 직접 만들지 않는다.
 - 회사별 원문 md는 `rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md` (머리말 형식은 CLAUDE.md 7장).

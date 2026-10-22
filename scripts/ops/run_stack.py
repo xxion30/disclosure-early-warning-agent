@@ -1,10 +1,10 @@
 """서버 전체를 한 명령으로 띄운다. Ctrl+C로 모두 함께 끈다.
 
-    uv run python scripts/run_stack.py            # 진짜 모드: business-mcp 8001 · rag-mcp 8002 · api 8000 · web 5173
-    uv run python scripts/run_stack.py --fake     # 가짜 모드: api 8000 · web 5173 (키·MCP 서버 불필요)
-    uv run python scripts/run_stack.py --no-web   # 화면 없이
+    uv run python scripts/ops/run_stack.py            # 진짜 모드: business-mcp 8001 · rag-mcp 8002 · api 8000 · web 5173
+    uv run python scripts/ops/run_stack.py --fake     # 가짜 모드: api 8000 · web 5173 (키·MCP 서버 불필요)
+    uv run python scripts/ops/run_stack.py --no-web   # 화면 없이
 
-처음 실행이면 필요한 준비(DB 만들기, 색인 만들기, npm install)를 먼저 한다. 점검은 `scripts/doctor.py`.
+처음 실행이면 필요한 준비(DB 만들기, 색인 만들기, npm install)를 먼저 한다. 점검은 `scripts/ops/doctor.py`.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import threading
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 COLORS = {"business": "36", "rag": "35", "api": "32", "web": "33"}
@@ -83,7 +83,7 @@ def prepare(real: bool, web: bool) -> bool:
     db = ROOT / "data" / "app.db"
     if not db.exists():
         say("data/app.db가 없어 만듭니다 (seed_db.py)")
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "seed_db.py"), "--reset"], cwd=ROOT, check=True)
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "data" / "seed_db.py"), "--reset"], cwd=ROOT, check=True)
     if real:
         if not s.OPENAI_API_KEY:
             say("진짜 모드에는 `.env`의 OPENAI_API_KEY가 필요합니다 (키 없이 화면만 볼 거면 --fake).")

@@ -1,9 +1,9 @@
 """데모 회사를 차례로 재생하고, 사건 공시까지 처리한 뒤 기대 결과(data/demo_companies.json)와 비교한다.
 
-    # 서버가 떠 있어야 한다: uv run python scripts/run_stack.py  (진짜 모드)
-    uv run python scripts/replay_all.py                 # 금양을 뺀 4개 회사 (위니아·오스템·CGV·SK)
-    uv run python scripts/replay_all.py --stock 048260  # 한 회사만
-    uv run python scripts/replay_all.py --all           # 금양까지 5개 전부
+    # 서버가 떠 있어야 한다: uv run python scripts/ops/run_stack.py  (진짜 모드)
+    uv run python scripts/demo/replay_all.py                 # 금양을 뺀 4개 회사 (위니아·오스템·CGV·SK)
+    uv run python scripts/demo/replay_all.py --stock 048260  # 한 회사만
+    uv run python scripts/demo/replay_all.py --all           # 금양까지 5개 전부
 
 회사마다: ① 사건 전 공시를 날짜순으로 흘려보낸다(첫 High 이상이 나오면 멈춤. --keep-going이면 계속)
 ② 사건 공시를 넣는다 ③ 기대 결과와 비교해 ✓/✗로 보여 준다. 결과표는 eval/results/scenario_b.md에도 저장한다.
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "demo"))
 
 import replay_demo as rd  # noqa: E402  (login, wait_for, load 재사용)
 

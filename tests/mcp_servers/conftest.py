@@ -1,4 +1,4 @@
-"""도구 테스트용: 임시 SQLite에 실제 데모 데이터(scripts/seed_db.py)를 적재한다."""
+"""도구 테스트용: 임시 SQLite에 실제 데모 데이터(scripts/data/seed_db.py)를 적재한다."""
 import pytest
 
 import shared.db as db_module
@@ -12,7 +12,7 @@ def seeded_db(tmp_path, monkeypatch):
     db_module._engine = None
     db_module._SessionLocal = None
 
-    from scripts import seed_db
+    from scripts.data import seed_db
 
     db_module.init_db()
     with db_module.get_session() as s:

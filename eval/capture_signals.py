@@ -20,7 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "demo"))
+sys.path.insert(0, str(ROOT / "scripts" / "ops"))
 
 import verify_all as v  # noqa: E402  (서버 기동·정리 도우미 재사용)
 
@@ -44,7 +45,7 @@ def main() -> None:
     from sqlalchemy import select  # noqa: E402
 
     try:
-        subprocess.run([v.PY, "scripts/seed_db.py", "--reset"], cwd=ROOT, env=env, capture_output=True, check=True)
+        subprocess.run([v.PY, "scripts/data/seed_db.py", "--reset"], cwd=ROOT, env=env, capture_output=True, check=True)
         v.spawn([v.PY, "-m", "mcp_servers.business.server"], env, tmp / "b.log")
         v.spawn([v.PY, "-m", "mcp_servers.rag.server"], env, tmp / "r.log")
         v.spawn([v.PY, "-m", "uvicorn", "api.main:app", "--port", str(v.PORTS["api"])], env, tmp / "a.log")

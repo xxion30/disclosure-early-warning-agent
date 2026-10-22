@@ -1,8 +1,8 @@
-"""scripts/replay_all.py의 기대 결과 비교(judge) 로직 테스트 — 서버·DB 없이 합성 결과로."""
+"""scripts/demo/replay_all.py의 기대 결과 비교(judge) 로직 테스트 — 서버·DB 없이 합성 결과로."""
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "demo"))
 
 import replay_all as ra  # noqa: E402
 

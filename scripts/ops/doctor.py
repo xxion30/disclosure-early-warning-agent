@@ -1,7 +1,7 @@
 """내 노트북에서 돌릴 준비가 됐는지 점검한다. 고칠 것은 ✗ 줄 끝에 방법을 적어 준다.
 
-    uv run python scripts/doctor.py            # 진짜 모드 기준 (MCP 서버 + 진짜 모델)
-    uv run python scripts/doctor.py --fake     # 가짜 모드 기준 (키·MCP 서버 불필요)
+    uv run python scripts/ops/doctor.py            # 진짜 모드 기준 (MCP 서버 + 진짜 모델)
+    uv run python scripts/ops/doctor.py --fake     # 가짜 모드 기준 (키·MCP 서버 불필요)
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PORTS = {8000: "api", 8001: "business-mcp", 8002: "rag-mcp", 5173: "web"}
@@ -70,7 +70,7 @@ def main() -> None:
 
     print("\n[데이터]")
     line((ROOT / "data" / "disclosures").glob("*.json").__next__() is not None if any((ROOT / "data" / "disclosures").glob("*.json")) else False,
-         "data/disclosures/*.json (DART 공시 목록)", "git pull 후에도 없으면 D에게 확인 (scripts/fetch_dart.py)")
+         "data/disclosures/*.json (DART 공시 목록)", "git pull 후에도 없으면 D에게 확인 (scripts/data/fetch_dart.py)")
     docs = len(list((ROOT / "rag_docs").rglob("*.md")))
     line(docs > 0, f"rag_docs/ 원문 {docs}건", "git pull")
     db = ROOT / "data" / "app.db"
@@ -80,13 +80,13 @@ def main() -> None:
             n = c.execute("select count(*) from companies").fetchone()[0]
             d = c.execute("select count(*) from disclosures").fetchone()[0]
             a = c.execute("select count(*) from risk_assessments").fetchone()[0]
-            line(n > 0 and d > 0, f"data/app.db: 회사 {n}, 공시 {d}, 이미 처리한 평가 {a}", "`uv run python scripts/seed_db.py --reset`")
+            line(n > 0 and d > 0, f"data/app.db: 회사 {n}, 공시 {d}, 이미 처리한 평가 {a}", "`uv run python scripts/data/seed_db.py --reset`")
             if a:
                 line(None, "이미 처리한 평가가 있다 → 같은 공시를 다시 실행하면 409. 처음부터 하려면 seed_db --reset 과 data/checkpoints.db 삭제")
         except sqlite3.Error as e:
-            line(False, f"data/app.db 읽기 실패: {e}", "`uv run python scripts/seed_db.py --reset`")
+            line(False, f"data/app.db 읽기 실패: {e}", "`uv run python scripts/data/seed_db.py --reset`")
     else:
-        line(False, "data/app.db 없음", "`uv run python scripts/seed_db.py --reset`")
+        line(False, "data/app.db 없음", "`uv run python scripts/data/seed_db.py --reset`")
     if real:
         try:
             from mcp_servers.rag import store
@@ -104,7 +104,7 @@ def main() -> None:
         line(port_free(port), f"{port} {name} 비어 있음", f"{port}번을 쓰는 프로그램을 끈다 (이미 서버가 떠 있다면 정상)")
 
     print()
-    print("준비 완료 — `uv run python scripts/run_stack.py" + ("" if real else " --fake") + "` 로 시작한다" if not bad else f"✗ {bad}개 고친 뒤 다시 실행한다")
+    print("준비 완료 — `uv run python scripts/ops/run_stack.py" + ("" if real else " --fake") + "` 로 시작한다" if not bad else f"✗ {bad}개 고친 뒤 다시 실행한다")
     sys.exit(1 if bad else 0)
 
 

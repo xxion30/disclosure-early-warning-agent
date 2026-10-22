@@ -112,7 +112,7 @@ capstone/
 ├── data/                     # [D] 데이터 담당
 │   ├── demo_companies.json   # 데모 회사 5개 + 기대 결과
 │   ├── customers.json        # 가짜 PB 2명, 고객 20명, 보유 종목
-│   ├── disclosures/          # 회사별 공시 목록 JSON (scripts/fetch_dart.py가 생성)
+│   ├── disclosures/          # 회사별 공시 목록 JSON (scripts/data/fetch_dart.py가 생성)
 │   ├── app.db                # 생성물, git 제외
 │   └── chroma/               # 생성물, git 제외
 │
@@ -155,7 +155,7 @@ EMBEDDING_MODEL=text-embedding-3-small
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=
 LANGSMITH_PROJECT=disclosure-early-warning
-DART_API_KEY=                       # scripts/fetch_dart.py용
+DART_API_KEY=                       # scripts/data/fetch_dart.py용
 JWT_SECRET=change-me
 DB_URL=sqlite:///data/app.db
 CHECKPOINT_DB=data/checkpoints.db
@@ -312,7 +312,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 **D (데이터·Harness·문서) 확인 항목**
 - [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
 - [ ] `.env.example`에 `GRAPH_ADAPTER=fake`, `FAKE_GRAPH_DELAY=0.4`를 추가하고, `JWT_SECRET`은 32자 이상을 권장한다고 적는다.
-- [ ] README 실행 방법: API `uv run uvicorn api.main:app --reload --port 8000`, 화면 `cd web && npm install && npm run dev`, 점검 `uv run python -m api.smoke --rcept-no <접수번호>`
+- [ ] README 실행 방법: API `uv run uvicorn api.main:app --reload --port 8000`, 화면 `cd web && npm install && npm run dev`, 점검 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>`
 - [ ] (선택) `harness/guardrails.py`에 `check_message(text) -> list[str]`를 열어 주면, PB가 직접 고친 안내문도 API에서 금지 표현을 검사한다.
 
 ---
@@ -454,7 +454,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 
 - `data/demo_companies.json`: 데모 회사 5개, 사건, **기대 결과**(평가 정답).
 - `data/customers.json`: PB 2명, 고객 20명, 보유 종목. 실제 사람과 무관한 가짜 데이터다.
-- `data/disclosures/<종목코드>.json`: `scripts/fetch_dart.py`가 OpenDART에서 받아 만든다. **공시 내용과 접수번호를 직접 지어내지 않는다.**
+- `data/disclosures/<종목코드>.json`: `scripts/data/fetch_dart.py`가 OpenDART에서 받아 만든다. **공시 내용과 접수번호를 직접 지어내지 않는다.**
 - `rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md`: 공시 원문. 파일 맨 위에 아래 머리말을 둔다.
 
 ```
@@ -510,7 +510,7 @@ API 주요 경로 (C 확정). `/auth/login` 외에는 모두 `Authorization: Bea
 
 Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내, 발표 비상용) | `real`(agent.AgentRuntime).
 큐(가산점): `docker compose up -d rabbitmq` + `.env`에 `QUEUE_ENABLED=true` → `POST /runs`가 바로 실행하지 않고 큐에 넣고(SSE에 `queued` 이벤트), API 안의 소비자(`api/worker/`)가 한 건씩 실행한다. 체크포인트가 생기기 전 실패(MCP 서버 꺼짐 등)는 3초·10초 뒤 최대 3회 재시도, 그 밖의 실패(MANUAL_CHECK)와 재시도 소진은 `disclosures.dlq`. 관리 화면 http://localhost:15672 (guest/guest).
-점검: 서버를 켠 뒤 `uv run python -m api.smoke --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
+점검: 서버를 켠 뒤 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
 
 ---
 
@@ -518,8 +518,8 @@ Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내
 
 ### 시나리오 A — 금양: 조기경보 + 확정 악재 (주인공)
 
-1. `scripts/seed_db.py`로 DB를 초기화한다. 금양 base_score를 계산해 넣는다.
-2. `scripts/replay_demo.py --stock 001570`로 사건 전 12개월 공시를 날짜순으로 흘려보낸다.
+1. `scripts/data/seed_db.py`로 DB를 초기화한다. 금양 base_score를 계산해 넣는다.
+2. `scripts/demo/replay_demo.py --stock 001570`로 사건 전 12개월 공시를 날짜순으로 흘려보낸다.
 3. **확인:** 숨은 신호가 쌓이면서 사건일(감사의견 거절 공시일)보다 앞선 날짜에 처음으로 High 이상이 나온다. 그 날짜와 "사건보다 며칠 먼저"를 출력한다.
 4. 감사의견 거절 공시를 넣는다.
 5. **확인:** 등급이 Critical(A그룹 규칙)이고, 점수 내역에 원문 인용이 1개 이상 붙어 있다.
@@ -551,7 +551,7 @@ Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내
 ## 10. 작업 순서 (Claude Code에 한 단계씩 맡긴다)
 
 0. **[B, 가장 먼저 30분]** 폴더 뼈대, `pyproject.toml`, `shared/`(config, db, models, schemas), `.env.example`를 만들어 main 브랜치에 올린다. 나머지는 이걸 받은 뒤 시작한다.
-1. [D] `scripts/seed_db.py` + `data/*.json` 적재, `scripts/fetch_dart.py` 실행
+1. [D] `scripts/data/seed_db.py` + `data/*.json` 적재, `scripts/data/fetch_dart.py` 실행
 2. [B] business-mcp 조회 도구 → 규칙 계산 도구(rules.yaml) → 변경 도구, 도구별 테스트
 3. [B] rag-mcp + `ingest.py`
 4. [A] State, Graph를 **가짜 도구(mock)**로 먼저 끝까지 돌리기 → 진짜 MCP로 교체

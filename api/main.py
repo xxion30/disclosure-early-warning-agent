@@ -44,7 +44,7 @@ async def stop_queue(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()  # 테이블이 없으면 만든다. 데이터 적재는 scripts/seed_db.py (D)
+    init_db()  # 테이블이 없으면 만든다. 데이터 적재는 scripts/data/seed_db.py (D)
     app.state.queue = None
     if get_settings().QUEUE_ENABLED:
         await start_queue(app)  # RabbitMQ가 없으면 여기서 실패한다 — docker compose up -d rabbitmq

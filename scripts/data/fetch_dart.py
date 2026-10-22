@@ -1,8 +1,8 @@
 """OpenDART에서 데모 회사의 공시 목록(과 원문)을 받아 data/disclosures/<종목코드>.json으로 저장한다.
 
 사용법 (레포 루트에서):
-    uv run python scripts/fetch_dart.py              # 목록만
-    uv run python scripts/fetch_dart.py --with-text  # 원문 텍스트까지 (느림)
+    uv run python scripts/data/fetch_dart.py              # 목록만
+    uv run python scripts/data/fetch_dart.py --with-text  # 원문 텍스트까지 (느림)
 
 필요: .env의 DART_API_KEY (https://opendart.fss.or.kr 에서 무료 발급)
 공시 제목으로 1차 분류(disclosure_type)만 하고, 실제 점수는 business-mcp 규칙이 계산한다.
@@ -30,7 +30,7 @@ except ImportError:
     pass
 
 BASE = "https://opendart.fss.or.kr/api"
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "data" / "disclosures"
 COMPANIES = ROOT / "data" / "demo_companies.json"
 

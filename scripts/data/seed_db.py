@@ -1,8 +1,8 @@
 """JSON → SQLite. data/app.db를 (다시) 만들고 PB·고객·보유 종목·회사·공시를 채운다.
 
 사용법 (레포 루트에서):
-    uv run python scripts/seed_db.py          # 비어 있는 테이블만 새로 만들고 채움 (이미 있으면 덮어씀)
-    uv run python scripts/seed_db.py --reset  # 모든 테이블을 지우고 처음부터
+    uv run python scripts/data/seed_db.py          # 비어 있는 테이블만 새로 만들고 채움 (이미 있으면 덮어씀)
+    uv run python scripts/data/seed_db.py --reset  # 모든 테이블을 지우고 처음부터
 
 공시는 data/disclosures/<종목코드>.json (fetch_dart.py가 생성)에서 읽고,
 body_text가 비어 있으면 rag_docs/companies/ 의 같은 rcept_no 원문 md로 채운다.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import bcrypt
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from shared.db import get_engine, get_session, init_db  # noqa: E402
@@ -107,7 +107,7 @@ def seed_disclosures(s, corp_of: dict[str, str]) -> None:
             )
             total += 1
     if total == 0:
-        print("[공시] 0건 — data/disclosures/가 비어 있음. scripts/fetch_dart.py를 먼저 실행하세요.")
+        print("[공시] 0건 — data/disclosures/가 비어 있음. scripts/data/fetch_dart.py를 먼저 실행하세요.")
     else:
         print(f"[공시] {total}건")
 

@@ -1,8 +1,8 @@
 """데모 회사 공시를 날짜순으로 api(POST /runs)에 흘려보내고, 등급이 어떻게 변하는지 출력한다.
 
 사용법 (api 8000, business-mcp 8001, rag-mcp 8002가 떠 있어야 함):
-    uv run python scripts/replay_demo.py --stock 001570
-    uv run python scripts/replay_demo.py --stock 001570 --dry-run   # 보낼 순서만 출력
+    uv run python scripts/demo/replay_demo.py --stock 001570
+    uv run python scripts/demo/replay_demo.py --stock 001570 --dry-run   # 보낼 순서만 출력
 
 끝에 "첫 High 이상 날짜 / 사건일 / 며칠 먼저"를 출력한다 (시나리오 A 3번 확인).
 승인 대기(WAITING_APPROVAL)에서 멈춘 공시는 PB 결정이 필요하므로 거기서 재생을 멈춘다.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 LEVEL_ORDER = {"Low": 0, "Medium": 1, "High": 2, "Critical": 3}
@@ -33,7 +33,7 @@ def load(stock: str) -> tuple[dict, list[dict]]:
         raise SystemExit(f"demo_companies.json에 {stock}가 없습니다.")
     path = ROOT / "data" / "disclosures" / f"{stock}.json"
     if not path.exists():
-        raise SystemExit(f"{path} 없음. 먼저 scripts/fetch_dart.py를 실행하세요.")
+        raise SystemExit(f"{path} 없음. 먼저 scripts/data/fetch_dart.py를 실행하세요.")
     disclosures = sorted(json.loads(path.read_text(encoding="utf-8")), key=lambda d: (d["filed_at"], d["rcept_no"]))
     return company, disclosures
 

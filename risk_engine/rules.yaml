@@ -178,7 +178,7 @@ task_transitions:                # update_task_status: 현재 상태 → 바꿀 
 # ---------------------------------------------------------------- classify 노드용 제목 키워드 표
 # agent/rules.py의 load_classifier(path)가 읽는 모양이다. 위에서부터 제목에 keywords 중 하나가 들어 있는
 # 첫 항목의 type이 disclosure_type이 된다. 맞는 것이 없으면 None → 해당 없음으로 종료.
-# 순서와 type 이름은 scripts/fetch_dart.py의 TITLE_RULES와 같다(DART 제목의 가운뎃점은 'ㆍ').
+# 순서와 type 이름은 scripts/data/fetch_dart.py의 TITLE_RULES와 같다(DART 제목의 가운뎃점은 'ㆍ').
 classification:
   - {type: EMBEZZLEMENT, keywords: ["횡령ㆍ배임", "횡령·배임", "횡령배임"]}
   - {type: TRADING_HALT, keywords: ["매매거래정지", "거래정지"]}

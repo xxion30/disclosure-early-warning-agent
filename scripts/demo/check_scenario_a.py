@@ -1,8 +1,8 @@
 """시나리오 A(금양)를 HTTP API로 끝까지 점검한다 (CLAUDE.md 9장 3~13단계).
 
     # 서버 3개가 떠 있어야 한다: business-mcp(8001), rag-mcp(8002), api(8000, GRAPH_ADAPTER=real)
-    uv run python scripts/seed_db.py --reset      # 깨끗한 DB에서 시작 (이미 처리한 공시는 409)
-    uv run python scripts/check_scenario_a.py
+    uv run python scripts/data/seed_db.py --reset      # 깨끗한 DB에서 시작 (이미 처리한 공시는 409)
+    uv run python scripts/demo/check_scenario_a.py
 
 진짜 모델을 부르므로 몇 분 걸리고 비용이 든다(공시 1건에 10~15원 안팎). 연락 업무를 실제로 만든다.
 결과는 단계별로 출력만 한다 (통과/실패 판정은 사람이 기대값과 비교).
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from shared.config import get_settings  # noqa: E402
@@ -56,11 +56,11 @@ def main() -> None:
     db = _resolve_url(get_settings().DB_URL).removeprefix("sqlite:///")
     c = sqlite3.connect(db)
     if c.execute("select count(*) from risk_assessments").fetchone()[0]:
-        print("! 이미 평가가 있는 DB입니다. 먼저 `scripts/seed_db.py --reset`(과 data/checkpoints.db 삭제)을 하세요.")
+        print("! 이미 평가가 있는 DB입니다. 먼저 `scripts/data/seed_db.py --reset`(과 data/checkpoints.db 삭제)을 하세요.")
 
     if not args.skip_replay:
         print("== 3. 사건 전 공시 재생 (첫 High에서 멈춤) ==", flush=True)
-        out = subprocess.run([sys.executable, str(ROOT / "scripts" / "replay_demo.py"), "--stock", "001570",
+        out = subprocess.run([sys.executable, str(ROOT / "scripts" / "demo" / "replay_demo.py"), "--stock", "001570",
                               "--until-event", "--timeout", "240", "--api", api], capture_output=True, text=True)
         print("\n".join(l for l in out.stdout.splitlines() if any(k in l for k in ("→", "첫 High", "사건보다", "✗"))), flush=True)
 
