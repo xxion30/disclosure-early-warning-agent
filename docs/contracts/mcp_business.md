@@ -3,6 +3,18 @@
 > 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `create_contact_task`·`update_task_status`는 오후 회의로 되살아나고, `compute_customer_impact`와 `purge_disclosure_text`는 삭제 대상이다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
+
+## R4 구현 계약 (2026-10-22)
+
+- calculate_risk_score: 새 위험 규칙 출력(stage, 그룹 점수, active_stages, 근거, 정규화 signals). 회사·공시 메타데이터를 DB로 검증하며 클라이언트 points는 무시한다.
+- save_assessment: 공시별 공개 평가 upsert. score_result가 새 stage 형식이면 risk_states도 트랜잭션 안에서 갱신한다. 과거 평가 재저장이 최신 상태를 덮지 않는다.
+- get_risk_state(corp_code), save_risk_state(corp_code, score_result, filed_at, resolution_evidence?)로 상태를 조회·저장한다. 해소는 근거가 필요하다.
+- get_holders(stock_code, tenant_id): 회사 필터를 적용하며 평가금액 내림차순, 고객 ID 순으로 반환한다. tenant_id 생략은 기존 연결용 default 테넌트로 제한한다.
+- create_contact_task는 기존 승인 후 코드 호출 경로를 유지한다. (assessment_id,customer_id) 유일 제약으로 중복 생성을 방지한다. PB의 소유권은 adapter/API가 검증한다.
+- tenant_runs의 회사별 실행 키는 API adapter가 제공한다. 모델은 회사·PB 권한을 지정할 수 없다.
+- 수집 요청 실행은 API의 명시적 dispatcher 경계를 사용한다. R3 수집기가 이 경계로 실제 실행·커서 갱신을 연결한다.
+
+
 ## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
 - 되살리는 도구: `create_contact_task(assessment_id, customer_id, draft_message)` — **PB 승인 후에만**, `priority` 인자 없음, (assessment_id, customer_id)당 1건(멱등). `update_task_status(task_id, status, note)` — PB가 화면에서만, 승인·보류 → 연락완료·보류.
@@ -100,3 +112,9 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 - `create_contact_task`: (assessment_id, customer_id)당 1건. 다시 부르면 기존 task_id를 `created: false`로 돌려준다. 평가 상태가 WAITING_APPROVAL/DONE이고
   규칙표로 다시 계산한 우선순위(P1·P2)와 같아야 만든다.
 - `update_task_status`: 승인·보류 → 연락완료·보류만. 모델 허용 목록에는 없다.
+
+### R2 연결 시 확인할 사항
+
+- 구형 level은 임시 호환 필드다. 감사의견 거절은 현재 YELLOW이며 호환 level은 High다. 기존 Critical 기대값을 새 판정으로 사용하지 않는다.
+- R2는 새 YAML의 red/orange/yellow signal_type을 분류·추출하고 stage를 기준으로 분기해야 한다. 구형 group_a/group_b와 옛 프롬프트는 새 위험 항목 전체를 지원하지 않는다.
+- 이벤트 관계는 R3가 검증한 disclosures.event_id/original_rcept_no를 사용한다. 모델이 event_id를 지정해 독립 사건을 임의로 합칠 수 없다.

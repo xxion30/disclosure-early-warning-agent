@@ -60,7 +60,7 @@ def test_calculate_risk_score_audit_rejection_has_quote():
         "2025-03-21",
     )
     d = res["data"]
-    assert d["level"] == "Critical"
+    assert d["stage"] == "YELLOW" and d["yellow_score"] == 5
     assert any(b.get("quote") for b in d["breakdown"])
 
 
@@ -79,25 +79,10 @@ def _score_and_save(status="WAITING_APPROVAL"):
     return save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "설명", status)
 
 
-def test_signals_feed_history_and_combo_across_calls():
-    # 기본 점수가 0인 오스템임플란트로, 신호 3종을 차례로 저장하면 다음 계산에서 이력으로 쓰이고 조합 규칙이 켜진다.
-    seq = [("20240430000001", "2024-04-30", "FILING_DELAY", {}), ("20240601000001", "2024-06-01", "PLEDGE", {"pledge_ratio_pct": 60})]
-    from shared.db import get_session
-    from shared.models import Disclosure
-
-    with get_session() as s:
-        for rcept, filed, *_ in seq:
-            s.add(Disclosure(rcept_no=rcept, corp_code=OS_CORP, title="t", filed_at=filed, processed=False))
-    for rcept, filed, st, detail in seq:
-        ev = [{"source": "s", "quote": "최대주주 주식담보 추가 설정", "rcept_no": rcept, "location": "chunk-0"}]  # 담보는 신규·추가 설정 표현이 있어야 점수가 붙는다
-        sc = calculate_risk_score(OS_CORP, [{"signal_type": st, "detail": detail, "rcept_no": rcept, "filed_at": filed, "evidence": ev}], filed)["data"]
-        assert save_assessment(OS_CORP, rcept, sc["signals"], sc, None, "DONE")["ok"]
-    hist = get_signal_history(OS_CORP, 12, "2024-07-01")["data"]["signals"]
-    assert [h["signal_type"] for h in hist] == ["FILING_DELAY", "PLEDGE"]
-    # 세 번째 서로 다른 유형 → 합계 4+3+2=9(High) → 조합 규칙으로 한 단계 올라 Critical
-    third = calculate_risk_score(OS_CORP, [{"signal_type": "CB_BW", "detail": {}, "filed_at": "2024-07-01"}], "2024-07-01")["data"]
-    assert third["total_score"] == 9 and third["level"] == "Critical"
-    assert third["combo_upgraded"] is True and third["level"] == "Critical"
+def test_phase2_signals_are_not_scored():
+    # Former FILING_DELAY/PLEDGE rules are explicitly outside Phase 1.
+    res = calculate_risk_score(KY_CORP, [{"signal_type": "PLEDGE", "rcept_no": KY_AUDIT}], "2025-03-21")
+    assert_err(res, "INVALID_INPUT")
 
 
 def test_save_assessment_upsert_and_validation():
@@ -107,7 +92,7 @@ def test_save_assessment_upsert_and_validation():
     # 상태만 바꾸기 (WAITING_APPROVAL → DONE): 행이 늘지 않고 기존 값은 유지
     again = save_assessment(KY_CORP, KY_AUDIT, status="DONE")
     assert again["ok"] and again["data"]["assessment_id"] == aid and again["data"]["created"] is False
-    assert again["data"]["level"] == "Critical"
+    assert again["data"]["stage"] == "YELLOW"
     # 공시는 처리됨 표시
     assert get_disclosure(KY_AUDIT)["data"]["processed"] is True
     assert_err(save_assessment(KY_CORP, KY_AUDIT, status="BAD"), "INVALID_INPUT")
@@ -161,28 +146,27 @@ def test_server_registers_all_ten_tools():
     names, data = asyncio.run(run())
     assert names == {
         "list_new_disclosures", "get_disclosure", "get_company_profile", "get_signal_history",
-        "calculate_risk_score", "get_holders",
+        "calculate_risk_score", "get_holders", "get_risk_state", "save_risk_state",
         "save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text",
     }
     assert data["ok"] is True and data["data"]["count"] == 7
 
 
-def test_market_comes_from_company_profile_for_embezzlement():
-    # 오스템임플란트(KOSDAQ): 자기자본 대비 3.5%는 코스닥 기준(3%) 이상 → Critical
-    res = calculate_risk_score("00341916", [{"signal_type": "EMBEZZLEMENT", "detail": {"ratio_to_equity_pct": 3.5}}], "2022-01-03")
-    assert res["data"]["level"] == "Critical"
-    # 금양(KOSPI): 같은 3.5%는 5% 미만 → High
-    res = calculate_risk_score(KY_CORP, [{"signal_type": "EMBEZZLEMENT", "detail": {"ratio_to_equity_pct": 3.5}}], "2025-03-21")
-    assert res["data"]["level"] == "High"
+def test_embezzlement_has_no_amount_threshold():
+    from risk_engine.stages import calculate
+    for ratio in (0, 1, 3.5):
+        res = calculate(new_signals=[{"signal_type": "EMBEZZLEMENT", "rcept_no": KY_AUDIT,
+                        "detail": {"ratio_to_equity_pct": ratio}}], as_of="2025-03-21")
+        assert res["stage"] == "RED"
 
 
 def test_failure_can_be_saved_before_scoring():
     res = save_assessment(KY_CORP, KY_AUDIT, status="MANUAL_CHECK")
     assert res["ok"] and res["data"]["created"] is True
     # 같은 공시를 이후 정상 저장하면 같은 행을 갱신한다
-    sc = calculate_risk_score(KY_CORP, [{"signal_type": "AUDIT_OPINION", "detail": {"opinion": "의견거절"}}], "2025-03-21")["data"]
+    sc = calculate_risk_score(KY_CORP, [{"signal_type": "AUDIT_OPINION", "rcept_no": KY_AUDIT, "detail": {"opinion": "의견거절"}}], "2025-03-21")["data"]
     again = save_assessment(KY_CORP, KY_AUDIT, sc["signals"], sc, "x", "WAITING_APPROVAL")
-    assert again["data"]["assessment_id"] == res["data"]["assessment_id"] and again["data"]["level"] == "Critical"
+    assert again["data"]["assessment_id"] == res["data"]["assessment_id"] and again["data"]["stage"] == "YELLOW"
 
 
 CGV_CORP = "00303873"
@@ -195,14 +179,11 @@ def test_correction_is_detected_from_disclosure_title_not_from_ai():
         return calculate_risk_score(CGV_CORP, [{"signal_type": "CB_BW", "detail": {"is_correction": False}, "rcept_no": rcept, "filed_at": filed}], filed)["data"]
 
     first = score(CGV_CB_FIRST, "2022-06-16")
-    assert first["signals"][0]["detail"]["is_correction"] is True
-    assert first["total_score"] == 2 + 2  # 기본 2 + 이전 신호가 없는 정정 = 일반 신호 2
-    save_assessment(CGV_CORP, CGV_CB_FIRST, first["signals"], first, None, "DONE")
-
+    assert first["manual_check"] is True
+    assert first["signals"] == []  # unknown original event must not become another financing
+    assert first["orange_score"] == 0
     second = score(CGV_CB_SECOND, "2022-07-08")
-    assert second["total_score"] == 2 + 2  # 같은 유형 정정은 점수를 다시 더하지 않는다 (이전: 8점 High였다)
-    assert second["level"] == "Medium"
-    assert next(b for b in second["breakdown"] if not b.get("from_history") and b["group"] == "B")["points"] == 0
+    assert second["manual_check"] is True and second["orange_score"] == 0
 
 
 def test_tool_annotations_mark_mutating_tools():
@@ -217,5 +198,5 @@ def test_tool_annotations_mark_mutating_tools():
 
     ann = asyncio.run(run())
     mutating = {n for n, a in ann.items() if a and a.destructiveHint}
-    assert mutating == {"save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text"}
+    assert mutating == {"save_risk_state", "save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text"}
     assert all(a.readOnlyHint for n, a in ann.items() if n not in mutating)

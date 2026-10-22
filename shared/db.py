@@ -30,7 +30,7 @@ def get_engine() -> Engine:
     if _engine is None:
         _engine = create_engine(
             _resolve_url(get_settings().DB_URL),
-            connect_args={"check_same_thread": False},
+            connect_args={"check_same_thread": False} if get_settings().DB_URL.startswith("sqlite") else {},
         )
         _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
@@ -65,8 +65,15 @@ def _ensure_columns(engine: Engine) -> None:
                 continue
             have = {c["name"] for c in insp.get_columns(table.name)}
             for col in table.columns:
-                if col.name not in have and col.nullable and not col.primary_key:
-                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
+                if col.name not in have and not col.primary_key and (col.nullable or col.server_default is not None):
+                    default = ""
+                    if col.server_default is not None:
+                        arg = col.server_default.arg
+                        value = "'" + arg.replace("'", "''") + "'" if isinstance(arg, str) else str(arg.compile(dialect=engine.dialect))
+                        default = f" DEFAULT {value}"
+                    nullable = "" if col.nullable else " NOT NULL"
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}{default}{nullable}'))
+
 
 
 # 영향도(P1~P3) 폐지로 모델에서 뺀 옛 칸. 기존 DB에 NOT NULL로 남아 있으면 새 업무를 만들 수 없으므로 지운다.
@@ -92,6 +99,18 @@ def init_db() -> None:
     from shared.models import Base
 
     engine = get_engine()
+    if engine.dialect.name == 'postgresql':
+        from sqlalchemy import inspect
+        if 'alembic_version' not in inspect(engine).get_table_names():
+            raise RuntimeError('PostgreSQL은 먼저 uv run alembic upgrade head를 실행하세요.')
+        return
     Base.metadata.create_all(engine)
     _ensure_columns(engine)
+    # Preserve the pre-existing SQLite cleanup for removed impact columns.
     _drop_legacy_columns(engine)
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        if engine.dialect.name == 'sqlite':
+            conn.execute(text("INSERT OR IGNORE INTO tenants (tenant_id,name) VALUES ('default','Default')"))
+        else:
+            conn.execute(text("INSERT INTO tenants (tenant_id,name) VALUES ('default','Default') ON CONFLICT DO NOTHING"))

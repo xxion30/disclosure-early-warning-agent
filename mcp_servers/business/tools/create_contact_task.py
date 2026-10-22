@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from mcp_servers.business.tools._common import guarded, invalid, not_found, now_iso, task_dict
 from shared.db import get_session
@@ -46,6 +47,7 @@ def create_contact_task(assessment_id: int, customer_id: str, draft_message: str
 
         now = now_iso()
         task = ContactTask(
+            tenant_id=customer.tenant_id,
             assessment_id=assessment_id,
             customer_id=customer_id,
             pb_id=customer.pb_id,
@@ -54,6 +56,13 @@ def create_contact_task(assessment_id: int, customer_id: str, draft_message: str
             created_at=now,
             updated_at=now,
         )
-        s.add(task)
-        s.flush()
+        try:
+            with s.begin_nested():
+                s.add(task)
+                s.flush()
+        except IntegrityError:
+            existing = s.scalar(select(ContactTask).where(ContactTask.assessment_id == assessment_id, ContactTask.customer_id == customer_id))
+            if existing is None:
+                raise
+            return ok({'task_id': existing.task_id, 'created': False, 'status': existing.status})
         return ok({"task_id": task.task_id, "created": True, "status": task.status})

@@ -1,3 +1,4 @@
+from api.tenancy import require_legacy_runtime
 """POST /runs — 공시 1건 처리 시작, GET /runs/{rcept_no} — 현재 진행 상태.
 
 QUEUE_ENABLED=true면 바로 실행하지 않고 RabbitMQ에 넣는다 (가산점). 소비자가 꺼내 실행하고,
@@ -60,6 +61,7 @@ async def start_run(
     manager: RunManager = Depends(get_run_manager),
     queue: QueueBackend | None = Depends(get_queue),
 ) -> RunStarted:
+    require_legacy_runtime(pb)
     try:
         if queue is None:
             manager.start(body.rcept_no)
@@ -81,6 +83,7 @@ async def start_batch(
     queue: QueueBackend | None = Depends(get_queue),
 ) -> dict:
     """여러 공시를 한꺼번에 큐에 넣는다. 이미 실행 중·처리된 공시는 건너뛴다."""
+    require_legacy_runtime(pb)
     if queue is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "QUEUE_ENABLED=false — 일괄 처리는 큐 모드에서만 됩니다.")
     queued, skipped = [], []
@@ -101,6 +104,7 @@ async def queue_status(
     pb: CurrentPB = Depends(get_current_pb),
     queue: QueueBackend | None = Depends(get_queue),
 ) -> dict:
+    require_legacy_runtime(pb)
     if queue is None:
         return {"enabled": False}
     consumer = getattr(request.app.state, "consumer", None)
@@ -116,6 +120,7 @@ async def get_run(
     manager: RunManager = Depends(get_run_manager),
 ) -> RunStatus:
     """SSE가 끊겼을 때 화면이 현재 단계를 다시 그리는 용도."""
+    require_legacy_runtime(pb)
     ch = manager.get(rcept_no)
     if ch is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "이 서버에서 실행한 기록이 없습니다.")

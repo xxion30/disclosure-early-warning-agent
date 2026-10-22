@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     CHECKPOINT_DB: str = "data/checkpoints.db"
     CHROMA_DIR: str = "data/chroma"
 
+    MCP_HOST: str = "127.0.0.1"
     BUSINESS_MCP_URL: str = "http://localhost:8001/mcp"
     RAG_MCP_URL: str = "http://localhost:8002/mcp"
 

@@ -3,6 +3,21 @@
 > 담당: **R4 (점수 값은 R1이 확정)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. A·B그룹·기본 점수·고객 영향도는 🔴/🟠/🟡 구조로 새로 쓴다. 규칙 파일은 `risk_engine/rules.yaml`이다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
+
+## R4 구현 계약 (2026-10-22)
+
+이 절은 오후 회의와 채택된 `docs/tasks/r4-design-decisions.md`를 구체화한다. 아래 이전 계약은 기록이다.
+
+- `version: dartch-v1`. `red`, `orange`, `yellow`, `thresholds`, `stage_priority`, `time_weights`를 YAML에 둔다. 수치는 코드에 중복하지 않는다.
+- 입력: `signal_type`, `detail`, `rcept_no`, `filed_at`, `event_id?`, `event_started_at?`, `evidence[]`. 공시번호·회사·정정 관계는 DB에서 보강한다. `points`는 무시한다.
+- 정정은 동일 event/type의 최신 버전으로 교체한다. 최초 발생일은 유지한다. 확실한 연결이 없는 정정은 수동 확인이며 독립 반복으로 세지 않는다. RED는 12개월 이후에도 해소 근거가 없으면 유지한다.
+- 출력: `stage`, `active_stages`, `orange_score`, `yellow_score`, `composite_ratio`, `manual_check`, `breakdown[]`, `signals[]`, `sort_value`. PB API는 점수와 정렬값을 제외한다.
+- ORANGE와 COMPOSITE는 같은 우선순위이며 기준 대비 비율로 비교한다. 그 외 RED > YELLOW > WATCH > NONE. 동점은 최근 근거 공시, 종목코드 순이다.
+- 정성 보정은 true와 인용 근거가 모두 있어야 인정한다. 누락은 unknown으로 보존한다. 기준 미정인 출자 규모는 자동 점수화하지 않는다.
+- `resolved=true`는 근거를 포함한 명시적 해소만 허용한다. 시간 감쇠는 단계만 바꾸며 해소를 의미하지 않는다.
+- 구형 R2 연결을 위한 level/total_score는 내부 호환 필드다. 새 판정은 stage가 정본이다. R2 그래프의 단계 분기 전환은 R2가 담당한다.
+
+
 ## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
 - **5-5 고객 영향도 표(보유 비중·평가금액·투자성향·신용거래 → P1~P3)는 되살리지 않는다.** 연락 대상은 해당 종목 보유 고객 전원이다. `rules.yaml`의 `impact` 구역은 만들지 않는다.
@@ -83,3 +98,7 @@
 - P1·P2만 안내문과 연락 업무를 만든다. P3는 목록에만.
 
 ---
+
+### 반복 보정의 시점
+
+반복 횟수는 각 사건의 최초 발생 시점을 기준으로 직전 12개월의 별도 사건을 센다. 두 번째 사건이 발생했다고 첫 번째 사건의 점수까지 소급해서 올리지 않는다. 같은 날짜의 사건 순서는 검증된 event_id 순으로 고정한다. 이 시간 순서는 계산 재현용이며 PB 우선순위 정렬과는 별개다.

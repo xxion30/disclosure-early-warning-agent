@@ -97,7 +97,7 @@ def test_scenario_a_end_to_end_through_assembly(world):
         deps = await build_dependencies(tools=DirectTools(), model=model)
         async with open_runtime(deps, str(world)) as rt:
             st = await rt.start(RCEPT)
-            assert st["status"] == "WAITING_APPROVAL" and st["risk_level"] == "Critical" and not st.get("error")
+            assert st["status"] == "WAITING_APPROVAL" and st["risk_level"] == "High" and not st.get("error")
             assert st["evidence"] and st["ai_explanation"]
             assert sorted(c["customer_id"] for c in st["affected_customers"]) == [f"C00{i}" for i in range(1, 8)]
             assert len(st["drafts"]) == 7 and st["guardrail_flags"] == []

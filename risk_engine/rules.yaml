@@ -1,7 +1,7 @@
 # 위험도·영향도 규칙표 (CLAUDE.md 5장). 숫자는 전부 여기서만 바꾼다.
 # 회계 담당이 조정할 수 있게 코드에는 숫자를 쓰지 않는다.
 # 평가(eval)에서 다른 설정을 쓰려면 환경 변수 RULES_PATH에 복사본 경로를 지정한다.
-version: v1
+version: dartch-v1
 
 # ---------------------------------------------------------------- 5-4 경보 기준
 level_order: [Low, Medium, High, Critical]
@@ -186,3 +186,95 @@ allowed_signals_by_type:
   CB_BW: [CB_BW]
   RIGHTS_OFFERING: [RIGHTS_OFFERING]
   OWNERSHIP: [PLEDGE]
+
+# DARTCH Phase 1 — legacy sections above remain for evaluation compatibility only.
+thresholds: {orange: 4, yellow: 5, composite: 1.5, watch_ratio: 0.75}
+stage_priority: {RED: 0, ORANGE: 1, COMPOSITE: 1, YELLOW: 2, WATCH: 3, NONE: 4}
+red:
+  DEFAULT: {label: 부도발생}
+  REHABILITATION: {label: 회생절차 개시신청}
+  BANK_MANAGEMENT: {label: 채권은행 관리절차 개시}
+  DISSOLUTION: {label: 해산사유 발생}
+  BUSINESS_SUSPENSION: {label: 영업정지}
+  TRADING_HALT: {label: 거래정지, exclude_words: [분할, 합병, 액면, 병합]}
+  ADMIN_ISSUE: {label: 관리종목 지정}
+  DELISTING: {label: 국내 상장폐지 사유}
+  EMBEZZLEMENT: {label: 횡령·배임}
+  PAYMENT_DEFAULT: {label: 원리금 미지급}
+orange:
+  LAWSUIT:
+    label: 소송 제기
+    base: 1
+    tiers: {ratio_to_equity_pct: [[1, 1], [5, 2], [10, 3]]}
+    flags: {core_business: 1}
+  CAPITAL_REDUCTION:
+    label: 감자 결정
+    base: 2
+    flags: {loss_compensation: 1}
+    tiers: {reduction_ratio_pct: [[50, 1]]}
+  RIGHTS_OFFERING:
+    label: 유상증자
+    base: 2
+    tiers: {ratio_pct: [[20, 1], [50, 2]]}
+    flags: {third_party: 1, payment_delayed_or_failed: 2}
+    repeat: {minimum: 2, add: 1}
+  CB_BW:
+    label: CB·BW·EB 발행
+    base: 2
+    flags: {refixing: 1, early_redemption: 1}
+    repeat: {minimum: 2, add: 1}
+  ASSET_TRANSFER:
+    label: 영업·자산·타법인 양수도
+    base: 1
+    tiers: {ratio_to_equity_pct: [[10, 1], [30, 2]]}
+    flags: {core_asset_sale: 1}
+  PUTBACK_OPTION:
+    label: 자산양수도·풋백옵션
+    base: 2
+    tiers: {obligation_to_equity_pct: [[10, 1]]}
+  MERGER:
+    label: 합병·분할·주식교환
+    base: 1
+    flags: {unfavorable_ratio: 2, distressed_transfer: 2}
+  TREASURY_DISPOSAL:
+    label: 자기주식 처분·신탁해지
+    base: 1
+    flags: {urgent_funding: 2}
+  BANK_MANAGEMENT_END:
+    label: 채권은행 관리절차 중단
+    base: 1
+    flags: {negotiation_failed: 3}
+    zero_if: normalized
+  OVERSEAS_DELISTING:
+    label: 해외 상장폐지
+    base: 1
+    flags: {distress_or_violation: 3}
+yellow:
+  AUDIT_OPINION:
+    label: 감사의견
+    values: {opinion: {거절: 5, 의견거절: 5, 부적정: 5, 한정: 3, 적정: 0}}
+    flags: {going_concern: 3}
+  CAPITAL_IMPAIRMENT:
+    label: 자본잠식
+    tiers: {impairment_pct: [[50, 3], [100, 4]]}
+  OPERATING_CASH_FLOW:
+    label: 영업현금흐름
+    tiers: {negative_years: [[1, 1], [2, 2]]}
+  INTEREST_BURDEN:
+    label: 이자 부담
+    less_than: {interest_coverage: {value: 1, add: 2}}
+  SHORT_TERM_DEBT:
+    label: 단기채무
+    tiers: {debt_to_cash_pct: [[100, 2], [200, 3]]}
+  DEBT_ISSUANCE:
+    label: 채무증권 발행
+    flags: {rate_increased: 1, maturity_shortened: 1}
+  FUND_USAGE:
+    label: 자금 사용내역
+    flags: {purpose_mismatch: 2}
+  LARGEST_SHAREHOLDER_CHANGE:
+    label: 최대주주 변경
+    flags: {changed_within_window: 2}
+  EQUITY_INVESTMENT:
+    label: 타법인 출자
+    manual_only: true

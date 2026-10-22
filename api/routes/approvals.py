@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from api.audit import write_audit
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
+from api.tenancy import require_assessment_access, require_legacy_runtime
 from api.graph_adapter import GraphAdapter, get_graph_adapter, now_iso, pending_customers
 from api.routes.alerts import GRAPH_DOWN, NAME_PLACEHOLDER, get_assessment, read_state
 from api.run_manager import RunConflict, RunManager, get_run_manager
@@ -60,6 +61,8 @@ async def decide(
     manager: RunManager = Depends(get_run_manager),
 ) -> dict:
     a = get_assessment(db, assessment_id)
+    require_assessment_access(db, pb, a)
+    require_legacy_runtime(pb)
     view, graph_error = await read_state(adapter, a.rcept_no)
     if graph_error:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, graph_error)
@@ -73,7 +76,7 @@ async def decide(
         raise HTTPException(status.HTTP_409_CONFLICT, f"이미 결정했거나 승인 대상이 아닌 고객: {', '.join(not_pending)}")
 
     customers = {c.customer_id: c for c in db.scalars(select(Customer).where(Customer.customer_id.in_(ids)))}
-    others = [cid for cid in ids if cid not in customers or customers[cid].pb_id != pb.pb_id]
+    others = [cid for cid in ids if cid not in customers or customers[cid].pb_id != pb.pb_id or customers[cid].tenant_id != pb.tenant_id]
     if others:
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"담당 고객이 아닙니다: {', '.join(others)}")
 
@@ -87,7 +90,7 @@ async def decide(
         decisions.append(item)
 
     # PBContext.allowed_customer_ids: 토큰의 PB가 DB에서 담당하는 고객 (요청 값을 그대로 쓰지 않는다)
-    allowed = sorted(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id)))
+    allowed = sorted(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id, Customer.tenant_id == pb.tenant_id)))
     payload = {"pb_id": pb.pb_id, "decided_at": decided_at, "allowed_customer_ids": allowed, "decisions": decisions}
 
     # 진짜 Graph는 202 전에 같은 검사(권한, 상태, 수정안 가드레일)를 먼저 한다

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import auth
 from api.graph_adapter import close_graph_adapter, get_graph_adapter
-from api.routes import alerts, approvals, customers, events, runs, tasks
+from api.routes import alerts, approvals, customers, events, runs, tasks, states, collect
 from api.run_manager import get_run_manager
 from shared.config import get_settings
 from shared.db import init_db
@@ -63,6 +63,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(states.router)
+app.include_router(collect.router)
 app.include_router(auth.router)
 app.include_router(runs.router)
 app.include_router(events.router)
@@ -75,3 +77,20 @@ app.include_router(customers.router)
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
+
+
+from fastapi import Request
+from starlette.exceptions import HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, headers=exc.headers,
+        content={'ok': False, 'error': {'code': {401:'UNAUTHORIZED',403:'FORBIDDEN',404:'NOT_FOUND',409:'CONFLICT',503:'UNAVAILABLE'}.get(exc.status_code,str(exc.status_code)), 'message': str(exc.detail)}, 'detail': exc.detail})
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    from fastapi.encoders import jsonable_encoder
+    return JSONResponse(status_code=422, content={'ok': False, 'error': {'code': 'INVALID_INPUT', 'message': '입력 형식이 올바르지 않습니다.'},
+        'detail': jsonable_encoder(exc.errors(), custom_encoder={ValueError: str})})

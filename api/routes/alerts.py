@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
+from api.tenancy import visible_stock_codes, require_assessment_access, require_legacy_runtime
+from shared.models import Holding
 from api.graph_adapter import GraphAdapter, get_graph_adapter, pending_customers
 from shared.models import Company, Customer, Disclosure, RiskAssessment
 
@@ -148,6 +150,7 @@ async def list_alerts(
         .outerjoin(Disclosure, Disclosure.rcept_no == RiskAssessment.rcept_no)
         .order_by(RiskAssessment.created_at.desc(), RiskAssessment.assessment_id.desc())
     )
+    q = q.where(Company.stock_code.in_(visible_stock_codes(pb)))
     if level:
         q = q.where(RiskAssessment.level.in_(level))
     if alert:
@@ -158,12 +161,12 @@ async def list_alerts(
         q = q.where(or_(Disclosure.filed_at.startswith(date), RiskAssessment.created_at.startswith(date)))
 
     rows = sorted(db.execute(q).all(), key=lambda r: priority_key(r[0]))  # 등급 → 점수 순 (최근 순은 쿼리 순서가 유지됨)
-    my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id)))
+    my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id, Customer.tenant_id == pb.tenant_id)))
     result = []
     graph_error = None  # 한 번 실패하면 남은 행은 다시 붙어 보지 않는다 (목록이 느려지지 않게)
     for a, corp_name, title, filed_at in rows:
         view = None
-        if a.level in ALERT_LEVELS and graph_error is None:
+        if a.level in ALERT_LEVELS and graph_error is None and pb.tenant_id == "default":
             view, graph_error = await read_state(adapter, a.rcept_no)
         customers = (view or {}).get("affected_customers", [])
         result.append({
@@ -173,6 +176,7 @@ async def list_alerts(
             "title": title or (view or {}).get("disclosure", {}).get("title"),
             "filed_at": filed_at,
             "level": a.level,
+            "stage": a.stage,
             "combo_upgraded": a.combo_upgraded,
             "status": a.status,
             "created_at": a.created_at,
@@ -191,6 +195,8 @@ async def get_alert(
     adapter: GraphAdapter = Depends(get_graph_adapter),
 ) -> dict:
     a = get_assessment(db, assessment_id)
+    require_assessment_access(db, pb, a)
+    require_legacy_runtime(pb)
     company = db.get(Company, a.corp_code)
     disclosure = db.get(Disclosure, a.rcept_no)
     view, graph_error = await read_state(adapter, a.rcept_no)
@@ -200,7 +206,7 @@ async def get_alert(
     customers = []
     for c in affected:
         cust = people.get(c["customer_id"])
-        mine = cust is not None and cust.pb_id == pb.pb_id
+        mine = cust is not None and cust.pb_id == pb.pb_id and cust.tenant_id == pb.tenant_id
         customers.append({
             "customer_id": c["customer_id"],  # 옛 체크포인트의 priority·impact 필드가 새어 나가지 않게 필요한 것만 담는다
             "eval_amount": c.get("eval_amount"),
@@ -222,6 +228,7 @@ async def get_alert(
         "rcept_no": a.rcept_no,
         "status": a.status,
         "level": a.level,
+            "stage": a.stage,
         "combo_upgraded": a.combo_upgraded,
         "summary": impact_summary(a, previous, customers if view is not None else None),
         "reasons": strip_scores(a.reasons),  # 위험 항목·근거 (점수 숫자 없음, 점수 높은 순)
@@ -252,6 +259,8 @@ async def get_drafts(
 ) -> dict:
     """로그인한 PB의 담당 고객 안내문만 돌려준다."""
     a = get_assessment(db, assessment_id)
+    require_assessment_access(db, pb, a)
+    require_legacy_runtime(pb)
     view, graph_error = await read_state(adapter, a.rcept_no)
     if graph_error:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, graph_error)

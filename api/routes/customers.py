@@ -16,7 +16,7 @@ from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from api.routes.alerts import ALERT_LEVELS, LEVEL_ORDER, fill_name
 from shared.config import ROOT_DIR
-from shared.models import AuditLog, Company, ContactTask, Customer, Holding, RiskAssessment
+from shared.models import AuditLog, Company, ContactTask, Customer, Holding, RiskAssessment, RiskState
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -83,14 +83,17 @@ def _history(db: Session, customers: dict[str, Customer], corp_names: dict[int, 
 
 @router.get("")
 def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depends(get_db)) -> dict:
-    customers = {c.customer_id: c for c in db.scalars(select(Customer).where(Customer.pb_id == pb.pb_id))}
+    customers = {c.customer_id: c for c in db.scalars(select(Customer).where(Customer.pb_id == pb.pb_id, Customer.tenant_id == pb.tenant_id))}
     if not customers:
         return {"summary": {"customers": 0, "exposed": 0, "critical": 0, "high": 0, "tasks": {}}, "customers": []}
 
     names = _stock_names(db)
     alerts = _recent_alerts(db)
+    current = {r.stock_code: r for r in db.scalars(select(RiskState))}
+    if pb.tenant_id != 'default':
+        alerts = {}  # no legacy private assessment exposure across companies
     holdings: dict[str, list[Holding]] = {cid: [] for cid in customers}
-    for h in db.scalars(select(Holding).where(Holding.customer_id.in_(list(customers)))):
+    for h in db.scalars(select(Holding).where(Holding.customer_id.in_(list(customers)), Holding.tenant_id == pb.tenant_id)):
         holdings[h.customer_id].append(h)
 
     corp_names = {
@@ -104,7 +107,14 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
         items, exposure = [], []
         for h in sorted(holdings[cid], key=lambda x: -x.eval_amount):
             alert = None
-            if h.stock_code in alerts:
+            state = current.get(h.stock_code)
+            if state is not None:
+                if state.stage in ('RED', 'ORANGE', 'YELLOW', 'COMPOSITE') and not state.resolved:
+                    from risk_engine.stages import LEGACY_LEVEL
+                    alert = {'stage': state.stage, 'level': LEGACY_LEVEL[state.stage], 'corp_name': names.get(h.stock_code),
+                             'created_at': state.updated_at}
+                    exposure.append(alert)
+            elif h.stock_code in alerts:
                 a, corp = alerts[h.stock_code]
                 alert = {
                     "level": a.level, "assessment_id": a.assessment_id, "rcept_no": a.rcept_no, "corp_name": corp,
@@ -115,7 +125,7 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
                 "stock_code": h.stock_code, "stock_name": names.get(h.stock_code, h.stock_code),
                 "eval_amount": h.eval_amount,
                 "ratio_pct": round(h.eval_amount / cust.total_assets * 100, 1) if cust.total_assets else None,
-                "on_credit": h.on_credit, "alert": alert,
+                "on_credit": h.on_credit, "stage": state.stage if state else "NONE", "alert": alert,
             })
         top = max((e["level"] for e in exposure), key=LEVEL_ORDER.index, default=None)
         rows.append({
@@ -129,8 +139,7 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
             "last_contact": next((x for x in history[cid]), None),
         })
 
-    # 경보 노출이 높은 고객(Critical → High → 없음)을 위로, 같으면 경보 종목 평가금액이 큰 순
-    rows.sort(key=lambda r: (-(LEVEL_ORDER.index(r["exposure"]["top_level"]) if r["exposure"]["top_level"] else -1), -r["exposure"]["amount"]))
+    rows.sort(key=lambda r: (-sum(h['eval_amount'] for h in r['holdings']), r['customer_id']))
 
     task_counts: dict[str, int] = {}
     for r in rows:

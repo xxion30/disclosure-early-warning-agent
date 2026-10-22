@@ -1,3 +1,56 @@
+# DARTCH R4 실행 안내 (2026-10-22)
+
+이 절은 새 R4 구현 기준이다. 아래 이전 프로젝트 실행 기록은 참고용으로 유지한다.
+
+## 준비와 검증
+
+```bash
+uv sync --frozen
+uv run python scripts/ops/verify_all.py
+```
+
+검증은 임시 테스트 DB를 사용하고 실제 모델을 호출하지 않는다. `uv` 캐시 권한 오류가 있는 환경에서는 `UV_CACHE_DIR=/tmp/dartch-uv-cache`를 지정한다.
+
+## PostgreSQL
+
+```bash
+docker compose up -d postgres
+DB_URL=postgresql+psycopg://dartch:dartch@localhost:5432/dartch uv run alembic upgrade head
+```
+
+API와 business-mcp를 로컬에서 실행할 경우 `.env`의 DB_URL을 위 URL로, CHECKPOINT_DB를 `postgresql://dartch:dartch@localhost:5432/dartch`로 설정한다. 기존 SQLite는 자동으로 PostgreSQL에 복사하지 않는다. 초기 마이그레이션은 연결한 DB 안의 기존 행·테이블을 보존하고 새 스키마를 추가한다. 실제 운영 데이터 이전은 별도 백업·이관 절차가 필요하다.
+
+```bash
+docker compose up --build api business
+# 화면 개발 서버가 필요할 때
+# docker compose --profile web up web
+```
+
+기본 GRAPH_ADAPTER=fake는 이전 시연용 그래프다. 새 위험 상태 전체 흐름이 구현됐다는 의미가 아니다. QUEUE_ENABLED는 false로 둔다.
+
+## 새 API
+
+- 로그인 후 `GET /states?alert=true`, `GET /states/{stock_code}`, `POST /states/{stock_code}/ack`를 사용한다.
+- 확인함 요청은 화면에서 받은 버전을 `{ "version": 1 }` 형태로 보낸다.
+- 회사 관리자는 PB 행의 role=ADMIN으로 지정한다. 별도 계정 생성·승격 API는 만들지 않는다.
+- `GET /collect/status`는 수집 이력을 조회한다. `POST /collect/run`은 관리자 전용이며, R3의 `app.state.collect_dispatcher`가 미연결이면 503이다.
+- 수집 dispatcher는 async `(run_id, stock_codes)` 계약이다. 실제 실행 결과와 종료 상태를 collect_runs에 기록하고, 성공한 종목만 `shared.collection.finish_stock(..., success_at=...)`으로 커서를 전진시킨다. 실패·취소 시 예약은 해제한다.
+- `uv run python -m scripts.ops.refresh_states`는 기존 위험 상태를 오늘(KST) 기준으로 재계산한다. R3 스케줄러는 일일 수집 후 이 함수를 호출해야 한다.
+
+## 평가와 연동 경계
+
+```bash
+uv run python eval/run_eval.py --cases eval/cases
+```
+
+실제 사례 JSON이 없으면 평가 미실행을 출력한다. 사례 형식은 case_id, as_of, signals, expected_stage, sources와 선택 history다. 실제 공시와 출처만 사용한다.
+
+R2는 새 signal_type·stage 분기, 회사별 승인 실행, 승인 대기 전 원문 조각 제거를 연결해야 한다. R3는 수집 dispatcher·스케줄러·재무 스냅샷·공시 사건 연결·메모리 RAG를 연결해야 한다. 이 연동 전에는 default 외 회사의 구형 실행·승인·SSE를 503으로 차단한다. 새 states/customers 조회와 수집 권한은 회사별로 분리한다.
+
+`integration` Compose 프로필은 R3 진입점·RAG 바인딩 연동용 초안이다. 현재 완성된 전체 서비스 배포로 취급하지 않는다. 상세 상태는 [구현 로그](log/2026-10-22-r4-implementation.md)를 참고한다.
+
+---
+
 > 담당: R4 (실행 방법·환경 변수). 이전 프로젝트(Capstone)의 README를 그대로 옮긴 것이다. 연락·승인 관련 설명은 구조 정리 이후 단계에서 DARTCH 기준으로 고친다.
 
 # 공시 조기경보 에이전트 (SKALA AI Agent Capstone)

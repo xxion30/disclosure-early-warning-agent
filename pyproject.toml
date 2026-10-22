@@ -23,6 +23,9 @@ dependencies = [
     "chromadb>=0.5",
     "aio-pika>=9.4",
     "requests>=2.32",
+    "alembic>=1.13,<2",
+    "psycopg[binary,pool]>=3.2,<4",
+    "langgraph-checkpoint-postgres>=2,<4",
 ]
 
 [dependency-groups]
