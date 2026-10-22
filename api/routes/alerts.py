@@ -202,7 +202,8 @@ async def get_alert(
         cust = people.get(c["customer_id"])
         mine = cust is not None and cust.pb_id == pb.pb_id
         customers.append({
-            **c,
+            "customer_id": c["customer_id"],  # 옛 체크포인트의 priority·impact 필드가 새어 나가지 않게 필요한 것만 담는다
+            "eval_amount": c.get("eval_amount"),
             "name": cust.name if mine else masked_name(c["customer_id"]),
             "pb_id": cust.pb_id if cust else None,
             "mine": mine,
