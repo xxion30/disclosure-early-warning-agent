@@ -9,7 +9,8 @@ import json
 from typing import Any
 
 from harness import context as ctx
-from harness import guardrails, masking, recovery
+from harness import guardrails, masking
+from harness import recovery_llm as recovery
 from harness.tracing import audit_system
 
 

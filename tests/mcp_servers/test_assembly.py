@@ -14,7 +14,7 @@ from agent.adapters.assembly import build_dependencies
 from agent.adapters.harness_tools import recover_tool
 from agent.harness_llm import prepare_input, recover_llm
 from agent.rules import signal_input
-from harness import recovery
+from harness import recovery_llm as recovery
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
 from mcp_servers.business.tools.compute_customer_impact import compute_customer_impact
 from mcp_servers.business.tools.create_contact_task import create_contact_task

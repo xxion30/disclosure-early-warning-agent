@@ -1,7 +1,7 @@
-"""Harness 7 — Recovery: 실패 대응.
+"""Harness 7 — Recovery (모델 쪽, 담당: R2).
 
 LLM 429·503: 2회 재시도(1초, 3초 대기) → 대체 모델 → 그래도 실패하면 LLMUnavailable(status FAILED).
-MCP 도구 TIMEOUT: 1회 재시도. 모든 실패는 audit_logs에 trace_id와 함께 남긴다.
+모든 실패는 audit_logs에 trace_id와 함께 남긴다. 도구 TIMEOUT 재시도는 harness/recovery_tools.py(R4).
 """
 import logging
 import os
@@ -76,24 +76,6 @@ def call_llm_with_recovery(
             last = exc
     _audit("llm_failed", target, trace_id, last)
     raise LLMUnavailable(str(last)) from last
-
-
-def call_tool_with_retry(
-    call: Callable[[], dict],
-    trace_id: str | None = None,
-    target: str | None = None,
-) -> dict:
-    """MCP 도구 호출. 응답이 TIMEOUT 오류면 1회 재시도하고, 그 밖의 오류는 그대로 돌려준다.
-
-    반환값은 {"ok": ...} 형식 그대로다. 호출한 노드가 ok=False를 State.error에 남기고 MANUAL_CHECK로 보낸다.
-    """
-    result = call()
-    if not result.get("ok") and result.get("error", {}).get("code") == "TIMEOUT":
-        _audit("tool_timeout_retry", target, trace_id, result["error"].get("message"))
-        result = call()
-    if not result.get("ok"):
-        _audit("tool_failed", target, trace_id, result.get("error"))
-    return result
 
 
 def _audit(action: str, target: str | None, trace_id: str | None, error: Any, **extra: Any) -> None:

@@ -1,6 +1,7 @@
 import pytest
 
-from harness import context, guardrails, loop_limits, masking, recovery
+from harness import context, guardrails, loop_limits, masking
+from harness import recovery_llm, recovery_tools
 
 
 # ---- loop_limits ----
@@ -100,7 +101,8 @@ class Err(Exception):
 
 @pytest.fixture(autouse=True)
 def no_audit(monkeypatch):
-    monkeypatch.setattr(recovery, "write_audit_log", lambda *a, **k: None)
+    monkeypatch.setattr(recovery_llm, "write_audit_log", lambda *a, **k: None)
+    monkeypatch.setattr(recovery_tools, "write_audit_log", lambda *a, **k: None)
 
 
 def test_retry_then_success():
@@ -112,7 +114,7 @@ def test_retry_then_success():
             raise Err(503)
         return "ok"
 
-    assert recovery.call_llm_with_recovery(primary, sleep=sleeps.append) == "ok"
+    assert recovery_llm.call_llm_with_recovery(primary, sleep=sleeps.append) == "ok"
     assert sleeps == [1, 3]
 
 
@@ -120,15 +122,15 @@ def test_fallback_after_retries():
     def primary():
         raise Err(429)
 
-    assert recovery.call_llm_with_recovery(primary, lambda: "fb", sleep=lambda s: None) == "fb"
+    assert recovery_llm.call_llm_with_recovery(primary, lambda: "fb", sleep=lambda s: None) == "fb"
 
 
 def test_unavailable_when_all_fail():
     def bad():
         raise Err(503)
 
-    with pytest.raises(recovery.LLMUnavailable):
-        recovery.call_llm_with_recovery(bad, bad, sleep=lambda s: None)
+    with pytest.raises(recovery_llm.LLMUnavailable):
+        recovery_llm.call_llm_with_recovery(bad, bad, sleep=lambda s: None)
 
 
 def test_non_retryable_raises_immediately():
@@ -136,17 +138,17 @@ def test_non_retryable_raises_immediately():
         raise Err(400)
 
     with pytest.raises(Err):
-        recovery.call_llm_with_recovery(primary, lambda: "fb", sleep=lambda s: None)
+        recovery_llm.call_llm_with_recovery(primary, lambda: "fb", sleep=lambda s: None)
 
 
 def test_fake_error_env(monkeypatch):
     monkeypatch.setenv("FAKE_LLM_ERROR", "503")
-    assert recovery.call_llm_with_recovery(lambda: "primary", lambda: "fallback", sleep=lambda s: None) == "fallback"
+    assert recovery_llm.call_llm_with_recovery(lambda: "primary", lambda: "fallback", sleep=lambda s: None) == "fallback"
 
 
 def test_tool_timeout_retried_once():
     results = iter([{"ok": False, "error": {"code": "TIMEOUT", "message": "t"}}, {"ok": True, "data": {}}])
-    assert recovery.call_tool_with_retry(lambda: next(results))["ok"] is True
+    assert recovery_tools.call_tool_with_retry(lambda: next(results))["ok"] is True
 
 
 def test_mask_text_keeps_iso_dates():
