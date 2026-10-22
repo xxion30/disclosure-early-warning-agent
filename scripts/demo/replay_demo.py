@@ -54,9 +54,9 @@ def assessment_of(rcept_no: str) -> dict | None:
 
 
 def login(api: str, email: str | None, password: str | None) -> dict:
-    """API는 JWT가 필요하다. 계정을 안 주면 data/customers.json의 첫 데모 PB(가짜 계정)로 로그인한다."""
+    """API는 JWT가 필요하다. 계정을 안 주면 data/seed/customers.json의 첫 데모 PB(가짜 계정)로 로그인한다."""
     if not email:
-        pb = json.loads((ROOT / "data" / "customers.json").read_text(encoding="utf-8"))["pbs"][0]
+        pb = json.loads((ROOT / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))["pbs"][0]
         email, password = pb["email"], pb["password"]
     r = requests.post(f"{api}/auth/login", json={"email": email, "password": password}, timeout=30)
     r.raise_for_status()
@@ -85,7 +85,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stock", required=True, help="종목코드 (예: 001570)")
     parser.add_argument("--api", default="http://localhost:8000")
-    parser.add_argument("--email", help="로그인 이메일 (기본: data/customers.json의 첫 PB)")
+    parser.add_argument("--email", help="로그인 이메일 (기본: data/seed/customers.json의 첫 PB)")
     parser.add_argument("--password")
     parser.add_argument("--timeout", type=float, default=150, help="공시 1건당 대기 초")
     parser.add_argument("--dry-run", action="store_true")

@@ -2,7 +2,7 @@
 
 API 프로세스 안에서 돈다 (api/main.py lifespan). 그래야
 - SSE 진행 이벤트가 그대로 화면에 간다 (RunManager가 같은 프로세스)
-- AgentRuntime이 하나뿐이다 (agent/INTEGRATION.md: 초기 데모는 단일 worker 권장)
+- AgentRuntime이 하나뿐이다 (docs/contracts/agent.md: 초기 데모는 단일 worker 권장)
 
 재시도 기준:
 - 실행 기록(체크포인트)이 생기기 전에 실패 → 일시 장애(MCP 서버 꺼짐, 조립 실패 등)로 보고 지연 후 다시 시도

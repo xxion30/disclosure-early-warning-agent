@@ -6,7 +6,7 @@ import pytest
 from shared.config import ROOT_DIR
 from shared.models import AuditLog, Company, ContactTask, Holding, RiskAssessment
 
-SEED = json.loads((ROOT_DIR / "data" / "customers.json").read_text(encoding="utf-8"))
+SEED = json.loads((ROOT_DIR / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))
 OWN = {"P01": {c["customer_id"] for c in SEED["customers"] if c["pb_id"] == "P01"},
        "P02": {c["customer_id"] for c in SEED["customers"] if c["pb_id"] == "P02"}}
 NOW = "2025-03-21T10:00:00+09:00"

@@ -1,3 +1,39 @@
+# business-mcp 도구 계약
+
+> 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 연락 관련 도구(`create_contact_task`, `update_task_status`, `compute_customer_impact`)와 `purge_disclosure_text`는 삭제 대상이다.
+> DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 4-2. business-mcp 도구 (포트 8001)
+
+| 도구 | 입력 | 출력 | 종류 |
+| --- | --- | --- | --- |
+| list_new_disclosures | since: str | 미처리 공시 목록 | 조회 |
+| get_disclosure | rcept_no: str | 제목·종류·날짜·원문 | 조회 |
+| get_company_profile | corp_code: str | 회사 정보, base_score, base_reasons | 조회 |
+| get_signal_history | corp_code: str, months: int = 12 | 과거 신호 목록 | 조회 |
+| calculate_risk_score | corp_code: str, new_signals: list, as_of: str | total_score, level, combo_upgraded, 점수 내역 | 조회(규칙 계산) |
+| get_holders | stock_code: str | 보유 고객과 보유 내역 (이름은 마스킹) | 조회 |
+| compute_customer_impact | stock_code: str, level: str | 고객별 impact_score, impact_level, priority, 요소별 점수 | 조회(규칙 계산) |
+| save_assessment | corp_code, rcept_no, signals, score_result, ai_explanation, status | assessment_id | 변경 |
+| create_contact_task | assessment_id, customer_id, priority, draft_message | task_id | 변경 (PB 승인 후에만) |
+| update_task_status | task_id, status, note | 바뀐 task | 변경 (PB가 화면에서만) |
+| purge_disclosure_text | rcept_no: str, content_hash: str = None | purged, content_hash, processed_at, purged_at | 변경 (Agent 코드만, 운영 모드 `RAG_INDEX_MODE=ephemeral`에서만 동작) |
+
+## 4-4. 공통 응답·오류 형식 (모든 도구)
+
+```json
+{"ok": true, "data": {}}
+{"ok": false, "error": {"code": "NOT_FOUND", "message": "..."}}
+```
+
+- 오류 코드: NOT_FOUND, INVALID_INPUT, DB_ERROR, TIMEOUT
+- 입력 검사는 도구 안에서 한다 (없는 rcept_no, 허용되지 않은 status 등).
+- 예외를 밖으로 던지지 말고 위 형식으로 돌려준다.
+
+---
+
+## 도구 사용 설명서 (docs/contracts/mcp_business.md에서 옮김)
+
 # business-mcp (포트 8001)
 
 ```bash

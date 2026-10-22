@@ -3,7 +3,7 @@
 증권사 PB를 위한 B2B 에이전트의 전체 AI 아키텍처 설계와 ISO/IEC 25010 품질 특성별 설계·검증 근거를 정리한다.
 각 항목은 **설계 결정 → 구현 위치(파일) → 검증 증거(테스트·실행 결과) → 한계**를 함께 적었다. 구현과 다른 내용은 쓰지 않았고, 아직 못 한 것은 "한계"에 그대로 남겼다.
 
-- 팀 약속(테이블·도구·State)은 [CLAUDE.md](../CLAUDE.md), Agent 연동 경계는 [agent/INTEGRATION.md](../agent/INTEGRATION.md), 실행·검증은 [README.md](../README.md)
+- 팀 약속(테이블·도구·State)은 [CLAUDE.md](../CLAUDE.md), Agent 연동 경계는 [docs/contracts/agent.md](../docs/contracts/agent.md), 실행·검증은 [README.md](../README.md)
 - 검증 증거: `uv run pytest -q`(202 통과), `uv run python scripts/ops/verify_all.py`(33개 항목), `eval/results/scenario_b.md`(데모 회사 5개)
 
 ---

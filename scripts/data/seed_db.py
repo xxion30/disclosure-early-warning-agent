@@ -46,7 +46,7 @@ def rag_bodies() -> dict[str, str]:
 
 
 def seed_people(s) -> None:
-    cust = load_json(DATA / "customers.json")
+    cust = load_json(DATA / "seed" / "customers.json")
     for pb in cust["pbs"]:
         hashed = bcrypt.hashpw(pb["password"].encode(), bcrypt.gensalt()).decode()
         s.merge(PB(pb_id=pb["pb_id"], name=pb["name"], email=pb["email"], password_hash=hashed))

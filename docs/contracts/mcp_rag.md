@@ -1,3 +1,24 @@
+# rag-mcp 도구 계약
+
+> 담당: **R3** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `release_disclosure_index`는 삭제 대상이고, 공시 원문 색인은 메모리 임시 색인으로 바뀐다.
+> DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 4-3. rag-mcp 도구 (포트 8002)
+
+| 도구 | 입력 | 출력 |
+| --- | --- | --- |
+| search_disclosure_text | rcept_no: str, query: str, k: int = 5 | 해당 공시 원문 조각 + 위치 |
+| search_reference | query: str, category: str, k: int = 5 | 참고 문서 조각 + 출처 |
+| release_disclosure_index | rcept_no: str | released_chunks, content_sha256, mode | 변경 (Agent 코드만, 처리가 끝난 공시의 색인 조각 삭제. 운영 모드에서만 동작) |
+
+- `category`: 상장규정, 공시해설, 회계용어, 안내문가이드
+- 결과마다 출처(문서명, rcept_no, 조각 위치)를 꼭 돌려준다. 근거 인용에 쓴다.
+- 조각 크기 800자, 겹침 100자.
+
+---
+
+## 서버 사용 설명서 (docs/contracts/mcp_rag.md에서 옮김)
+
 # rag-mcp (포트 8002)
 
 ```bash

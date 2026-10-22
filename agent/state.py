@@ -1,6 +1,6 @@
 """Serializable graph state and validated model/API payloads.
 
-Additional fields are A-local; see INTEGRATION.md before binding other components.
+Additional fields are A-local; see docs/contracts/agent.md before binding other components.
 """
 from typing import Any, Literal, TypedDict
 

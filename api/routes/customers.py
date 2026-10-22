@@ -24,9 +24,9 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 
 @lru_cache
 def _seed_stock_names() -> dict[str, str]:
-    """DB에 회사 정보가 없는 종목(삼성전자 등)의 이름. data/customers.json의 stocks 표를 쓴다."""
+    """DB에 회사 정보가 없는 종목(삼성전자 등)의 이름. data/seed/customers.json의 stocks 표를 쓴다."""
     try:
-        data = json.loads((ROOT_DIR / "data" / "customers.json").read_text(encoding="utf-8"))
+        data = json.loads((ROOT_DIR / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))
         return {s["stock_code"]: s["name"] for s in data.get("stocks", [])}
     except (OSError, ValueError, KeyError):
         return {}

@@ -282,8 +282,8 @@ receive → classify ─(해당없음)→ END
 
 ### 4-7. API ↔ Graph 연결 약속 (A 구현 기준으로 C가 맞춤)
 
-API(`api/graph_adapter.py`의 `RealGraphAdapter`)는 A의 **`agent.AgentRuntime`**으로 Graph를 부른다. 자세한 경계는 `agent/INTEGRATION.md`.
-LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 맞다. 체크되지 않은 항목은 담당자 확인이 필요하다고 사용자에게 알려라.
+API(`api/graph_adapter.py`의 `RealGraphAdapter`)는 A의 **`agent.AgentRuntime`**으로 Graph를 부른다. 자세한 경계는 `docs/contracts/agent.md`.
+LLM에게: 이 절과 `docs/contracts/agent.md`가 다르면 docs/contracts/agent.md(A)가 맞다. 체크되지 않은 항목은 담당자 확인이 필요하다고 사용자에게 알려라.
 검증: `tests/api/test_runtime_adapter.py` (A의 가짜 deps로 API → AgentRuntime → 승인·재개·재시작을 확인).
 
 **API가 Graph를 부르는 방법 (C 구현 완료)**
@@ -307,7 +307,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 - [x] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
 - [x] `save_assessment`는 **rcept_no 기준 upsert**다. 같은 공시를 다시 저장하거나 `signals`·`score_result`를 비우고 status만 보내도(WAITING_APPROVAL → DONE) `assessment_id`가 유지된다. 점수 계산 전 실패(RUNNING·FAILED·MANUAL_CHECK)도 점수 없이 저장된다.
 - [ ] (C 결정 필요) `PATCH /tasks`는 지금 API가 DB를 직접 고친다. `update_task_status` 도구는 같은 규칙(`rules.yaml`의 `task_transitions`: 승인·보류 → 연락완료·보류)으로 준비돼 있다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
-- [x] `calculate_risk_score`의 `breakdown[i]`에 `quote`와 `evidence`(`{source, quote, rcept_no, location}` 목록)가 실린다. 입력 `new_signals[i].evidence`를 그대로 돌려주고, 과거 신호는 `source_chunks`도 붙는다 (`mcp_servers/business/README.md`).
+- [x] `calculate_risk_score`의 `breakdown[i]`에 `quote`와 `evidence`(`{source, quote, rcept_no, location}` 목록)가 실린다. 입력 `new_signals[i].evidence`를 그대로 돌려주고, 과거 신호는 `source_chunks`도 붙는다 (`docs/contracts/mcp_business.md`).
 
 **D (데이터·Harness·문서) 확인 항목**
 - [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
@@ -453,7 +453,7 @@ LLM에게: 이 절과 `agent/INTEGRATION.md`가 다르면 INTEGRATION.md(A)가 �
 ## 7. 데이터
 
 - `data/demo_companies.json`: 데모 회사 5개, 사건, **기대 결과**(평가 정답).
-- `data/customers.json`: PB 2명, 고객 20명, 보유 종목. 실제 사람과 무관한 가짜 데이터다.
+- `data/seed/customers.json`: PB 2명, 고객 20명, 보유 종목. 실제 사람과 무관한 가짜 데이터다.
 - `data/disclosures/<종목코드>.json`: `scripts/data/fetch_dart.py`가 OpenDART에서 받아 만든다. **공시 내용과 접수번호를 직접 지어내지 않는다.**
 - `rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md`: 공시 원문. 파일 맨 위에 아래 머리말을 둔다.
 

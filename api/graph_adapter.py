@@ -2,7 +2,7 @@
 
 - FakeGraphAdapter: 진짜 Graph를 돌릴 수 없을 때(MCP·키 없음, 발표 비상용) 시나리오 A(금양) 기대 결과로 흐름만 흉내 낸다.
   A·B가 맡을 DB 쓰기(save_assessment, create_contact_task)도 가짜로 대신해서 화면을 끝까지 만들 수 있게 한다.
-- RealGraphAdapter: A의 agent.AgentRuntime으로 실제 실행한다 (agent/INTEGRATION.md).
+- RealGraphAdapter: A의 agent.AgentRuntime으로 실제 실행한다 (docs/contracts/agent.md).
 
 `.env`의 `GRAPH_ADAPTER=fake|real`로 고른다 (기본 fake, shared.config).
 
@@ -96,8 +96,8 @@ FAKE_STOCK_CODE = "001570"  # 시나리오 A 금양
 
 
 def _load_expected_impact() -> list[dict]:
-    """data/customers.json의 시나리오 A 기대 결과(D가 만든 평가 정답)를 그대로 쓴다."""
-    path = ROOT_DIR / "data" / "customers.json"
+    """data/seed/customers.json의 시나리오 A 기대 결과(D가 만든 평가 정답)를 그대로 쓴다."""
+    path = ROOT_DIR / "data" / "seed" / "customers.json"
     rows = json.loads(path.read_text(encoding="utf-8"))["expected_impact_001570_critical"]
     return [
         {
@@ -327,7 +327,7 @@ async def default_dependencies():
 
 
 class RealGraphAdapter:
-    """A의 `agent.AgentRuntime`으로 실행한다 (agent/INTEGRATION.md "C: Python 호출 경계").
+    """A의 `agent.AgentRuntime`으로 실행한다 (docs/contracts/agent.md "C: Python 호출 경계").
 
     - 시작: runtime.start(rcept_no), 재개: runtime.resume(rcept_no, ApprovalBatch, PBContext)
     - 진행 이벤트: Harness.event의 node_started/node_finished

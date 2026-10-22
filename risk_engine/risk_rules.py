@@ -69,7 +69,7 @@ def clean_evidence(items) -> list[dict]:
 
 
 def with_source_chunks(item: dict) -> dict:
-    """과거 근거는 저장된 인용문 자체를 조각으로 삼아 검증할 수 있게 한다 (agent/INTEGRATION.md)."""
+    """과거 근거는 저장된 인용문 자체를 조각으로 삼아 검증할 수 있게 한다 (docs/contracts/agent.md)."""
     if item.get("evidence"):
         item["source_chunks"] = [{**e, "text": e["quote"]} for e in item["evidence"]]
     return item

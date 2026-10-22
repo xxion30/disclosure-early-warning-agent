@@ -55,7 +55,7 @@ class MCPTools:
         try:
             from langchain_mcp_adapters.client import MultiServerMCPClient
         except ImportError as exc:
-            raise RuntimeError("MCP 의존성 호환 오류: agent/INTEGRATION.md 확인") from exc
+            raise RuntimeError("MCP 의존성 호환 오류: docs/contracts/agent.md 확인") from exc
         from shared.config import get_settings
         settings = settings or get_settings()
         client = MultiServerMCPClient({

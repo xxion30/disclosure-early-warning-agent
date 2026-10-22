@@ -1,3 +1,99 @@
+# Agent 계약 (State·Graph·API 연결)
+
+> 담당: **R2** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인(interrupt)·안내문·연락 업무 관련 State와 노드는 삭제 대상이고, 그래프는 새로 정한다.
+> DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+## 4-5. Agent State (`agent/state.py`)
+
+| 항목 | 형식 | 채우는 노드 |
+| --- | --- | --- |
+| disclosure | {rcept_no, corp_code, stock_code, title, filed_at} | receive |
+| disclosure_type | str | classify |
+| extracted_facts | dict | extract_facts |
+| evidence | list[{source, quote, rcept_no}] | extract_facts |
+| retry_count | int | extract_facts, draft_messages |
+| tool_call_counts | dict[str, int] | 모든 노드 (Harness 5) |
+| signals | list[{signal_type, points, detail}] | score_risk |
+| total_score / risk_level / combo_upgraded | int / str / bool | score_risk |
+| ai_explanation | str | explain_risk |
+| affected_customers | list[{customer_id, impact_score, impact_level, priority, reasons}] | find_customers |
+| drafts | dict[customer_id, str] | draft_messages |
+| guardrail_flags | list[str] | guardrail_check |
+| approval | {status, pb_id, edited_drafts, reject_reason, decided_at} | pb_approval |
+| task_ids | list[int] | create_tasks |
+| error | str 또는 None | 모든 노드 |
+
+- 공시 1건 = 스레드 1개, `thread_id = rcept_no`. 승인 대기 후 같은 thread_id로 재개한다.
+
+## 4-6. Graph 노드 (`agent/graph.py`)
+
+```
+receive → classify ─(해당없음)→ END
+            └→ extract_facts ⟲(근거 부족, 최대 2회) → score_risk → explain_risk
+               → route_by_level ─(Low·Medium)→ save_and_summarize → END
+                                └(High·Critical)→ find_customers → draft_messages
+               → guardrail_check ─(실패, 최대 2회)→ draft_messages
+                                └(통과)→ pb_approval [interrupt]
+               → (반려) save_rejection → END
+               → (승인) create_tasks → END
+```
+
+| 노드 | 담당 | 하는 일 |
+| --- | --- | --- |
+| receive | 코드 | get_disclosure로 공시 가져오기 |
+| classify | 규칙 | rules.yaml의 제목 키워드 표로 disclosure_type 결정 |
+| extract_facts | AI | search_disclosure_text로 원문을 읽고 조건 값 + 인용 문장 반환 (프롬프트 `extract_facts.md`) |
+| score_risk | 규칙 | get_signal_history + calculate_risk_score |
+| explain_risk | AI | 점수 내역 항목마다 원문 인용을 붙여 설명 (`explain_risk.md`) |
+| route_by_level | 코드 | 등급으로 분기 |
+| save_and_summarize | 코드 | save_assessment, 일일 요약 대상으로 표시 |
+| find_customers | 규칙 | compute_customer_impact, P1·P2만 다음 단계로 |
+| draft_messages | AI | 고객별 안내문 초안 (`draft_message.md`), 고객 이름 대신 `{고객명}` 자리표시 |
+| guardrail_check | 규칙 | harness/guardrails.py로 금지 표현 검사 |
+| pb_approval | 사람 | `interrupt()`로 멈춤 → PB 결정 받아 재개 |
+| create_tasks | 코드 | 승인된 고객마다 create_contact_task |
+
+## 4-7. API ↔ Graph 연결 약속 (A 구현 기준으로 C가 맞춤)
+
+API(`api/graph_adapter.py`의 `RealGraphAdapter`)는 A의 **`agent.AgentRuntime`**으로 Graph를 부른다. 자세한 경계는 `docs/contracts/agent.md`.
+LLM에게: 이 절과 `docs/contracts/agent.md`가 다르면 docs/contracts/agent.md(A)가 맞다. 체크되지 않은 항목은 담당자 확인이 필요하다고 사용자에게 알려라.
+검증: `tests/api/test_runtime_adapter.py` (A의 가짜 deps로 API → AgentRuntime → 승인·재개·재시작을 확인).
+
+**API가 Graph를 부르는 방법 (C 구현 완료)**
+- `open_runtime(deps, data/checkpoints.db)`를 한 번 열고 서버 종료 시 닫는다. `thread_id = rcept_no`.
+- 시작 `runtime.start(rcept_no)`, 재개 `runtime.resume(rcept_no, ApprovalBatch, PBContext)`.
+  - C 형식 `{action: approve|reject|rewrite, edited_draft}` → A 형식 `{status: approved|rejected|rewrite, edited_message}`로 바꾼다.
+  - `PBContext.allowed_customer_ids`는 토큰의 PB가 DB에서 담당하는 고객으로 C가 만든다.
+  - 결정 API는 202 전에 `validate_batch`로 먼저 검사한다: PermissionError → 403, ValueError(가드레일 실패한 수정안 등) → 422.
+- 진행 이벤트: `deps.harness.event`의 `node_started`·`node_finished`를 SSE로 보낸다. `waiting_approval`·`done`·`failed`는 실행이 끝난 뒤 State(`status`)로 C가 만든다.
+- 화면 데이터: `runtime.get_state` → `assessment_id, status, disclosure, risk_level, score_result, ai_explanation, evidence, affected_customers, drafts, guardrail_flags, manual_drafts, decisions, task_ids, error`. PB별 필터는 API 라우트가 한다.
+
+**A (Agent) — 구현으로 확인됨**
+- [x] PB 1명씩 결정 묶음, `create_tasks` 후 남은 고객이 있으면 다시 승인 대기 (`finalize` → `prepare_approval`)
+- [x] interrupt 전에 `persistence.save(state, "WAITING_APPROVAL")` → `State.assessment_id`, 끝나면 `DONE`
+- [x] 결정 누적은 `State.decisions = {customer_id: {status, edited_message, reject_reason, pb_id, decided_at}}`
+- [x] 반려 고객은 업무 없음(`save_rejection`이 감사 기록), interrupt 노드 앞 DB 쓰기 없음
+- [x] **`agent.Dependencies` 조립**은 B가 `agent/assembly.py`의 `build_dependencies()`로 만들었다 (tools=`MCPTools`, model=`StructuredLLM`, harness=D 모듈을 async로 연결, persistence=`AssessmentStore`, create_task=`ToolTaskCreator`). `api/graph_adapter.default_dependencies()`가 이를 부른다. 실제 실행에는 business-mcp(8001)·rag-mcp(8002)와 `.env`의 `ANTHROPIC_API_KEY`·`OPENAI_API_KEY`가 필요하다. 모델만 가짜로 바꾼 시나리오 A 통합 테스트: `tests/mcp_servers/test_assembly.py`.
+- [x] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0` import 오류 → B가 `mcp>=1.12,<2`, `fastmcp>=2.12,<3`로 고정하고 `uv.lock`을 갱신했다 (feat/b-risk-score). 실제 서버 두 개에 `MCPTools.connect`가 붙는 것을 확인했다.
+
+**B (MCP·shared) 확인 항목**
+- [x] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
+- [x] `save_assessment`는 **rcept_no 기준 upsert**다. 같은 공시를 다시 저장하거나 `signals`·`score_result`를 비우고 status만 보내도(WAITING_APPROVAL → DONE) `assessment_id`가 유지된다. 점수 계산 전 실패(RUNNING·FAILED·MANUAL_CHECK)도 점수 없이 저장된다.
+- [ ] (C 결정 필요) `PATCH /tasks`는 지금 API가 DB를 직접 고친다. `update_task_status` 도구는 같은 규칙(`rules.yaml`의 `task_transitions`: 승인·보류 → 연락완료·보류)으로 준비돼 있다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
+- [x] `calculate_risk_score`의 `breakdown[i]`에 `quote`와 `evidence`(`{source, quote, rcept_no, location}` 목록)가 실린다. 입력 `new_signals[i].evidence`를 그대로 돌려주고, 과거 신호는 `source_chunks`도 붙는다 (`docs/contracts/mcp_business.md`).
+
+**D (데이터·Harness·문서) 확인 항목**
+- [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
+- [ ] `.env.example`에 `GRAPH_ADAPTER=fake`, `FAKE_GRAPH_DELAY=0.4`를 추가하고, `JWT_SECRET`은 32자 이상을 권장한다고 적는다.
+- [ ] README 실행 방법: API `uv run uvicorn api.main:app --reload --port 8000`, 화면 `cd web && npm install && npm run dev`, 점검 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>`
+- [ ] (선택) `harness/guardrails.py`에 `check_message(text) -> list[str]`를 열어 주면, PB가 직접 고친 안내문도 API에서 금지 표현을 검사한다.
+
+---
+
+---
+
+## 경계 상세 (docs/contracts/agent.md에서 옮김)
+
 # Agent 실행·연동 안내
 
 A 구현 범위는 `agent/`, `tests/agent/`다. 공통 스키마·타 담당 폴더·의존성 잠금 파일은 변경하지 않았다.
@@ -9,7 +105,7 @@ uv sync --frozen
 uv run pytest tests/agent -q
 ```
 
-테스트는 네트워크·실제 키·다른 담당 서버 없이 실행된다. 합성 공시를 사용하며 실제 공시의 정확성이나 조기경보 성능을 검증하지 않는다. 고객 기대 우선순위는 기존 `data/customers.json`을 참조한다. `FakeHarness`는 D의 운영 구현이 아니다.
+테스트는 네트워크·실제 키·다른 담당 서버 없이 실행된다. 합성 공시를 사용하며 실제 공시의 정확성이나 조기경보 성능을 검증하지 않는다. 고객 기대 우선순위는 기존 `data/seed/customers.json`을 참조한다. `FakeHarness`는 D의 운영 구현이 아니다.
 
 ## C: Python 호출 경계
 

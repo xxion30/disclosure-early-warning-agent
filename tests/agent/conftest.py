@@ -16,7 +16,7 @@ EVIDENCE = {"source": "synthetic.md", "quote": "테스트 감사의견은 거절
 
 class FakeTools:
     def __init__(self, level="Critical"):
-        data = json.loads((Path(__file__).parents[2] / "data/customers.json").read_text())
+        data = json.loads((Path(__file__).parents[2] / "data/seed/customers.json").read_text())
         self.customers = [{k: row[k] for k in ("customer_id", "impact_score", "impact_level", "priority")}
                           | {"reasons": {}} for row in data["expected_impact_001570_critical"]]
         self.level = level

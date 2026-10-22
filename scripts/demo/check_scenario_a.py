@@ -50,7 +50,7 @@ def main() -> None:
     args = ap.parse_args()
     api = args.api
 
-    pbs = {p["pb_id"]: p for p in json.loads((ROOT / "data" / "customers.json").read_text(encoding="utf-8"))["pbs"]}
+    pbs = {p["pb_id"]: p for p in json.loads((ROOT / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))["pbs"]}
     h1 = login(api, pbs["P01"]["email"], pbs["P01"]["password"])
     h2 = login(api, pbs["P02"]["email"], pbs["P02"]["password"])
     db = _resolve_url(get_settings().DB_URL).removeprefix("sqlite:///")

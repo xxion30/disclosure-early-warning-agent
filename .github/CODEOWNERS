@@ -1,0 +1,76 @@
+# 경로별 리뷰어 지정 (GitHub CODEOWNERS)
+# 아래 @R?-github-id를 각자의 GitHub 아이디로 바꾼다. 바꾸기 전에는 GitHub가 "알 수 없는 소유자" 경고를 표시한다.
+# R1 양시온 · R2 윤찬웅 · R3 한예빈 · R4 양경환 · R5 박세호
+# 규칙: 뒤에 나온 줄이 앞의 줄을 덮어쓴다. 한 파일의 담당은 한 명이어야 한다.
+
+*                                  @xxion30
+/docs/                             @xxion30
+/CLAUDE.md                         @xxion30
+/README.md                         @xxion30
+/.github/                          @xxion30
+
+# R2 — AI 흐름
+/agent/                            @R2-github-id
+/harness/context.py                @R2-github-id
+/harness/guardrails.py             @R2-github-id
+/harness/loop_limits.py            @R2-github-id
+/harness/recovery_llm.py           @R2-github-id
+/eval/experiments/model.py         @R2-github-id
+/eval/experiments/guardrail.py     @R2-github-id
+/eval/experiments/context.py       @R2-github-id
+/eval/capture_signals.py           @R2-github-id
+/tests/agent/                      @R2-github-id
+/docs/contracts/agent.md           @R2-github-id
+/docs/contracts/harness.md         @R2-github-id
+
+# R3 — RAG·데이터
+/collector/                        @R3-github-id
+/mcp_servers/rag/                  @R3-github-id
+/rag_docs/                         @R3-github-id
+/data/                             @R3-github-id
+/scripts/data/                     @R3-github-id
+/shared/models/collect.py          @R3-github-id
+/eval/experiments/rag_k.py         @R3-github-id
+/tests/collector/                  @R3-github-id
+/tests/rag/                        @R3-github-id
+/docs/contracts/mcp_rag.md         @R3-github-id
+/docs/contracts/data_sources.md    @R3-github-id
+
+# R4 — 백엔드·도구
+/shared/                           @R4-github-id
+/migrations/                       @R4-github-id
+/risk_engine/                      @R4-github-id
+/mcp_servers/business/             @R4-github-id
+/api/                              @R4-github-id
+/agent/adapters/                   @R4-github-id
+/harness/masking.py                @R4-github-id
+/harness/tracing.py                @R4-github-id
+/harness/recovery_tools.py         @R4-github-id
+/docker/                           @R4-github-id
+/docker-compose.yml                @R4-github-id
+/pyproject.toml                    @R4-github-id
+/uv.lock                           @R4-github-id
+/.env.example                      @R4-github-id
+/scripts/ops/                      @R4-github-id
+/eval/run_eval.py                  @R4-github-id
+/eval/experiments/combo.py         @R4-github-id
+/eval/experiments/_common.py       @R4-github-id
+/tests/business/                   @R4-github-id
+/tests/risk_engine/                @R4-github-id
+/tests/api/                        @R4-github-id
+/tests/wiring/                     @R4-github-id
+/tests/conftest.py                 @R4-github-id
+/docs/run.md                       @R4-github-id
+/docs/contracts/api.md             @R4-github-id
+/docs/contracts/db.md              @R4-github-id
+/docs/contracts/mcp_business.md    @R4-github-id
+/docs/contracts/risk_rules.md      @R4-github-id
+
+# R5 — 프론트·데모
+/web/                              @R5-github-id
+/scripts/demo/                     @R5-github-id
+/tests/demo/                       @R5-github-id
+/docs/verification.md              @R5-github-id
+
+# 공동 폴더 (R3·R5): 리뷰는 R1이 한다
+/eval/cases/                       @xxion30
