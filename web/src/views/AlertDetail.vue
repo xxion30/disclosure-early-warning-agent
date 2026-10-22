@@ -241,7 +241,7 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
               <td>
                 <div class="customer">
                   <span class="avatar sm" :class="{ soft: !c.mine }" aria-hidden="true">{{ c.mine ? (c.name || '-').slice(0, 1) : 'C' }}</span>
-                  <div class="customer-text"><strong>{{ c.name }}</strong><span class="sub">{{ c.customer_id }}</span></div>
+                  <div class="customer-text"><strong>{{ c.name }}</strong><span v-if="c.mine" class="sub">{{ c.customer_id }}</span></div>
                 </div>
               </td>
               <td>{{ c.risk_profile || '-' }}</td>

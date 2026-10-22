@@ -83,7 +83,8 @@ const stats = computed(() => ({
   pendingAlerts: rows.value.filter((r) => r.my_pending_count > 0).length,
   critical: rows.value.filter((r) => r.level === 'Critical').length,
   high: rows.value.filter((r) => r.level === 'High').length,
-  p1: rows.value.reduce((sum, r) => sum + Number(r.p1_count || 0), 0),
+  // 끝난 경보의 P1까지 더하면 이미 결정한 고객이 다시 세진다. 승인 대기 경보만 센다
+  p1: rows.value.filter((r) => r.status === 'WAITING_APPROVAL').reduce((sum, r) => sum + Number(r.p1_count || 0), 0),
 }))
 
 // ---- 공시 1건 처리 시작 (데모용) ----
@@ -143,7 +144,7 @@ async function startRun() {
     <div class="stat">
       <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>P1 연락 대상</span>
       <div class="stat-value"><strong>{{ stats.p1 }}</strong><span>명</span></div>
-      <span class="stat-note">우선 연락이 필요해요</span>
+      <span class="stat-note">승인 대기 경보 기준</span>
     </div>
   </div>
 
