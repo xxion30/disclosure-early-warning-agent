@@ -55,6 +55,17 @@ const graphError = computed(() => rows.value.find((r) => r.graph_error)?.graph_e
 
 const waitingCount = computed(() => rows.value.filter((r) => r.status === 'WAITING_APPROVAL').length)
 
+const today = computed(() => new Date().toLocaleDateString('ko-KR', {
+  year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+}))
+const stats = computed(() => ({
+  pending: rows.value.reduce((sum, r) => sum + Number(r.my_pending_count || 0), 0),
+  pendingAlerts: rows.value.filter((r) => r.my_pending_count > 0).length,
+  critical: rows.value.filter((r) => r.level === 'Critical').length,
+  high: rows.value.filter((r) => r.level === 'High').length,
+  p1: rows.value.reduce((sum, r) => sum + Number(r.p1_count || 0), 0),
+}))
+
 // ---- 공시 1건 처리 시작 (데모용) ----
 const rceptNo = ref('')
 const runError = ref('')
@@ -83,81 +94,165 @@ async function startRun() {
 <template>
   <div class="page-head">
     <div>
+      <p class="eyebrow">{{ today }}</p>
       <h1>경보 목록</h1>
-      <p class="muted">승인 대기 {{ waitingCount }}건</p>
     </div>
-    <form class="row" @submit.prevent="startRun">
-      <input v-model="rceptNo" placeholder="접수번호 14자리" pattern="\d{14}" required style="width: 170px" />
+    <form class="row run-start" @submit.prevent="startRun">
+      <label for="rcept" class="sr-only">접수번호</label>
+      <input id="rcept" v-model="rceptNo" placeholder="접수번호 14자리" pattern="\d{14}" required />
       <button type="submit">공시 처리 시작</button>
     </form>
   </div>
 
-  <div v-if="running || runError" class="card">
-    <h2>처리 진행 <small v-if="rceptNo">· {{ rceptNo }}</small></h2>
-    <RunProgress v-if="running" :state="runState" />
-    <p v-if="runError" class="error">{{ runError }}</p>
+  <div class="stat-grid">
+    <div class="stat dark">
+      <span class="stat-label">내 승인 대기</span>
+      <div class="stat-value"><strong>{{ stats.pending }}</strong><span>명</span></div>
+      <span class="stat-note">{{ stats.pendingAlerts ? `경보 ${stats.pendingAlerts}건에 걸쳐 있어요` : '지금은 결정할 고객이 없어요' }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label"><span class="dot dot-critical" aria-hidden="true"></span>Critical</span>
+      <div class="stat-value"><strong>{{ stats.critical }}</strong><span>건</span></div>
+      <span class="stat-note">긴급 경보</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label"><span class="dot dot-high" aria-hidden="true"></span>High</span>
+      <div class="stat-value"><strong>{{ stats.high }}</strong><span>건</span></div>
+      <span class="stat-note">고객 영향도 계산됨</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>P1 연락 대상</span>
+      <div class="stat-value"><strong>{{ stats.p1 }}</strong><span>명</span></div>
+      <span class="stat-note">우선 연락이 필요해요</span>
+    </div>
   </div>
 
-  <div class="card">
-    <div class="tabs">
-      <button v-for="(t, key) in TABS" :key="key" :class="{ active: tab === key }" @click="tab = key">
-        {{ t.label }}
-      </button>
+  <section v-if="running || runError" class="card" aria-label="처리 진행">
+    <div class="card-head">
+      <h2>처리 진행 <small v-if="rceptNo" class="run-number">· {{ rceptNo }}</small></h2>
     </div>
+    <RunProgress v-if="running" :state="runState" />
+    <p v-if="runError" class="error">{{ runError }}</p>
+  </section>
 
-    <div class="row" style="margin-bottom: 12px">
-      <template v-if="tab === 'summary'">
-        <label for="d" style="margin: 0">날짜</label>
-        <input id="d" v-model="summaryDate" type="date" />
-      </template>
-      <select v-if="tab === 'all'" v-model="levelFilter">
-        <option value="">등급 전체</option>
-        <option v-for="l in ['Critical', 'High', 'Medium', 'Low']" :key="l" :value="l">{{ l }}</option>
-      </select>
-      <select v-model="statusFilter">
-        <option value="">상태 전체</option>
-        <option v-for="(label, key) in ASSESSMENT_STATUS" :key="key" :value="key">{{ label }}</option>
-      </select>
-      <button class="ghost small" @click="load">새로고침</button>
+  <section class="card flush alert-list" aria-label="경보 목록">
+    <div class="card-head">
+      <div class="tabs" role="group" aria-label="보기">
+        <button v-for="(t, key) in TABS" :key="key" type="button" :class="{ active: tab === key }" :aria-pressed="tab === key" @click="tab = key">
+          {{ t.label }}<span v-if="tab === key" class="count">{{ rows.length }}</span>
+        </button>
+      </div>
+
+      <div class="row list-filters">
+        <template v-if="tab === 'summary'">
+          <label for="d" class="date-label">날짜</label>
+          <input id="d" v-model="summaryDate" type="date" />
+        </template>
+        <template v-if="tab === 'all'">
+          <label for="level-filter" class="sr-only">등급</label>
+          <select id="level-filter" v-model="levelFilter">
+            <option value="">등급 전체</option>
+            <option v-for="l in ['Critical', 'High', 'Medium', 'Low']" :key="l" :value="l">{{ l }}</option>
+          </select>
+        </template>
+        <label for="status-filter" class="sr-only">상태</label>
+        <select id="status-filter" v-model="statusFilter">
+          <option value="">상태 전체</option>
+          <option v-for="(label, key) in ASSESSMENT_STATUS" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <button type="button" class="ghost small" @click="load">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+          </svg>
+          새로고침
+        </button>
+      </div>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="graphError" class="notice">{{ graphError }} 영향 고객 수는 연결되면 다시 보입니다.</p>
-    <table>
-      <thead>
-        <tr>
-          <th>회사</th>
-          <th>공시</th>
-          <th>등급</th>
-          <th class="num">점수</th>
-          <th class="num">영향 고객</th>
-          <th class="num">P1</th>
-          <th class="num">내 승인 대기</th>
-          <th>상태</th>
-          <th>생성</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="r in rows"
-          :key="r.assessment_id"
-          class="clickable"
-          @click="router.push({ name: 'alert-detail', params: { assessmentId: r.assessment_id } })"
-        >
-          <td><strong>{{ r.corp_name || '-' }}</strong></td>
-          <td>{{ r.title || r.rcept_no }}<br /><small>{{ r.filed_at || r.rcept_no }}</small></td>
-          <td><LevelBadge :level="r.level" /> <small v-if="r.combo_upgraded">조합 상향</small></td>
-          <td class="num">{{ r.total_score ?? '-' }}</td>
-          <td class="num">{{ r.affected_count }}</td>
-          <td class="num">{{ r.p1_count }}</td>
-          <td class="num"><strong v-if="r.my_pending_count">{{ r.my_pending_count }}</strong><span v-else>-</span></td>
-          <td><StatusBadge :status="r.status" /></td>
-          <td><small>{{ formatTime(r.created_at) }}</small></td>
-        </tr>
-        <tr v-if="!rows.length && !loading">
-          <td colspan="9" class="empty">표시할 경보가 없습니다.</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>회사</th>
+            <th>공시</th>
+            <th>등급</th>
+            <th class="num">점수</th>
+            <th class="num">영향 고객</th>
+            <th class="num">P1</th>
+            <th class="num">내 승인 대기</th>
+            <th>상태</th>
+            <th>생성</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="r in rows"
+            :key="r.assessment_id"
+            class="clickable"
+            @click="router.push({ name: 'alert-detail', params: { assessmentId: r.assessment_id } })"
+          >
+            <td>
+              <div class="corp">
+                <span class="corp-mark" aria-hidden="true">{{ (r.corp_name || '-').slice(0, 1) }}</span>
+                <div class="corp-text">
+                  <strong>{{ r.corp_name || '-' }}</strong>
+                  <span v-if="r.stock_code" class="sub">{{ r.stock_code }}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="disclosure">
+                <span class="disclosure-title">{{ r.title || r.rcept_no }}</span>
+                <span class="sub">{{ r.filed_at || r.rcept_no }}</span>
+              </div>
+            </td>
+            <td>
+              <div class="level-cell">
+                <LevelBadge :level="r.level" />
+                <span v-if="r.combo_upgraded" class="sub">조합 상향</span>
+              </div>
+            </td>
+            <td class="num score">{{ r.total_score ?? '-' }}</td>
+            <td class="num">{{ r.affected_count }}명</td>
+            <td class="num p1">{{ r.p1_count }}</td>
+            <td class="num"><span v-if="r.my_pending_count > 0" class="count-pill">{{ r.my_pending_count }}</span><span v-else class="muted">-</span></td>
+            <td><StatusBadge :status="r.status" /></td>
+            <td class="created-at">{{ formatTime(r.created_at) }}</td>
+          </tr>
+          <tr v-if="!rows.length && !loading">
+            <td colspan="9" class="empty">표시할 경보가 없습니다.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </template>
+
+<style scoped>
+.run-start { padding: 8px; border: 1px solid var(--border); border-radius: var(--pill); background: var(--surface); box-shadow: var(--shadow-sm); }
+.run-start input { width: 200px; min-width: 0; padding: 0 18px; border: none; border-radius: var(--pill); background: var(--bg); }
+.run-start button { white-space: nowrap; padding: 0 22px; }
+.run-number { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.alert-list .tabs { margin-bottom: 0; }
+.alert-list .tabs button, .list-filters button { min-height: 44px; }
+.date-label { margin: 0; }
+.list-filters input, .list-filters select { font-size: 14px; }
+.list-filters input { border-radius: var(--pill); }
+.alert-list > .error, .alert-list > .notice { margin: 0 24px 16px; }
+.alert-list table { min-width: 980px; }
+.alert-list th { padding-top: 12px; padding-bottom: 12px; }
+.alert-list td { padding-top: 16px; padding-bottom: 16px; font-size: 14px; }
+.disclosure { display: flex; flex-direction: column; line-height: 1.4; }
+.disclosure-title { font-weight: 500; }
+.level-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.alert-list .score { font-size: 16px; font-weight: 700; }
+.p1 { color: var(--bad); font-weight: 700; }
+.alert-list .created-at { font-size: 13px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 540px) {
+  .run-start { width: 100%; border-radius: var(--radius); }
+  .run-start input { flex: 1 1 160px; }
+  .run-start button { flex: 1 1 auto; }
+}
+</style>

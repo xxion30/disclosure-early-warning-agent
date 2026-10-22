@@ -15,10 +15,20 @@ const steps = computed(() => {
     status: props.state.nodes[node] || 'todo',
   }))
 })
+
+// 막대: PB 승인까지를 100%로 본다 (반려·업무 생성은 승인 뒤 단계라 빼고 셈)
+const percent = computed(() => {
+  const upto = MAIN_PATH.indexOf('pb_approval') + 1
+  const reached = steps.value.slice(0, upto).filter((s) => s.status !== 'todo').length
+  return Math.round((reached / upto) * 100)
+})
 </script>
 
 <template>
   <p v-if="state.queued" class="notice">큐에서 차례를 기다리는 중입니다…</p>
+  <div class="progress-bar" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
+    <span :style="{ width: `${percent}%` }" />
+  </div>
   <ol class="progress">
     <li v-for="s in steps" :key="s.node" :class="`step-${s.status}`">
       <span class="dot" />
