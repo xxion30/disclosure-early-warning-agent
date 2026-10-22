@@ -12,6 +12,7 @@ from mcp_servers.business.tools.get_disclosure import get_disclosure
 from mcp_servers.business.tools.get_holders import get_holders
 from mcp_servers.business.tools.get_signal_history import get_signal_history
 from mcp_servers.business.tools.list_new_disclosures import list_new_disclosures
+from mcp_servers.business.tools.purge_disclosure_text import purge_disclosure_text
 from mcp_servers.business.tools.save_assessment import save_assessment
 from mcp_servers.business.tools.update_task_status import update_task_status
 
@@ -35,6 +36,7 @@ for _tool, _hints in (
     (save_assessment, MUTATING),  # rcept_no 기준 upsert (같은 입력이면 같은 결과)
     (create_contact_task, MUTATING),  # PB 승인 뒤에만, (평가, 고객)당 1건 (멱등)
     (update_task_status, MUTATING),  # PB가 화면에서만
+    (purge_disclosure_text, MUTATING),  # 처리가 끝난 공시의 본문을 비움 (운영 모드에서만 동작, Agent 코드만 호출)
 ):
     mcp.tool(_tool, annotations=_hints)
 

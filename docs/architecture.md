@@ -208,6 +208,8 @@ flowchart TD
 
 모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다. 도구 주석(annotations)으로 조회 도구는 `readOnlyHint`, 변경 도구 3개는 `destructiveHint`를 표시한다(수업 자료의 Harness 규칙).
 
+**운영 모드(`RAG_INDEX_MODE=ephemeral`)**: 공시 1건을 처리할 때 그 원문만 임시로 색인하고(원문은 DB 본문 → rag_docs 파일 → DART 순서로 찾음), 경보를 저장한 직후 `release_disclosure_index`와 `purge_disclosure_text`로 색인 조각과 DB 본문을 지운다. 해시(`content_hash`)·처리 시각·삭제 시각, 신호와 근거 문장은 남는다. 실패(`MANUAL_CHECK`·`FAILED`) 공시는 해결될 때까지 지우지 않고, 정리가 실패해도 처리 결과는 바꾸지 않는다. 기본은 `persistent`(데모·평가)다.
+
 **문서 색인 (오프라인, Pipe-and-Filter)**: `rag_docs/*.md`(실제 DART 공시 원문, 참고 문서) → 800자·겹침 100자 청킹 → 임베딩(`text-embedding-3-small`) → Chroma(코사인). 조각마다 `source`, `rcept_no`, `location`을 메타데이터로 남기고, 컬렉션에 임베딩 설정을 기록해 **질의 때 다른 임베딩이면 검색을 거부**한다. 실행: `uv run python -m mcp_servers.rag.ingest`.
 
 ## 8. Harness (Microkernel: 모델을 감싸는 8개 구성 요소)

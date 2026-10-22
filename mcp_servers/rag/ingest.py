@@ -57,13 +57,19 @@ def build_records(path: Path, kind: str) -> tuple[str, list[dict], str]:
             raise ValueError(f"{path.name}: category는 {', '.join(CATEGORIES)} 중 하나여야 합니다 ({category!r}).")
         doc_id = path.stem
         base = {"doc_id": doc_id, "source": meta.get("title", path.stem), "category": category, "title": meta.get("title", "")}
+    records, doc_hash = records_from_body(doc_id, body, base)
+    return doc_id, records, doc_hash
+
+
+def records_from_body(doc_id: str, body: str, base: dict) -> tuple[list[dict], str]:
+    """본문 → 조각 레코드. 파일에서 읽은 문서(ingest)와 운영에서 공시마다 임시로 만드는 색인이 같은 규칙을 쓴다."""
     doc_hash = hashlib.sha256(f"{store.CHUNK_SIZE}/{store.CHUNK_OVERLAP}/{body}".encode()).hexdigest()[:16]
     records = []
     for i, (start, end, text) in enumerate(store.chunk_text(body)):
         records.append(
             {"id": f"{doc_id}:{i}", "text": text, "meta": {**base, "location": location_of(i, start, end), "chunk_index": i, "doc_hash": doc_hash}}
         )
-    return doc_id, records, doc_hash
+    return records, doc_hash
 
 
 def collect(only: str | None) -> list[tuple[Path, str]]:

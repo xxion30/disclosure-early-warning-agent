@@ -87,7 +87,7 @@ def test_reingest_skips_unchanged_documents(rag):
     assert again["skipped_docs"] == 4 and again["embedded_chunks"] == 0
 
 
-def test_server_registers_two_tools(rag):
+def test_server_registers_search_tools_and_release(rag):
     from fastmcp import Client
 
     from mcp_servers.rag.server import mcp
@@ -99,4 +99,4 @@ def test_server_registers_two_tools(rag):
             return names, r.data
 
     names, data = asyncio.run(run())
-    assert names == {"search_disclosure_text", "search_reference"} and data["ok"] is True
+    assert names == {"search_disclosure_text", "search_reference", "release_disclosure_index"} and data["ok"] is True

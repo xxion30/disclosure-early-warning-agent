@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
 import LevelBadge from '../components/LevelBadge.vue'
+import AlertSummary from '../components/AlertSummary.vue'
 import RunProgress from '../components/RunProgress.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -171,6 +172,9 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
         </div>
       </div>
     </section>
+
+    <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
+    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" :total-score="alert.total_score" />
 
     <section v-if="hasRunHistory" class="card" aria-label="진행 단계">
       <div class="card-head">

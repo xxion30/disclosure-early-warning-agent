@@ -164,6 +164,7 @@ BUSINESS_MCP_URL=http://localhost:8001/mcp
 RAG_MCP_URL=http://localhost:8002/mcp
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 QUEUE_ENABLED=false                 # 가산점 기능 켜기
+RAG_INDEX_MODE=persistent           # persistent(데모) | ephemeral(운영: 공시마다 임시 색인, 처리 후 삭제)
 ```
 
 ---
@@ -204,6 +205,7 @@ QUEUE_ENABLED=false                 # 가산점 기능 켜기
 | save_assessment | corp_code, rcept_no, signals, score_result, ai_explanation, status | assessment_id | 변경 |
 | create_contact_task | assessment_id, customer_id, priority, draft_message | task_id | 변경 (PB 승인 후에만) |
 | update_task_status | task_id, status, note | 바뀐 task | 변경 (PB가 화면에서만) |
+| purge_disclosure_text | rcept_no: str, content_hash: str = None | purged, content_hash, processed_at, purged_at | 변경 (Agent 코드만, 운영 모드 `RAG_INDEX_MODE=ephemeral`에서만 동작) |
 
 ### 4-3. rag-mcp 도구 (포트 8002)
 
@@ -211,6 +213,7 @@ QUEUE_ENABLED=false                 # 가산점 기능 켜기
 | --- | --- | --- |
 | search_disclosure_text | rcept_no: str, query: str, k: int = 5 | 해당 공시 원문 조각 + 위치 |
 | search_reference | query: str, category: str, k: int = 5 | 참고 문서 조각 + 출처 |
+| release_disclosure_index | rcept_no: str | released_chunks, content_sha256, mode | 변경 (Agent 코드만, 처리가 끝난 공시의 색인 조각 삭제. 운영 모드에서만 동작) |
 
 - `category`: 상장규정, 공시해설, 회계용어, 안내문가이드
 - 결과마다 출처(문서명, rcept_no, 조각 위치)를 꼭 돌려준다. 근거 인용에 쓴다.
