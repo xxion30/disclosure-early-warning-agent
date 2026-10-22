@@ -269,6 +269,20 @@ blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md);
 .banner.ok .banner-icon { background: var(--ok-dot); }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
 .banner.warn .banner-icon { background: var(--warn-dot); }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.banner.bad .banner-icon { background: var(--critical); }
+.banner.info { background: var(--blue-soft); color: var(--blue-strong); }
+.banner.info .banner-icon { background: var(--blue); }
+.banner-action { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 진행 막대: 실패는 빨강, 수동 확인은 주황 */
+.progress-bar.bad > span { background: var(--critical); }
+.progress-bar.warn > span { background: var(--warn-dot); }
+.progress .step-manual { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.progress .step-manual .dot { background: var(--warn-dot); }
+
+/* 점수 계산 전에 멈춘 평가의 등급 자리 */
+.unscored { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: var(--pill); border: 1px dashed var(--border-strong); color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 
 /* ---------- 결정 버튼 (안내문 검토) ---------- */
 .choices { display: flex; gap: 8px; flex-wrap: wrap; }

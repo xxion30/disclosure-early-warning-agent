@@ -82,12 +82,15 @@ function problems() {
     const f = form[d.customer_id]
     if (f.choice === 'reject' && !f.reason.trim()) out.push(`${d.name}: 반려 사유를 입력하세요.`)
     if (f.choice === 'edit' && !f.text.trim()) out.push(`${d.name}: 수정한 안내문이 비어 있습니다.`)
+    // 초안이 빈 고객을 그대로 승인하면 빈 안내문으로 연락 업무가 생긴다
+    if (f.choice === 'approve' && d.manual) out.push(`${d.name}: 초안이 비어 있어 그대로 승인할 수 없어요. 직접 작성해 주세요.`)
   }
   return out
 }
 
+// 초안이 빈(직접 작성 필요) 고객은 한꺼번에 승인하지 않는다
 function approveAll() {
-  for (const d of pending.value) if (!form[d.customer_id].choice) form[d.customer_id].choice = 'approve'
+  for (const d of pending.value) if (!form[d.customer_id].choice && !d.manual) form[d.customer_id].choice = 'approve'
 }
 
 async function submit() {
@@ -163,7 +166,7 @@ async function submit() {
         </div>
       </div>
 
-      <article v-for="d in pending" :key="d.customer_id" class="card draft" :class="form[d.customer_id].choice" :aria-label="`${d.name} 안내문 검토`">
+      <article v-for="d in pending" :key="d.customer_id" class="card draft" :class="[form[d.customer_id].choice, { manual: d.manual && !form[d.customer_id].choice }]" :aria-label="`${d.name} 안내문 검토`">
         <div class="draft-head">
           <span class="prio-pill" :class="`prio-${d.priority}`">{{ d.priority }}</span>
           <span class="avatar sm" aria-hidden="true">{{ (d.name || '-').slice(0, 1) }}</span>
@@ -171,11 +174,12 @@ async function submit() {
             <strong>{{ d.name }}</strong>
             <span class="sub">{{ d.customer_id }} · {{ d.risk_profile }}</span>
           </div>
+          <span v-if="d.manual" class="badge tone-warn">직접 작성 필요</span>
           <span class="impact-pill" :class="`impact-${d.impact_level}`">영향 {{ d.impact_level }} · {{ d.impact_score }}점</span>
         </div>
 
         <p v-if="d.manual" class="notice">
-          가드레일을 3번 통과하지 못해 초안이 비었습니다. "수정 후 승인"으로 직접 작성하거나 "다시 작성"을 눌러 주세요.
+          가드레일 검사를 여러 번 통과하지 못해 AI 초안이 비어 있어요. "수정 후 승인"으로 직접 작성하거나 "다시 작성"을 눌러 주세요.
         </p>
         <div v-if="form[d.customer_id].choice === 'edit'" class="edit-body">
           <label :for="`edit-${d.customer_id}`">안내문 수정 <span class="edit-hint">· <code>{고객명}</code> 자리표시는 그대로 두세요</span></label>
@@ -198,6 +202,8 @@ async function submit() {
             class="choice"
             :class="[key, { selected: form[d.customer_id].choice === key }]"
             :aria-pressed="form[d.customer_id].choice === key"
+            :disabled="key === 'approve' && d.manual"
+            :title="key === 'approve' && d.manual ? '초안이 비어 있어 그대로 승인할 수 없어요' : undefined"
             @click="form[d.customer_id].choice = form[d.customer_id].choice === key ? null : key"
           >
             <svg v-if="form[d.customer_id].choice === key" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10" /></svg>
@@ -266,6 +272,8 @@ async function submit() {
 .draft.edit { border: 1.5px solid var(--navy); }
 .draft.approve, .draft.rewrite { border: 1.5px solid var(--blue); }
 .draft.reject { border: 1.5px solid #e5a3a3; }
+.draft.manual { border: 1.5px solid #f7c9a6; }
+.choice:disabled { opacity: .45; }
 .draft-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .customer-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
 .customer-text strong { font-size: 16px; }

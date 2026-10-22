@@ -7,7 +7,7 @@ import LevelBadge from '../components/LevelBadge.vue'
 import RunProgress from '../components/RunProgress.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { ASSESSMENT_STATUS, formatTime } from '../labels'
+import { ASSESSMENT_STATUS, formatTime, isUnscored } from '../labels'
 
 const router = useRouter()
 
@@ -41,6 +41,26 @@ async function load() {
   } finally {
     loading.value = false
   }
+  loadAttention()
+}
+
+// 사람이 봐야 하는 공시: 점수 계산 전에 멈추면 Low로 저장돼 경보 탭(High·Critical)에 안 보이므로 따로 센다
+const attention = ref({ MANUAL_CHECK: 0, FAILED: 0 })
+async function loadAttention() {
+  try {
+    const [manual, failed] = await Promise.all([
+      api.listAlerts({ status: 'MANUAL_CHECK' }),
+      api.listAlerts({ status: 'FAILED' }),
+    ])
+    attention.value = { MANUAL_CHECK: manual.length, FAILED: failed.length }
+  } catch {
+    // 안내용이라 실패해도 목록은 그대로 둔다
+  }
+}
+const showAttention = computed(() => !statusFilter.value && (attention.value.MANUAL_CHECK || attention.value.FAILED))
+function showStatus(status) {
+  tab.value = 'all'
+  statusFilter.value = status
 }
 
 watch(tab, () => {
@@ -118,7 +138,7 @@ async function startRun() {
     <div class="stat">
       <span class="stat-label"><span class="dot dot-high" aria-hidden="true"></span>High</span>
       <div class="stat-value"><strong>{{ stats.high }}</strong><span>건</span></div>
-      <span class="stat-note">고객 영향도 계산됨</span>
+      <span class="stat-note">고객 영향도 계산 대상</span>
     </div>
     <div class="stat">
       <span class="stat-label"><span class="dot dot-blue" aria-hidden="true"></span>P1 연락 대상</span>
@@ -133,7 +153,34 @@ async function startRun() {
     </div>
     <RunProgress v-if="running" :state="runState" />
     <p v-if="runError" class="error">{{ runError }}</p>
+    <RouterLink
+      v-if="['failed', 'done'].includes(runState.last) && runState.lastData?.assessment_id"
+      :to="{ name: 'alert-detail', params: { assessmentId: String(runState.lastData.assessment_id) } }"
+      class="run-detail-link"
+    >
+      경보 상세 보기
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+    </RouterLink>
   </section>
+
+  <div v-if="showAttention" class="banner warn" role="status">
+    <span class="banner-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+    </span>
+    <span class="banner-text">
+      <strong>사람이 확인해야 할 공시가 있어요</strong>
+      <span>
+        <template v-if="attention.MANUAL_CHECK">수동 확인 {{ attention.MANUAL_CHECK }}건</template>
+        <template v-if="attention.MANUAL_CHECK && attention.FAILED"> · </template>
+        <template v-if="attention.FAILED">실패 {{ attention.FAILED }}건</template>
+        — 점수 계산 전에 멈춘 공시는 경보 탭에 나오지 않아요.
+      </span>
+    </span>
+    <span class="banner-action">
+      <button v-if="attention.MANUAL_CHECK" type="button" class="ghost small" @click="showStatus('MANUAL_CHECK')">수동 확인 보기</button>
+      <button v-if="attention.FAILED" type="button" class="ghost small" @click="showStatus('FAILED')">실패 보기</button>
+    </span>
+  </div>
 
   <section class="card flush alert-list" aria-label="경보 목록">
     <div class="card-head">
@@ -210,11 +257,12 @@ async function startRun() {
             </td>
             <td>
               <div class="level-cell">
-                <LevelBadge :level="r.level" />
+                <span v-if="isUnscored(r)" class="unscored" title="점수 계산 전에 멈췄어요">미계산</span>
+                <LevelBadge v-else :level="r.level" />
                 <span v-if="r.combo_upgraded" class="sub">조합 상향</span>
               </div>
             </td>
-            <td class="num score">{{ r.total_score ?? '-' }}</td>
+            <td class="num score">{{ isUnscored(r) ? '-' : r.total_score ?? '-' }}</td>
             <td class="num">{{ r.affected_count }}명</td>
             <td class="num p1">{{ r.p1_count }}</td>
             <td class="num"><span v-if="r.my_pending_count > 0" class="count-pill">{{ r.my_pending_count }}</span><span v-else class="muted">-</span></td>
@@ -235,6 +283,7 @@ async function startRun() {
 .run-start input { width: 200px; min-width: 0; padding: 0 18px; border: none; border-radius: var(--pill); background: var(--bg); }
 .run-start button { white-space: nowrap; padding: 0 22px; }
 .run-number { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.run-detail-link { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: 8px; font-weight: 600; }
 .alert-list .tabs { margin-bottom: 0; }
 .alert-list .tabs button, .list-filters button { min-height: 44px; }
 .date-label { margin: 0; }

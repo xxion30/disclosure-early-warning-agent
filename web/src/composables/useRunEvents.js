@@ -14,7 +14,9 @@ export function useRunEvents() {
     order: [], // 이벤트가 온 노드 순서
     last: null, // 마지막 이벤트 이름
     lastData: null,
-    error: null,
+    error: null, // 실패·수동 확인 이유 (없으면 null)
+    manual: false, // 수동 확인으로 끝남 (진짜 Graph는 failed 이벤트에 status: MANUAL_CHECK를 싣는다)
+    disconnected: false, // 끝나기 전에 SSE 연결이 끊김 (처리 실패와는 다르다)
   })
   let es = null
 
@@ -24,6 +26,8 @@ export function useRunEvents() {
     state.last = null
     state.lastData = null
     state.error = null
+    state.manual = false
+    state.disconnected = false
     state.queued = false
   }
 
@@ -35,8 +39,11 @@ export function useRunEvents() {
     if (name === 'node_finished') state.nodes[data.node] = 'done'
     if (name === 'waiting_approval') state.nodes.pb_approval = 'waiting'
     if (name === 'failed') {
-      state.error = data.message || '처리 실패'
-      if (data.node) state.nodes[data.node] = 'failed'
+      state.manual = data.status === 'MANUAL_CHECK'
+      // 이유가 없으면 서버가 상태 코드(MANUAL_CHECK 등)를 message로 보낸다. 코드가 그대로 보이지 않게 거른다
+      const message = data.message && data.message !== data.status ? data.message : null
+      state.error = message
+      if (data.node) state.nodes[data.node] = state.manual ? 'manual' : 'failed'
     }
     state.last = name
     state.lastData = data
@@ -66,7 +73,7 @@ export function useRunEvents() {
     }
     es.onerror = () => {
       // 서버가 스트림을 닫았거나 연결 실패. 자동 재연결로 무한 반복하지 않게 닫는다
-      if (!TERMINAL.includes(state.last)) state.error = state.error || '진행 이벤트 연결이 끊겼습니다.'
+      if (!TERMINAL.includes(state.last)) state.disconnected = true
       close()
     }
   }

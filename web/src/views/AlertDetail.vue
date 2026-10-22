@@ -7,7 +7,7 @@ import RunProgress from '../components/RunProgress.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { formatTime, MAIN_PATH } from '../labels'
+import { formatTime, isUnscored, MAIN_PATH, STATUS_GUIDE } from '../labels'
 import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
@@ -80,7 +80,15 @@ const priorityNote = computed(() => ['P1', 'P2'].map((priority) => {
 const progressNote = computed(() => ({
   WAITING_APPROVAL: 'PB 승인에서 멈춰 있어요',
   DONE: '처리가 끝났어요',
+  MANUAL_CHECK: '사람의 확인이 필요해 멈췄어요',
+  FAILED: '처리 중간에 멈췄어요',
 }[alert.value?.status] || ''))
+
+// 실패·수동 확인·처리 중이면 맨 위에 안내를 띄운다. 이유(error)는 API가 주면 함께 보여준다
+const guide = computed(() => STATUS_GUIDE[alert.value?.status] || null)
+const unscored = computed(() => isUnscored(alert.value))
+// 고객 영향도는 High·Critical 경보에서만 계산한다
+const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].includes(alert.value?.level))
 </script>
 
 <template>
@@ -91,6 +99,19 @@ const progressNote = computed(() => ({
   <p v-if="error" class="error detail-error" role="alert">{{ error }}</p>
 
   <template v-if="alert">
+    <div v-if="guide" class="banner status-banner" :class="guide.tone" :role="guide.tone === 'bad' ? 'alert' : 'status'">
+      <span class="banner-icon" aria-hidden="true">
+        <svg v-if="guide.tone === 'bad'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15 9l-6 6M9 9l6 6" /></svg>
+        <svg v-else-if="guide.tone === 'warn'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+      </span>
+      <span class="banner-text">
+        <strong>{{ guide.title }}</strong>
+        <span>{{ guide.text }}<template v-if="unscored"> 점수 계산 전에 멈춰서 등급과 총점이 없어요.</template></span>
+        <span v-if="alert.error" class="status-reason">이유: {{ alert.error }}</span>
+      </span>
+    </div>
+
     <section class="card hero" aria-label="경보 요약">
       <div class="hero-head">
         <div class="hero-company">
@@ -98,7 +119,8 @@ const progressNote = computed(() => ({
           <div class="hero-copy">
             <div class="hero-title">
               <h1>{{ alert.company.name || alert.disclosure.title }}</h1>
-              <LevelBadge :level="alert.level" />
+              <span v-if="unscored" class="unscored">등급 미계산</span>
+              <LevelBadge v-else :level="alert.level" />
               <StatusBadge :status="alert.status" />
             </div>
             <p class="hero-meta muted">
@@ -122,15 +144,20 @@ const progressNote = computed(() => ({
         </RouterLink>
       </div>
       <div class="mini-stats">
-        <div class="mini-stat" :class="{ bad: fixedReason }">
+        <div v-if="unscored" class="mini-stat">
+          <span class="mini-stat-label">등급 결정</span>
+          <div class="mini-stat-value level-value"><strong class="muted">미계산</strong></div>
+          <span class="mini-stat-note">점수 계산 전에 멈췄어요</span>
+        </div>
+        <div v-else class="mini-stat" :class="{ bad: fixedReason }">
           <span class="mini-stat-label">등급 결정</span>
           <div class="mini-stat-value level-value"><strong>{{ fixedReason ? `${fixedReason.fixed_level} 고정` : alert.level || '-' }}</strong></div>
           <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `총점 기준 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
         </div>
         <div class="mini-stat">
           <span class="mini-stat-label">총점</span>
-          <div class="mini-stat-value"><strong>{{ alert.total_score ?? '-' }}</strong><span>점</span></div>
-          <span class="mini-stat-note">기본 점수 {{ scoreTotals.base }} + 신호 {{ scoreTotals.signals }}</span>
+          <div class="mini-stat-value"><strong>{{ unscored ? '-' : alert.total_score ?? '-' }}</strong><span v-if="!unscored">점</span></div>
+          <span class="mini-stat-note">{{ unscored ? '점수 내역 없음' : `기본 점수 ${scoreTotals.base} + 신호 ${scoreTotals.signals}` }}</span>
         </div>
         <div class="mini-stat">
           <span class="mini-stat-label">영향 고객</span>
@@ -178,7 +205,8 @@ const progressNote = computed(() => ({
           </figcaption>
         </figure>
       </div>
-      <p v-if="!evidence.length" class="notice">원문 인용이 없습니다. 수동 확인이 필요합니다.</p>
+      <p v-if="!evidence.length && alert.status === 'FAILED'" class="notice">처리가 중간에 멈춰 원문 인용이 없어요. 공시 원문을 직접 확인해 주세요.</p>
+      <p v-else-if="!evidence.length" class="notice">원문 인용이 없어요. 추측하지 않고 수동 확인으로 남겼어요.</p>
     </section>
 
     <section class="card flush customers" aria-label="영향 고객">
@@ -186,7 +214,10 @@ const progressNote = computed(() => ({
         <h2>영향 고객 <small>{{ customers.length }}명 · 우선순위순</small></h2>
         <span class="muted section-note">다른 PB의 고객은 이름을 가려요</span>
       </div>
-      <p v-if="alert.graph_error" class="notice">
+      <p v-if="impactSkipped && !customers.length" class="muted impact-skipped">
+        고객 영향도는 High·Critical 경보에서만 계산해요.<template v-if="unscored"> 이 공시는 점수 계산 전에 멈췄어요.</template>
+      </p>
+      <p v-else-if="alert.graph_error" class="notice">
         {{ alert.graph_error }} 점수 내역은 그대로 볼 수 있고, 영향 고객·안내문은 연결되면 다시 보입니다.
       </p>
       <p v-else-if="!alert.graph_state_available" class="notice">
@@ -234,6 +265,9 @@ const progressNote = computed(() => ({
 <style scoped>
 .back-link { min-height: 44px; }
 .detail-error { margin: 0 0 20px; }
+.status-banner { margin-bottom: 20px; }
+.status-reason { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
+.impact-skipped { margin: 0 24px 16px; font-size: 14px; }
 .hero { border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
 .hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 .hero-company { display: flex; align-items: flex-start; gap: 16px; flex: 1 1 560px; min-width: 0; }
