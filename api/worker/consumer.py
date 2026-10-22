@@ -7,7 +7,7 @@ API 프로세스 안에서 돈다 (api/main.py lifespan). 그래야
 재시도 기준:
 - 실행 기록(체크포인트)이 생기기 전에 실패 → 일시 장애(MCP 서버 꺼짐, 조립 실패 등)로 보고 지연 후 다시 시도
 - 실행 기록이 남은 실패(MANUAL_CHECK·FAILED) → 같은 thread를 다시 돌려도 결과가 같다. 사람이 볼 일이라 DLQ
-- waiting_approval·done → 성공 (PB 승인 대기는 큐 밖의 일)
+- done → 성공
 """
 from __future__ import annotations
 

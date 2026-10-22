@@ -82,7 +82,7 @@ def test_post_runs_in_queue_mode_enqueues_then_consumer_runs(queued_client, auth
     # 대기 중에 다시 넣으면 그대로 받아 준다(아직 실행 전), 실행이 끝난 뒤에는 409
     consumer = DisclosureConsumer(manager, adapter, backend)
     queued_client.portal.call(backend.drain, consumer)
-    assert read_events(queued_client, auth_headers)[-1][0] == "waiting_approval"
+    assert read_events(queued_client, auth_headers)[-1][0] == "done"
     assert queued_client.post("/runs", json={"rcept_no": RCEPT}, headers=auth_headers).status_code == 409
 
 
@@ -105,7 +105,7 @@ def test_sse_attached_while_queued_sees_whole_run(queued_client, auth_headers, b
         return names
 
     names = queued_client.portal.call(watch_then_consume)
-    assert names[0] == "queued" and names[-1] == "waiting_approval" and "node_started" in names
+    assert names[0] == "queued" and names[-1] == "done" and "node_started" in names
 
 
 def test_batch(queued_client, auth_headers, backend):
@@ -138,7 +138,7 @@ def test_transient_failure_is_retried_until_success(backend):
         return consumer.processed
 
     processed = run(scenario())
-    assert [p[2] for p in processed] == ["retry in 3s", "retry in 10s", "waiting_approval"]
+    assert [p[2] for p in processed] == ["retry in 3s", "retry in 10s", "done"]
     assert backend.delays == [3, 10] and not backend.queues[DLQ]
 
 
@@ -177,7 +177,7 @@ def test_already_processed_is_skipped(backend):
         await consumer.handle({"rcept_no": RCEPT})  # 같은 메시지가 두 번 와도 다시 실행하지 않는다
         return consumer.processed
 
-    assert [p[2] for p in run(scenario())] == ["waiting_approval", "skip"]
+    assert [p[2] for p in run(scenario())] == ["done", "skip"]
 
 
 class _NoDb:
@@ -231,7 +231,7 @@ def test_real_rabbitmq_delayed_retry_returns_to_main_queue():
             task = asyncio.create_task(consumer.run_forever())
             await backend.publish(MAIN_QUEUE, {"rcept_no": RCEPT, "attempt": 1})
             for _ in range(60):
-                if any(p[2] == "waiting_approval" for p in consumer.processed):
+                if any(p[2] == "done" for p in consumer.processed):
                     break
                 await asyncio.sleep(0.2)
             task.cancel()
@@ -240,6 +240,6 @@ def test_real_rabbitmq_delayed_retry_returns_to_main_queue():
             await backend.close()
 
     processed, stats = asyncio.run(scenario())
-    assert [p[2] for p in processed] == ["retry in 1s", "waiting_approval"]
+    assert [p[2] for p in processed] == ["retry in 1s", "done"]
     assert [p[1] for p in processed] == [1, 2]
     assert stats == {MAIN_QUEUE: 0, RETRY_QUEUE: 0, DLQ: 0}

@@ -7,12 +7,12 @@ from shared.models.base import Base
 from shared.models.collect import *  # noqa: F401,F403
 from shared.models.core import Company, Disclosure, Signal
 from shared.models.risk import (
-    ASSESSMENT_STATUSES, LEVELS, PRIORITIES, TASK_STATUSES, AuditLog, ContactTask, RiskAssessment,
+    ASSESSMENT_STATUSES, LEVELS, AuditLog, RiskAssessment,
 )
 from shared.models.tenant import PB, Customer, Holding
 
 __all__ = [
     "Base", "Company", "Disclosure", "Signal", "PB", "Customer", "Holding",
-    "RiskAssessment", "ContactTask", "AuditLog",
-    "ASSESSMENT_STATUSES", "TASK_STATUSES", "LEVELS", "PRIORITIES",
+    "RiskAssessment", "AuditLog",
+    "ASSESSMENT_STATUSES", "LEVELS",
 ]

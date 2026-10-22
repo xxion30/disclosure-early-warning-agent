@@ -1,10 +1,10 @@
-"""GET /customers — 내 담당 고객 현황 (읽기 전용). 메모리 DB에 회사·보유·경보·업무를 직접 넣어 확인한다."""
+"""GET /customers — 내 담당 고객의 보유 종목과 위험 노출 (읽기 전용). 메모리 DB에 회사·보유·경보를 직접 넣어 확인한다. (담당: R4)"""
 import json
 
 import pytest
 
 from shared.config import ROOT_DIR
-from shared.models import AuditLog, Company, ContactTask, Holding, RiskAssessment
+from shared.models import Company, Holding, RiskAssessment
 
 SEED = json.loads((ROOT_DIR / "data" / "seed" / "customers.json").read_text(encoding="utf-8"))
 OWN = {"P01": {c["customer_id"] for c in SEED["customers"] if c["pb_id"] == "P01"},
@@ -23,7 +23,7 @@ def world(session_factory):
         s.add(RiskAssessment(assessment_id=1, corp_code="00106119", rcept_no="20250117000380", total_score=8, level="High",
                              status="DONE", created_at="2025-01-17T09:00:00+09:00", reasons=[]))
         s.add(RiskAssessment(assessment_id=2, corp_code="00106119", rcept_no="20250321802001", total_score=8, level="Critical",
-                             status="WAITING_APPROVAL", created_at=NOW, reasons=[]))
+                             status="DONE", created_at=NOW, reasons=[]))
         s.add(RiskAssessment(assessment_id=3, corp_code="00303873", rcept_no="20230620000238", total_score=5, level="Medium",
                              status="DONE", created_at=NOW, reasons=[]))
         s.commit()
@@ -46,18 +46,17 @@ def test_only_my_customers_are_returned(client, auth_headers, p02_headers, world
     assert all(c["name"] and not c["name"].startswith("고객 ") for c in p01.values())  # 내 고객은 실명
 
 
-def test_exposure_and_priority_match_the_alert_rules(client, auth_headers, p02_headers, world):
+def test_exposure_points_at_the_latest_alert_of_each_held_stock(client, auth_headers, p02_headers, world):
     p01 = by_id(client.get("/customers", headers=auth_headers))
-    # 시나리오 A: 금양 Critical → P1 5명(C001·C003·C005·C006·C007), P2 2명(C002·C004)
+    # 금양을 가진 고객은 가장 최근의 High·Critical 평가(2번, Critical)에 노출된다
     for cid in ("C001", "C003", "C005", "C007"):
-        assert p01[cid]["exposure"]["top_priority"] == "P1", cid
+        assert p01[cid]["exposure"]["top_level"] == "Critical", cid
     p02 = by_id(client.get("/customers", headers=p02_headers))
-    assert p02["C006"]["exposure"]["top_priority"] == "P1"
-    assert p02["C002"]["exposure"]["top_priority"] == "P2" and p02["C004"]["exposure"]["top_priority"] == "P2"
-    # 경보와 연결: 가장 최근의 High·Critical 평가(2번)를 가리킨다
+    assert p02["C006"]["exposure"]["top_level"] == "Critical" and p02["C002"]["exposure"]["alert_count"] >= 1
     h = next(x for x in p01["C001"]["holdings"] if x["stock_code"] == "001570")
     assert h["alert"]["assessment_id"] == 2 and h["alert"]["level"] == "Critical" and h["stock_name"] == "금양"
     assert h["ratio_pct"] == 30.0  # 9천만 ÷ 3억
+    assert "priority" not in h["alert"]  # 연락 우선순위(P1~P3)는 삭제됐다
 
 
 def test_non_alert_holdings_have_no_alert_and_known_names(client, auth_headers, world):
@@ -71,42 +70,19 @@ def test_non_alert_holdings_have_no_alert_and_known_names(client, auth_headers, 
     assert all(h["alert"] is None for c in cgv_holders for h in c["holdings"] if h["stock_code"] == "079160")
 
 
-def test_sorted_by_urgency_and_summary(client, auth_headers, world):
+def test_sorted_by_exposure_and_summary(client, auth_headers, world):
     res = client.get("/customers", headers=auth_headers).json()
-    order = [c["exposure"]["top_priority"] for c in res["customers"]]
-    rank = {"P1": 0, "P2": 1, "P3": 2, None: 9}
-    assert [rank[o] for o in order] == sorted(rank[o] for o in order)  # P1 → P2 → 노출 없음
+    rank = {"Critical": 0, "High": 1, None: 9}
+    order = [rank[c["exposure"]["top_level"]] for c in res["customers"]]
+    assert order == sorted(order)  # Critical → High → 노출 없음
     s = res["summary"]
-    assert s["customers"] == len(OWN["P01"]) and s["exposed"] >= s["p1"] + s["p2"] >= 1
+    assert s["customers"] == len(OWN["P01"]) and s["exposed"] >= s["critical"] + s["high"] >= 1
+    assert not {"p1", "p2", "tasks"} & set(s)  # 연락 관련 집계는 삭제됐다
 
 
-def test_contact_history_shows_tasks_and_rejections(client, auth_headers, p02_headers, world):
-    with world() as s:
-        s.add(ContactTask(assessment_id=2, customer_id="C001", pb_id="P01", priority="P1", impact_score=8,
-                          draft_message="{고객명}님, 공시 안내드립니다.", status="연락완료", result_note="통화 완료",
-                          created_at="2025-03-21T11:00:00+09:00", updated_at="2025-03-22T09:00:00+09:00"))
-        s.add(AuditLog(actor="P02", action="decision.reject", target="assessment:2/customer:C002",
-                       payload={"customer_id": "C002", "reject_reason": "고객 요청으로 보류", "decided_at": "2025-03-21T12:00:00+09:00"},
-                       created_at="2025-03-21T12:00:00+09:00"))
-        s.commit()
-    c1 = by_id(client.get("/customers", headers=auth_headers))["C001"]
-    t = c1["history"][0]
-    assert (t["kind"], t["status"], t["corp_name"], t["note"]) == ("task", "연락완료", "금양", "통화 완료")
-    assert "한지우" in t["message_preview"] and "{고객명}" not in t["message_preview"]  # 내 고객이라 실명으로 채워 보여 준다
-    assert c1["last_contact"]["status"] == "연락완료"
-    c2 = by_id(client.get("/customers", headers=p02_headers))["C002"]
-    assert (c2["history"][0]["kind"], c2["history"][0]["status"], c2["history"][0]["note"]) == ("reject", "반려", "고객 요청으로 보류")
-    # 반려 기록은 담당 PB 화면에만 나온다
-    assert all(x["kind"] != "reject" for c in by_id(client.get("/customers", headers=auth_headers)).values() for x in c["history"])
-
-
-def test_other_pbs_history_never_leaks(client, auth_headers, world):
-    with world() as s:
-        s.add(ContactTask(assessment_id=2, customer_id="C002", pb_id="P02", priority="P2", impact_score=1,
-                          draft_message="{고객명}님", status="승인", created_at=NOW, updated_at=NOW))
-        s.commit()
-    body = client.get("/customers", headers=auth_headers).text
-    assert "C002" not in body and "오민재" not in body
+def test_no_contact_history_in_the_response(client, auth_headers, world):
+    body = client.get("/customers", headers=auth_headers).json()["customers"][0]
+    assert not {"history", "last_contact"} & set(body)
 
 
 def test_read_only(client, auth_headers):
@@ -116,4 +92,4 @@ def test_read_only(client, auth_headers):
 
 def test_empty_when_no_data(client, auth_headers):
     res = client.get("/customers", headers=auth_headers).json()  # 보유·경보가 없어도 깨지지 않는다
-    assert res["summary"]["exposed"] == 0 and all(c["holdings"] == [] and c["history"] == [] for c in res["customers"])
+    assert res["summary"]["exposed"] == 0 and all(c["holdings"] == [] for c in res["customers"])
