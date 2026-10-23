@@ -1,3 +1,56 @@
+# DARTCH R4 실행 안내 (2026-10-22)
+
+이 절은 새 R4 구현 기준이다. 아래 이전 프로젝트 실행 기록은 참고용으로 유지한다.
+
+## 준비와 검증
+
+```bash
+uv sync --frozen
+uv run python scripts/ops/verify_all.py
+```
+
+검증은 임시 테스트 DB를 사용하고 실제 모델을 호출하지 않는다. `uv` 캐시 권한 오류가 있는 환경에서는 `UV_CACHE_DIR=/tmp/dartch-uv-cache`를 지정한다.
+
+## PostgreSQL
+
+```bash
+docker compose up -d postgres
+DB_URL=postgresql+psycopg://dartch:dartch@localhost:5432/dartch uv run alembic upgrade head
+```
+
+API와 business-mcp를 로컬에서 실행할 경우 `.env`의 DB_URL을 위 URL로, CHECKPOINT_DB를 `postgresql://dartch:dartch@localhost:5432/dartch`로 설정한다. 기존 SQLite는 자동으로 PostgreSQL에 복사하지 않는다. 초기 마이그레이션은 연결한 DB 안의 기존 행·테이블을 보존하고 새 스키마를 추가한다. 실제 운영 데이터 이전은 별도 백업·이관 절차가 필요하다.
+
+```bash
+docker compose up --build api business
+# 화면 개발 서버가 필요할 때
+# docker compose --profile web up web
+```
+
+기본 GRAPH_ADAPTER=fake는 이전 시연용 그래프다. 새 위험 상태 전체 흐름이 구현됐다는 의미가 아니다. QUEUE_ENABLED는 false로 둔다.
+
+## 새 API
+
+- 로그인 후 `GET /states?alert=true`, `GET /states/{stock_code}`, `POST /states/{stock_code}/ack`를 사용한다.
+- 확인함 요청은 화면에서 받은 버전을 `{ "version": 1 }` 형태로 보낸다.
+- 회사 관리자는 PB 행의 role=ADMIN으로 지정한다. 별도 계정 생성·승격 API는 만들지 않는다.
+- `GET /collect/status`는 수집 이력을 조회한다. `POST /collect/run`은 관리자 전용이며, R3의 `app.state.collect_dispatcher`가 미연결이면 503이다.
+- 수집 dispatcher는 async `(run_id, stock_codes)` 계약이다. 실제 실행 결과와 종료 상태를 collect_runs에 기록하고, 성공한 종목만 `shared.collection.finish_stock(..., success_at=...)`으로 커서를 전진시킨다. 실패·취소 시 예약은 해제한다.
+- `uv run python -m scripts.ops.refresh_states`는 기존 위험 상태를 오늘(KST) 기준으로 재계산한다. R3 스케줄러는 일일 수집 후 이 함수를 호출해야 한다.
+
+## 평가와 연동 경계
+
+```bash
+uv run python eval/run_eval.py --cases eval/cases
+```
+
+실제 사례 JSON이 없으면 평가 미실행을 출력한다. 사례 형식은 case_id, as_of, signals, expected_stage, sources와 선택 history다. 실제 공시와 출처만 사용한다.
+
+R2는 새 signal_type·stage 분기, 회사별 승인 실행, 승인 대기 전 원문 조각 제거를 연결해야 한다. R3는 수집 dispatcher·스케줄러·재무 스냅샷·공시 사건 연결·메모리 RAG를 연결해야 한다. 이 연동 전에는 default 외 회사의 구형 실행·승인·SSE를 503으로 차단한다. 새 states/customers 조회와 수집 권한은 회사별로 분리한다.
+
+`integration` Compose 프로필은 R3 진입점·RAG 바인딩 연동용 초안이다. 현재 완성된 전체 서비스 배포로 취급하지 않는다. 상세 상태는 [구현 로그](log/2026-10-22-r4-implementation.md)를 참고한다.
+
+---
+
 > 담당: R4 (실행 방법·환경 변수). 이전 프로젝트(Capstone)의 README를 그대로 옮긴 것이다. 연락·승인 관련 설명은 구조 정리 이후 단계에서 DARTCH 기준으로 고친다.
 
 # 공시 조기경보 에이전트 (SKALA AI Agent Capstone)
@@ -225,3 +278,11 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 - 같은 신호가 공시마다 쌓여 경보가 사건보다 일찍 울리고, 이후 비슷한 공시마다 경보가 반복될 수 있다 (개선 과제).
 - 사건 날짜 기준 경보 시점은 모델이 어떤 공시를 신호로 보는지에 따라 실행마다 며칠~몇 주 달라질 수 있다 (등급과 사건 공시 결과는 안정적이다).
 - SQLite 파일 하나를 서버 두 개가 쓰므로 동시에 여러 PB가 결정하는 경우는 시험하지 않았다.
+
+## 검증 후 운영 보완 (2026-10-22)
+
+`uv run alembic upgrade head`로 20261022_02 마이그레이션을 적용한다. 위험 판정 기준일·버전과 수집 임대 컬럼을 추가하며 이전 마이그레이션은 수정하지 않는다.
+
+수집 실행자는 `shared.collection.heartbeat_run(session, run_id)`가 false이면 만료된 작업이므로 중단한다. 정상 실행 중 COLLECTION_LEASE_SECONDS보다 짧은 주기로 heartbeat하고, 각 종목을 finish_stock으로 마친 후 finish_run으로 실행을 종료한다. `uv run python -m scripts.ops.recover_collections`는 만료 작업을 실패 처리하고 예약을 해제한다. 수동 수집 요청도 만료 복구를 수행한다. 스케줄러에서의 호출 연결은 R3 담당이다.
+
+새 공시 분류와 모델 결과 필터는 R4의 Phase1 adapter에 연결했다. 과거 근거는 실제 RAG 조각을 다시 조회·검증하고 검증된 인용 부분만 반환한다. RAG 재조회가 불가능하면 수동 확인으로 남긴다. R2의 프롬프트 품질 검증 및 회사별 Graph 실행은 여전히 별도 연동이 필요하다.

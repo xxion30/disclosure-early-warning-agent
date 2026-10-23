@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
+from shared.presentation import public_explanation
+from risk_engine.loader import load_rules
+from risk_engine.stages import sort_value
+from api.tenancy import visible_stock_codes, require_assessment_access, require_legacy_runtime
+from shared.models import Holding
 from api.graph_adapter import GraphAdapter, get_graph_adapter, pending_customers
 from shared.models import Company, Customer, Disclosure, RiskAssessment
 
@@ -69,8 +74,18 @@ def _strip(value):
 
 
 def priority_key(a: RiskAssessment) -> tuple:
-    """경보 우선순위: 등급 높은 순 → 점수 높은 순 → 최근 순. 점수는 정렬에만 쓰고 응답에는 넣지 않는다."""
-    return (-LEVEL_ORDER.index(a.level) if a.level in LEVEL_ORDER else 0, -(a.total_score or 0))
+    rules = load_rules()
+    if a.stage and a.stage != 'NONE':
+        orange = sum(float(r.get('points') or 0) for r in (a.reasons or []) if r.get('group') == 'ORANGE')
+        yellow = sum(float(r.get('points') or 0) for r in (a.reasons or []) if r.get('group') == 'YELLOW')
+        # Proper new assessments have a full breakdown; retain deterministic ordering for minimal imported rows.
+        if not a.reasons:
+            orange = a.total_score if a.stage == 'ORANGE' else 0
+            yellow = a.total_score if a.stage == 'YELLOW' else 0
+        ratio = orange / rules['thresholds']['orange'] + yellow / rules['thresholds']['yellow']
+        return (rules['stage_priority'][a.stage], -sort_value(a.stage, orange, yellow, ratio, rules))
+    legacy = {'Critical': 'RED', 'High': 'ORANGE', 'Medium': 'WATCH', 'Low': 'NONE'}
+    return (rules['stage_priority'][legacy.get(a.level, 'NONE')], -(a.total_score or 0))
 
 
 def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers: list[dict] | None) -> dict:
@@ -81,7 +96,7 @@ def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers
     - customers: 보유 고객 수와 내가 아직 결정하지 않은 수. Graph에 붙지 못하면 None
     """
     rows = [r for r in (a.reasons or []) if isinstance(r, dict)]
-    mine = [r for r in rows if r.get("rcept_no") == a.rcept_no and not r.get("from_history") and r.get("group") in ("A", "B")]
+    mine = [r for r in rows if r.get("rcept_no") == a.rcept_no and not r.get("from_history") and r.get("group") in ("A", "B", "RED", "ORANGE", "YELLOW") and r.get("active", True)]
     items = []
     for r in mine:
         quote = r.get("quote") or next((e.get("quote") for e in r.get("evidence") or [] if isinstance(e, dict)), None)
@@ -110,6 +125,10 @@ def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers
     if customers is not None:
         cust = {"total": len(customers),
                 "my_pending": sum(1 for c in customers if c.get("mine") and c.get("decision") == "승인대기")}
+    if a.stage and a.stage != 'NONE':
+        names = '·'.join(i['item'] for i in items)
+        headline = f'이번 공시의 위험 항목: {names}.' if names else '이번 공시의 추가 위험 항목은 없습니다.'
+        headline += f' 현재 단계는 {a.stage}입니다.'
     return {
         "headline": headline,
         "previous": {"assessment_id": previous.assessment_id, "level": previous.level} if prev_ok else None,
@@ -148,6 +167,7 @@ async def list_alerts(
         .outerjoin(Disclosure, Disclosure.rcept_no == RiskAssessment.rcept_no)
         .order_by(RiskAssessment.created_at.desc(), RiskAssessment.assessment_id.desc())
     )
+    q = q.where(Company.stock_code.in_(visible_stock_codes(pb)))
     if level:
         q = q.where(RiskAssessment.level.in_(level))
     if alert:
@@ -158,12 +178,12 @@ async def list_alerts(
         q = q.where(or_(Disclosure.filed_at.startswith(date), RiskAssessment.created_at.startswith(date)))
 
     rows = sorted(db.execute(q).all(), key=lambda r: priority_key(r[0]))  # 등급 → 점수 순 (최근 순은 쿼리 순서가 유지됨)
-    my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id)))
+    my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id, Customer.tenant_id == pb.tenant_id)))
     result = []
     graph_error = None  # 한 번 실패하면 남은 행은 다시 붙어 보지 않는다 (목록이 느려지지 않게)
     for a, corp_name, title, filed_at in rows:
         view = None
-        if a.level in ALERT_LEVELS and graph_error is None:
+        if a.level in ALERT_LEVELS and graph_error is None and pb.tenant_id == "default":
             view, graph_error = await read_state(adapter, a.rcept_no)
         customers = (view or {}).get("affected_customers", [])
         result.append({
@@ -173,6 +193,7 @@ async def list_alerts(
             "title": title or (view or {}).get("disclosure", {}).get("title"),
             "filed_at": filed_at,
             "level": a.level,
+            "stage": a.stage,
             "combo_upgraded": a.combo_upgraded,
             "status": a.status,
             "created_at": a.created_at,
@@ -191,6 +212,8 @@ async def get_alert(
     adapter: GraphAdapter = Depends(get_graph_adapter),
 ) -> dict:
     a = get_assessment(db, assessment_id)
+    require_assessment_access(db, pb, a)
+    require_legacy_runtime(pb)
     company = db.get(Company, a.corp_code)
     disclosure = db.get(Disclosure, a.rcept_no)
     view, graph_error = await read_state(adapter, a.rcept_no)
@@ -200,7 +223,7 @@ async def get_alert(
     customers = []
     for c in affected:
         cust = people.get(c["customer_id"])
-        mine = cust is not None and cust.pb_id == pb.pb_id
+        mine = cust is not None and cust.pb_id == pb.pb_id and cust.tenant_id == pb.tenant_id
         customers.append({
             "customer_id": c["customer_id"],  # 옛 체크포인트의 priority·impact 필드가 새어 나가지 않게 필요한 것만 담는다
             "eval_amount": c.get("eval_amount"),
@@ -222,10 +245,11 @@ async def get_alert(
         "rcept_no": a.rcept_no,
         "status": a.status,
         "level": a.level,
+        "stage": a.stage,
         "combo_upgraded": a.combo_upgraded,
         "summary": impact_summary(a, previous, customers if view is not None else None),
         "reasons": strip_scores(a.reasons),  # 위험 항목·근거 (점수 숫자 없음, 점수 높은 순)
-        "ai_explanation": a.ai_explanation,
+        "ai_explanation": public_explanation(a.ai_explanation),
         "created_at": a.created_at,
         "company": {"corp_code": a.corp_code, "name": company.name if company else None,
                     "stock_code": company.stock_code if company else (view or {}).get("disclosure", {}).get("stock_code"),
@@ -252,6 +276,8 @@ async def get_drafts(
 ) -> dict:
     """로그인한 PB의 담당 고객 안내문만 돌려준다."""
     a = get_assessment(db, assessment_id)
+    require_assessment_access(db, pb, a)
+    require_legacy_runtime(pb)
     view, graph_error = await read_state(adapter, a.rcept_no)
     if graph_error:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, graph_error)

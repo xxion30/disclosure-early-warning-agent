@@ -1,19 +1,74 @@
-# 가산점: 공시 처리 큐 (CLAUDE.md 10장 9). 쓰려면 .env에 QUEUE_ENABLED=true
-#   docker compose up -d rabbitmq
-#   관리 화면 http://localhost:15672  (guest / guest)
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  environment: &env
+    DB_URL: postgresql+psycopg://dartch:dartch@postgres:5432/dartch
+    CHECKPOINT_DB: postgresql://dartch:dartch@postgres:5432/dartch
+    QUEUE_ENABLED: "false"
+    BUSINESS_MCP_URL: http://business:8001/mcp
+    RAG_MCP_URL: http://rag:8002/mcp
+    GRAPH_ADAPTER: ${GRAPH_ADAPTER:-fake}
+    JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-sharing}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    DART_API_KEY: ${DART_API_KEY:-}
+    MCP_HOST: 0.0.0.0
+  depends_on:
+    postgres:
+      condition: service_healthy
 services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dartch
+      POSTGRES_PASSWORD: dartch
+      POSTGRES_DB: dartch
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dartch -d dartch"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    <<: *backend
+    command: ["sh", "-c", "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port 8000"]
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  business:
+    <<: *backend
+    command: ["python", "-m", "mcp_servers.business.server"]
+    depends_on:
+      api:
+        condition: service_healthy
+  rag:
+    <<: *backend
+    profiles: ["integration"]
+    command: ["python", "-m", "mcp_servers.rag.server"]
+    # R3 must add configurable bind host and in-memory index before this integration profile is usable.
+  collector:
+    <<: *backend
+    profiles: ["integration"]
+    command: ["python", "-m", "collector"]
+    # R3 supplies collector.__main__ and daily scheduler.
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    profiles: ["web"]
+    volumes: ["./web:/app", "web-modules:/app/node_modules"]
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
+    ports: ["127.0.0.1:5173:5173"]
   rabbitmq:
     image: rabbitmq:3.13-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq   # 컨테이너를 다시 켜도 쌓인 메시지가 남는다
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-
+    profiles: ["legacy-queue"]
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    volumes: ["rabbitmq-data:/var/lib/rabbitmq"]
 volumes:
+  postgres-data:
   rabbitmq-data:
+  web-modules:

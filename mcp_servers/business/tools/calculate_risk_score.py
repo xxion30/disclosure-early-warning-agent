@@ -3,11 +3,12 @@ from datetime import date
 from sqlalchemy import select
 
 from risk_engine import risk_rules
+from risk_engine.stages import calculate
 from risk_engine.loader import load_rules
 from mcp_servers.business.tools._common import guarded, invalid, require_company
 from mcp_servers.business.tools.get_signal_history import history_rows
 from shared.db import get_session
-from shared.models import Disclosure
+from shared.models import Disclosure, FinancialSnapshot, RiskState
 from shared.schemas import ok
 
 
@@ -31,7 +32,9 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
     rules = load_rules()
     with get_session() as s:
         company = require_company(s, corp_code)
-        # 시장(KOSPI/KOSDAQ)은 공시가 아니라 회사 정보에서 온다 (횡령·배임 기준 5% / 3% 구분).
+        current_state = s.get(RiskState, corp_code)
+        expected_version = current_state.state_version if current_state else 0
+        # 시장 메타데이터는 DB에서 보강한다. 횡령·배임은 금액 기준 없이 RED다.
         new_signals = [
             {**sig, "detail": {"market": company.market, **(sig.get("detail") or {})}} for sig in new_signals
         ]
@@ -44,14 +47,36 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
                 title = titles.get(sig.get("rcept_no")) or ""
                 sig["detail"] = {**sig["detail"], "is_correction": title.lstrip().startswith(prefixes), "title": title}
         history = history_rows(s, corp_code, rules["history_months"], as_of_d)
-        result = risk_rules.calculate(
-            base_score=company.base_score or 0,
-            base_reasons=company.base_reasons or [],
-            history=history,
-            new_signals=new_signals,
-            as_of=as_of_d.isoformat(),
-            rules=rules,
-        )
+        # DB metadata establishes event links; model-supplied event IDs are not authoritative.
+        for sig in new_signals:
+            disc = s.get(Disclosure, sig.get('rcept_no')) if sig.get('rcept_no') else None
+            if disc is None or disc.corp_code != corp_code:
+                raise invalid('신호의 접수번호와 회사가 일치하는 공시가 필요합니다.')
+            sig['detail']['title'] = disc.title
+            sig['filed_at'] = disc.filed_at
+            sig.pop('event_id', None)
+            sig.pop('event_started_at', None)
+            sig['detail'].pop('event_id', None)
+            sig['detail'].pop('event_started_at', None)
+            root = s.get(Disclosure, disc.original_rcept_no) if disc.original_rcept_no else None
+            if root and root.corp_code != corp_code:
+                raise invalid('원공시의 회사가 일치하지 않습니다.')
+            if disc.event_id or root:
+                sig['event_id'] = disc.event_id or root.event_id or root.rcept_no
+                sig['event_started_at'] = disc.event_started_at or (root.event_started_at or root.filed_at if root else disc.filed_at)
+        # Read R3-produced snapshots through DB only. Do not import the collector.
+        snapshots = s.scalars(select(FinancialSnapshot).join(Disclosure, Disclosure.rcept_no == FinancialSnapshot.rcept_no)
+                              .where(FinancialSnapshot.corp_code == corp_code, Disclosure.corp_code == corp_code,
+                                     Disclosure.filed_at <= as_of_d.isoformat() + '~')).all()
+        if snapshots:
+            from risk_engine.financials import select_snapshot_signals
+            financial = select_snapshot_signals(snapshots, {d.rcept_no: d.filed_at for d in s.scalars(select(Disclosure).where(Disclosure.corp_code == corp_code))})
+            explicit = {sig['signal_type'] for sig in new_signals}
+            selected_types = {sig['signal_type'] for sig in financial} - explicit
+            history = [sig for sig in history if sig['signal_type'] not in selected_types]
+            history.extend(sig for sig in financial if sig['signal_type'] not in explicit)
+        result = calculate(history=history, new_signals=new_signals, as_of=as_of_d.isoformat(), rules=rules)
+    result["expected_state_version"] = expected_version
     result["corp_code"] = corp_code
     result["as_of"] = as_of_d.isoformat()
     return ok(result)

@@ -3,6 +3,19 @@
 > 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 오후 회의로 되살아나고(점수는 응답에서 뺀다), `/states`·`/collect`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
+
+## R4 구현 계약 (2026-10-22)
+
+- 모든 PB 조회는 JWT의 PB·tenant와 DB 소속을 확인한다. states는 본인 담당 고객의 보유 종목만 조회한다. 회사 관리자는 수동 수집만 회사 전체 범위로 요청한다.
+- GET /states: stage(반복 가능), alert, manual_check, resolved, limit(1~100), offset. 응답 {items,total,limit,offset}. 서버가 전체 우선순위 정렬 후 페이지를 나눈다.
+- GET /states/{stock_code}: 목록 필드 + items(항목·인용·출처), timeline(접수번호·제목·일자·링크), resolution_evidence. 점수·weight·sort_value·composite_ratio는 어떤 중첩에도 내보내지 않는다.
+- POST /states/{stock_code}/ack: {version: int}. 요청 버전까지만 읽음 처리하며 새 버전을 읽은 것으로 취급하지 않는다. 응답 {stock_code,read_version,new}.
+- GET /collect/status: 본인 회사 작업과 공개 정기 작업의 최근 상태. POST /collect/run: 관리자 전용, 회사 보유 종목으로 제한, 202 {run_id,status}. 중복 실행은 기존 실행을 반환한다. 수집기 미연결은 503이며 성공을 가장하지 않는다.
+- /customers는 현재 stage와 연락 이력을 반환하고 평가금액 합계 큰 순으로 정렬한다. 기존 응답 모양은 호환을 위해 보존한다.
+- 오류: HTTP 상태 유지, {ok:false,error:{code,message}}. detail은 구형 클라이언트 호환용이다. 승인·초안·연락 업무 경로는 유지한다.
+- SSE/승인 런타임의 회사별 thread 전환은 R2와 함께 연결한다. 기존 그래프를 새 그래프로 간주하지 않는다.
+
+
 ## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
 - 되살리는 경로: `GET /alerts/{id}/drafts`, `POST /alerts/{id}/decision`(승인 / 수정 후 승인 / 다시 작성 / 반려, 반려 사유 필수, 다른 PB 고객 403), `GET /tasks`, `PATCH /tasks/{task_id}`. 화면 `/alerts/:id/drafts`, `/tasks`와 SSE `waiting_approval`도 돌아온다.
@@ -53,3 +66,11 @@ Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내
 점검: 서버를 켠 뒤 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
 
 ---
+
+## R4 검증 후 보완 계약 (2026-10-22)
+
+- 승인·재작성 전 최신 공개 상태와 평가의 risk_state_version을 비교하고, Graph 초안의 판정 fingerprint와 저장된 판정도 대조한다. 해소·비경보·버전 불일치는 409이며 감사 결정과 Graph 재개를 만들지 않는다. 변경 후 명시적 새 분석이 필요하다. 전원 반려만 요청하면 오래된 검토도 종료할 수 있다.
+- 읽음은 DB의 원자적 최댓값 upsert로 처리하며 감소하지 않는다.
+- 설명문에 내부 점수·반영률 표현이 있으면 PB 응답에서 설명을 수동 확인 문구로 대체한다. 원문 인용은 별도 evidence에 그대로 보존한다. R4 adapter의 규칙 설명 fallback 자체도 점수를 포함하지 않는다.
+- 기존 /alerts도 새 stage 우선순위와 기준 대비 정렬값을 사용한다. 과거 level만 있는 행에 한해 기존 순위를 호환한다.
+- 수집 실행자는 heartbeat로 임대를 갱신하고 finish_stock으로 완료한다. 만료 실행은 다음 요청 또는 운영 복구 함수에서 실패 처리하며 같은 run_id로 재사용하지 않는다.
