@@ -26,7 +26,10 @@ async def _once() -> int:
     ok = sum(o.ok for o in summary.outcomes)
     print(f"실행 {summary.run_id}: 성공 {ok}종목, 실패 {len(summary.failed)}종목")
     for o in summary.outcomes:
-        print(f"  {o.stock_code} {'OK ' if o.ok else 'FAIL'} 새 공시 {o.new_disclosures}건, 재무 스냅샷 {o.snapshots}개" + (f" — {o.error}" if o.error else ""))
+        print(f"  {o.stock_code} {'OK ' if o.ok else 'FAIL'} 새 공시 {o.new_disclosures}건, 재무 스냅샷 {o.snapshots}개, 구조화 사실 {o.facts}건, 분석 인계 {o.handed_off}건"
+              + (f" — {o.error}" if o.error else "") + (f" (사실을 못 만든 이유 {len(o.problems)}건)" if o.problems else ""))
+        for problem in o.problems[:3]:
+            print(f"      · {problem}")
     return 1 if summary.failed else 0
 
 
