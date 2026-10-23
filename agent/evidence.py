@@ -3,6 +3,13 @@ from agent.ports import AgentError
 from agent.state import Evidence
 
 
+def _verified_record(raw):
+    item = Evidence.model_validate(raw)
+    if any(not getattr(item, k).strip() for k in ("source", "quote", "rcept_no", "location")):
+        raise AgentError("빈 출처·인용 식별자")
+    return item
+
+
 def chunks_from(data):
     chunks = data.get("chunks") if isinstance(data, dict) else data
     if not isinstance(chunks, list) or not chunks:
@@ -18,7 +25,7 @@ def chunks_from(data):
 
 def validate_evidence(evidence, chunks):
     for raw in evidence:
-        item = Evidence.model_validate(raw)
+        item = _verified_record(raw)
         if not any(item.source == c["source"] and item.rcept_no == c["rcept_no"]
                    and item.location == c["location"] and item.quote in c["text"]
                    for c in chunks):

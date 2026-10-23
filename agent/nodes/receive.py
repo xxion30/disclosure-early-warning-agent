@@ -14,6 +14,8 @@ async def receive(state, deps):
     if not isinstance(profile, dict) or not profile.get("stock_code"):
         raise AgentError("회사 종목코드 누락")
     # The full disclosure body is deliberately not checkpointed or sent to the model.
-    return {"disclosure": {**{key: disclosure[key] for key in required},
-                           "stock_code": profile["stock_code"],
-                           "corp_name": profile.get("name", "")}}
+    data = {**{key: disclosure[key] for key in required},
+            "stock_code": profile["stock_code"], "corp_name": profile.get("name", "")}
+    if deps.phase1 is not None and isinstance(disclosure.get("structured_data"), dict):
+        data["structured_data"] = disclosure["structured_data"]
+    return {"disclosure": data}

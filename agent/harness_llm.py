@@ -12,11 +12,15 @@ from harness import context as ctx
 from harness import guardrails, masking
 from harness import recovery_llm as recovery
 from harness.tracing import audit_system
+from agent.ports import AgentError
+
+PROTECTED_KEYS = frozenset({"source", "rcept_no", "location", "quote", "customer_id",
+                            "item", "flag", "stage", "disclosure_type"})
 
 
 def _shrink_strings(obj: Any, limit: int) -> Any:
     if isinstance(obj, dict):
-        return {k: _shrink_strings(v, limit) for k, v in obj.items()}
+        return {k: v if k in PROTECTED_KEYS else _shrink_strings(v, limit) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_shrink_strings(v, limit) for v in obj]
     if isinstance(obj, str) and len(obj) > limit:
@@ -34,13 +38,30 @@ def _longest_string(obj: Any) -> int:
 
 async def prepare_input(payload: dict) -> dict:
     """모델에 보내기 직전: 개인정보 마스킹 → 긴 문자열 4,000자 자르기 → 입력 6,000토큰 안으로 줄이기."""
-    prepared = _shrink_strings(masking.mask_obj(payload), ctx.TOOL_RESULT_MAX_CHARS)
+    masked = masking.mask_obj(payload)
+
+    def check_identifiers(original, prepared):
+        if isinstance(original, dict):
+            for key, value in original.items():
+                if key in PROTECTED_KEYS and value != prepared[key]:
+                    # Never call a masked fragment a verbatim citation; never
+                    # restore suspected PII just to make validation pass.
+                    raise AgentError("출처 식별자·인용 마스킹 충돌: 원문 확인 필요")
+                check_identifiers(value, prepared[key])
+        elif isinstance(original, list):
+            for a, b in zip(original, prepared):
+                check_identifiers(a, b)
+
+    check_identifiers(payload, masked)
+    prepared = _shrink_strings(masked, ctx.TOOL_RESULT_MAX_CHARS)
     limit = ctx.TOOL_RESULT_MAX_CHARS
     for _ in range(12):
         if ctx.estimate_tokens(json.dumps(prepared, ensure_ascii=False)) <= ctx.TOKEN_BUDGET:
             break
         limit = max(50, min(limit, _longest_string(prepared)) // 2)
         prepared = _shrink_strings(prepared, limit)
+    if ctx.estimate_tokens(json.dumps(prepared, ensure_ascii=False)) > ctx.TOKEN_BUDGET:
+        raise AgentError("원문 식별자를 보존한 입력 예산 초과")
     return prepared
 
 

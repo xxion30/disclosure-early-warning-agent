@@ -1,11 +1,16 @@
 """Small integration boundaries; implementations are explicitly injected."""
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Protocol
 
 from pydantic import BaseModel
 from harness.loop_limits import MAX_SECONDS, MAX_TURNS
 from shared.schemas import ToolResponse
 from agent.state import AgentState
+
+if TYPE_CHECKING:
+    from agent.phase1 import Phase1Bindings
 
 
 class AgentError(Exception):
@@ -56,3 +61,5 @@ class Dependencies:
     quiet_types: frozenset[str] = frozenset()
     execution_seconds: float = MAX_SECONDS  # harness/loop_limits.py가 한도의 단일 출처
     max_model_turns: int = MAX_TURNS
+    # R2's opt-in Phase 1 graph. Real bindings/persistence need R4 agreement.
+    phase1: Phase1Bindings | None = None
