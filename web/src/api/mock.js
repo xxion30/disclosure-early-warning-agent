@@ -114,6 +114,50 @@ export const mockApi = {
   async collectStatus() {
     return { runs: [{ run_id: 'mock-run', status: 'DONE', started_at: hoursAgo(3), finished_at: hoursAgo(2), fetched_count: 8, failed_count: 0, error: null }] }
   },
+  // ---- 새 조직별 검토 (예시전자 MOCK02) ----
+  isMockReview: (id) => String(id).startsWith('mock-'),
+  async createReview(publicId) {
+    const rv = readReview()
+    return { review_id: rv.review_id, status: rv.status, version: rv.version, public_assessment_id: publicId }
+  },
+  async getReview() {
+    const rv = readReview()
+    return clone({ ...rv, customer_names: MOCK_CUSTOMERS })
+  },
+  // 실제로는 R2 실행기가 초안을 만든다. 가짜 모드에서는 예시 문안을 채운다 (다시 작성 요청된 고객만 새로)
+  async runReview() {
+    const rv = readReview()
+    if (!['PENDING', 'MANUAL_CHECK'].includes(rv.status)) throw mockError(409, '초안 또는 최신 판정을 확인해야 합니다.')
+    const targets = rv.rewrite_customers.length ? rv.rewrite_customers : Object.keys(MOCK_CUSTOMERS)
+    for (const cid of targets) rv.drafts[cid] = draftFor(cid, rv.rewrite_customers.includes(cid))
+    rv.rewrite_customers = []
+    rv.status = 'WAITING_APPROVAL'
+    rv.version += 1
+    saveReview(rv)
+    return { review_id: rv.review_id, status: rv.status }
+  },
+  async decideReview(id, expectedVersion, decisions) {
+    const rv = readReview()
+    if (rv.version !== expectedVersion) throw mockError(409, '검토 버전이 변경됐습니다.')
+    if (rv.status !== 'WAITING_APPROVAL') throw mockError(409, '승인 대기 상태가 아닙니다.')
+    for (const d of decisions) {
+      if (!(d.customer_id in rv.drafts)) throw mockError(403, '담당 고객만 결정할 수 있습니다.')
+      if (rv.decisions[d.customer_id]) throw mockError(409, '이미 처리된 결정입니다.')
+      if (d.action === 'reject' && !(d.reject_reason || '').trim()) throw mockError(409, '반려 사유가 필요합니다.')
+      if (d.action === 'approve' && !(d.edited_draft || rv.drafts[d.customer_id] || '').trim()) throw mockError(409, '검사 실패 문안은 승인할 수 없습니다.')
+    }
+    for (const d of decisions) {
+      if (d.action === 'rewrite') {
+        rv.rewrite_customers = [...new Set([...rv.rewrite_customers, d.customer_id])]
+        rv.status = 'PENDING'
+      } else rv.decisions[d.customer_id] = { ...d, pb_id: 'P01' }
+    }
+    rv.version += 1
+    if (Object.keys(rv.decisions).length === Object.keys(rv.drafts).length) rv.status = 'DONE'
+    saveReview(rv)
+    return { review_id: rv.review_id, status: rv.status, version: rv.version }
+  },
+
   isMockStock: (code) => ROWS.some((r) => r.stock_code === code),
   async getState(code) {
     return clone(buildState(ROWS.find((r) => r.stock_code === code)))
@@ -237,6 +281,40 @@ function mockReview(r) {
   const none = { assessment_id: null, public_assessment_id: null, review_id: null, review_status: null, review_backend: null, my_approval_pending: false, can_review: false }
   if (r.stock_code === 'MOCK01') return { ...none, assessment_id: r.assessment_id, review_backend: 'legacy', review_status: 'WAITING_APPROVAL', my_approval_pending: true, can_review: true }
   if (r.stock_code === 'MOCK02') return { ...none, assessment_id: r.assessment_id, public_assessment_id: 'mock-public-2', review_id: 'mock-review-2', review_backend: 'organization', review_status: 'WAITING_APPROVAL', my_approval_pending: true, can_review: true }
+  if (r.stock_code === 'MOCK03') return { ...none, public_assessment_id: 'mock-public-2', review_backend: 'organization' } // 검토가 아직 없음 → 초안 만들기
   if (ALERT.includes(r.stages[0])) return { ...none, assessment_id: r.assessment_id, review_backend: 'legacy', review_status: 'DONE' }
   return none
 }
+
+// ---- 새 조직별 검토 예시 상태 (탭을 닫기 전까지 sessionStorage에 유지) ----
+// 고객은 실제 고객이 아닌 예시 이름이다. 안내문에는 매수·매도 권유를 넣지 않는다
+const REVIEW_KEY = 'dachi_mock_review'
+const MOCK_CUSTOMERS = { 'MOCK-C1': { name: '예시고객 가', risk_profile: '안정형' }, 'MOCK-C2': { name: '예시고객 나', risk_profile: '적극투자형' }, 'MOCK-C3': { name: '예시고객 다', risk_profile: '위험중립형' } }
+function draftFor(cid, rewritten) {
+  if (cid === 'MOCK-C3' && !rewritten) return '' // 금지 표현 검사를 통과하지 못해 비어 있는 초안 (직접 작성 필요)
+  return `{고객명}님, 보유하신 예시전자에 [예시] 전환사채 발행 공시가 있어 알려 드립니다. 공시 원문과 내용은 DART에서 확인하실 수 있습니다.${rewritten ? ' (다시 작성한 문안)' : ''}`
+}
+function readReview() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(REVIEW_KEY) || 'null')
+    if (saved) return saved
+  } catch {
+    // 저장이 막혀 있으면 처음 상태로 시작한다
+  }
+  return { review_id: 'mock-review-2', assessment_id: 'mock-public-2', status: 'WAITING_APPROVAL', version: 1, stage: 'ORANGE',
+    ai_explanation: '[예시] 가짜 데이터 모드라 AI 설명 대신 이 문장이 보여요.',
+    drafts: Object.fromEntries(Object.keys(MOCK_CUSTOMERS).map((cid) => [cid, draftFor(cid, false)])), decisions: {}, rewrite_customers: [] }
+}
+function saveReview(rv) {
+  try {
+    sessionStorage.setItem(REVIEW_KEY, JSON.stringify(rv))
+  } catch {
+    // 저장이 막혀도 이번 화면에서는 동작한다
+  }
+}
+function mockError(status, detail) {
+  const err = new Error(detail)
+  err.response = { status, data: { detail } }
+  return err
+}
+

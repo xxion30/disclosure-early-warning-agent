@@ -3,6 +3,7 @@
 // 데이터: GET /states/{stock_code} (R4, api/routes/states.py). ?mock=stages면 같은 모양의 예시 종목을 쓴다.
 // 점수 숫자는 보여주지 않는다. 단계 배지, 항목 이름·설명, 근거 인용, DART 링크, 공시 타임라인만.
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { api, errorMessage } from '../api/client'
 import { mockMode } from '../api/mock'
@@ -11,6 +12,7 @@ import StageBadge from '../components/StageBadge.vue'
 import { formatTime, ITEM_GROUPS, itemStatus, missingNames, signalLabel, STAGES, stagesOf, stageText } from '../labels'
 
 const props = defineProps({ stockCode: { type: String, required: true } })
+const router = useRouter()
 
 const state = ref(null)
 const error = ref('')
@@ -77,7 +79,7 @@ const changeTone = (c) => ({ stage_up: 'warn', new_type: 'warn', evidence_added:
 const hasChanges = computed(() => !!state.value && 'changes' in state.value)
 
 // ---- 안내문 검토 연결 (서버 review_backend·can_review·my_approval_pending·review_status) ----
-// 예전 방식은 지금 안내문 검토 화면으로 보낸다. 새 조직별 검토는 화면이 아직 없어 상태만 알린다
+// 예전 방식은 /alerts/:id/drafts, 새 조직별 검토는 /reviews/:reviewId (같은 안내문 검토 화면)로 보낸다
 const review = computed(() => {
   const s = state.value
   if (!s || !s.review_backend) return null
@@ -88,12 +90,35 @@ const review = computed(() => {
     return null
   }
   if (s.review_backend === 'organization') {
-    if (s.my_approval_pending) return { tone: 'info', text: '내 고객의 안내문이 승인을 기다려요 · 새 검토 화면은 준비 중이에요' }
+    if (s.review_id) return { to: { name: 'org-review', params: { reviewId: s.review_id }, query: { stock: s.stock_code } }, text: s.my_approval_pending ? '안내문 검토 · 내 승인 대기' : '안내문 검토 보기' }
+    // 아직 내 조직의 검토가 없으면 PB가 눌러서 만든다 (경보이고 해소되지 않은 현재 판정만)
+    if (s.public_assessment_id && !s.resolved && ['RED', 'ORANGE', 'YELLOW', 'COMPOSITE'].includes(s.stage)) return { create: true, text: '안내문 초안 만들기' }
     return null
   }
   if (s.review_backend === 'unsupported') return { tone: 'muted', text: '이 조직의 안내문 검토는 새 검토 화면이 필요해요 (준비 중)' }
   return null
 })
+
+// 새 조직별 검토 만들기 → 초안 생성 요청 → 검토 화면으로. 초안 생성기(R2)가 없으면 검토 화면에서 안내한다
+const creating = ref(false)
+async function startReview() {
+  if (creating.value) return
+  creating.value = true
+  error.value = ''
+  try {
+    const rv = await api.createReview(state.value.public_assessment_id)
+    try {
+      await api.runReview(rv.review_id)
+    } catch {
+      // 503(생성기 미연결)·409는 검토 화면의 안내와 "안내문 초안 만들기" 버튼으로 이어서 처리한다
+    }
+    router.push({ name: 'org-review', params: { reviewId: rv.review_id }, query: { stock: state.value.stock_code } })
+  } catch (err) {
+    error.value = errorMessage(err)
+  } finally {
+    creating.value = false
+  }
+}
 
 const latestActive = computed(() => [...activeItems.value].sort((a, b) => String(b.filed_at || '').localeCompare(String(a.filed_at || '')))[0] || null)
 
@@ -163,6 +188,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
       <p class="state-line"><strong>지금 상태</strong><span>{{ STAGES[topStage].label }}<template v-if="STAGES[topStage].hint"> — {{ STAGES[topStage].hint }}</template></span></p>
       <div v-if="review || state.assessment_id" class="review-row">
         <RouterLink v-if="review?.to" :to="review.to" class="review-link">{{ review.text }}</RouterLink>
+        <button v-else-if="review?.create" type="button" class="review-link" :disabled="creating" @click="startReview">{{ creating ? '만드는 중…' : review.text }}</button>
         <p v-else-if="review" class="review-note" :class="`review-${review.tone}`" role="status">{{ review.text }}</p>
         <RouterLink v-if="state.assessment_id" :to="{ name: 'alert-detail', params: { assessmentId: String(state.assessment_id) } }" class="detail-link">경보 상세 보기</RouterLink>
       </div>
@@ -285,6 +311,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
 .review-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .review-link { display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: var(--pill); background: var(--blue-strong); color: #fff; font-weight: 700; }
 .review-link:hover { text-decoration: none; filter: brightness(1.05); }
+button.review-link { border: none; font-size: 15px; }
 .review-note { margin: 0; padding: 10px 16px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; }
 .review-info { background: var(--blue-soft); color: var(--blue-strong); }
 .review-warn { background: var(--warn-soft); color: var(--warn); }

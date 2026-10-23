@@ -1,6 +1,10 @@
 <script setup>
-// 안내문 검토: 고객마다 결정을 고른 뒤 한 번에 제출한다 (PB 1명의 결정 = Graph 재개 1회).
-import { computed, onMounted, reactive, ref } from 'vue'
+// 안내문 검토: 고객마다 결정을 고른 뒤 한 번에 제출한다.
+// 두 방식을 같은 화면으로 다룬다
+// - 예전 방식 /alerts/:assessmentId/drafts: GET /alerts/{id}/drafts, POST decision (PB 1명의 결정 = Graph 재개 1회, SSE로 진행)
+// - 새 조직별 검토 /reviews/:reviewId: GET /reviews/{id}, POST /reviews/{id}/decisions {expected_version}, 초안 생성은 POST /reviews/{id}/run
+//   (R4 계약 "Pre-merge 실행·조직 검토"). 새 API는 고객 ID만 주므로 이름은 고객 현황(/customers)에서 붙인다 — AI에는 이름이 가지 않는다
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
 import StageBadge from '../components/StageBadge.vue'
@@ -9,7 +13,22 @@ import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
 import { MAIN_PATH } from '../labels'
 
-const props = defineProps({ assessmentId: { type: String, required: true } })
+const props = defineProps({
+  assessmentId: { type: String, default: null },
+  reviewId: { type: String, default: null },
+  stockCode: { type: String, default: null }, // 새 검토 화면에서 돌아갈 종목 상세
+})
+const isOrg = computed(() => !!props.reviewId)
+const review = ref(null) // 새 조직별 검토 원본 (status, version)
+const running = ref(false)
+const REVIEW_STATUS = {
+  PENDING: { tone: 'info', title: '안내문 초안이 아직 없어요', text: '"안내문 초안 만들기"를 누르면 고객별 초안을 만들어요. 다시 작성을 요청한 고객도 여기서 새 초안을 받아요.' },
+  MANUAL_CHECK: { tone: 'warn', title: '초안을 만들지 못했어요', text: '사람의 확인이 필요해요. 다시 만들기를 눌러 보거나 공시 원문을 확인해 주세요.' },
+  RUNNING: { tone: 'info', title: '안내문 초안을 만드는 중이에요', text: '잠시 뒤 새로고침해 주세요.' },
+  DONE: { tone: 'ok', title: '모든 고객의 결정이 끝났어요', text: '승인한 고객은 연락 업무에서 확인할 수 있어요.' },
+  SUPERSEDED: { tone: 'warn', title: '판정이 바뀌어 이 검토는 더 이상 승인할 수 없어요', text: '새 판정의 검토에서 다시 확인해 주세요.' },
+  RESOLVED: { tone: 'ok', title: '위험이 해소돼 이 검토는 끝났어요', text: '승인할 안내문이 없어요.' },
+}
 
 const PLACEHOLDER = '{고객명}'
 const CHOICES = {
@@ -29,10 +48,31 @@ const form = reactive({}) // customer_id → { choice, text, reason }
 const { state: runState, connect } = useRunEvents()
 const showProgress = ref(false)
 
-async function load() {
-  error.value = ''
+// 새 조직별 검토 응답 → 예전 화면이 쓰는 모양 {drafts: [{customer_id, name, risk_profile, draft, preview, manual, decision, ...}]}
+async function loadOrgReview() {
+  const [rv, customers] = await Promise.all([api.getReview(props.reviewId), api.listCustomers().catch(() => null)])
+  const names = Object.fromEntries((customers?.customers || []).map((c) => [c.customer_id, c]))
+  const extra = rv.customer_names || {} // 가짜 데이터 모드에서만 오는 예시 이름
+  review.value = rv
+  const drafts = Object.entries(rv.drafts || {}).map(([cid, text]) => {
+    const who = names[cid] || extra[cid] || {}
+    const name = who.name || cid
+    const dec = rv.decisions?.[cid]
+    return {
+      customer_id: cid, name, risk_profile: who.risk_profile || '-', draft: text || '', preview: fillName(text, name),
+      manual: !text, // 서버가 금지 표현 검사에 걸린 초안을 빈 문자열로 준다
+      decision: dec ? (dec.action === 'reject' ? '반려' : '승인') : '승인대기',
+      reject_reason: dec?.reject_reason, edited_draft: dec?.edited_draft,
+    }
+  })
+  return { drafts, guardrail_flags: [] }
+}
+
+// keepError: 제출·초안 만들기 뒤 다시 불러올 때 방금 난 오류 안내를 지우지 않는다
+async function load({ keepError = false } = {}) {
+  if (!keepError) error.value = ''
   try {
-    data.value = await api.getDrafts(props.assessmentId)
+    data.value = isOrg.value ? await loadOrgReview() : await api.getDrafts(props.assessmentId)
   } catch (err) {
     error.value = errorMessage(err)
     return
@@ -48,13 +88,40 @@ async function load() {
 onMounted(load)
 onMounted(async () => {
   try {
-    alertInfo.value = await api.getAlert(props.assessmentId)
+    if (!isOrg.value) alertInfo.value = await api.getAlert(props.assessmentId)
+    else if (props.stockCode) {
+      const st = await api.getState(props.stockCode)
+      alertInfo.value = { company: { name: st.corp_name }, stage: st.stage, stages: st.active_stages, stage_available: true }
+    }
   } catch {
     // 부가 정보가 없어도 안내문은 검토할 수 있다
   }
 })
+watch(() => props.reviewId, () => { if (isOrg.value) load() })
 
-const pending = computed(() => (data.value?.drafts || []).filter((d) => d.decision === '승인대기'))
+// 새 조직별 검토: PB가 눌러야 초안을 만든다 (R2 실행기가 연결되지 않은 서버는 503)
+async function runDrafts() {
+  if (running.value) return
+  running.value = true
+  error.value = ''
+  message.value = ''
+  approvedSubmitted.value = false
+  try {
+    await api.runReview(props.reviewId)
+    message.value = '안내문 초안을 만들었어요.'
+  } catch (err) {
+    const st = err.response?.status
+    error.value = st === 503 ? '안내문 초안 생성기가 아직 연결되지 않았어요. AI 흐름(R2) 연결 뒤에 사용할 수 있어요.' : errorMessage(err)
+  } finally {
+    running.value = false
+    await load({ keepError: true })
+  }
+}
+const reviewGuide = computed(() => (isOrg.value && review.value && review.value.status !== 'WAITING_APPROVAL' ? REVIEW_STATUS[review.value.status] || null : null))
+const canRun = computed(() => isOrg.value && ['PENDING', 'MANUAL_CHECK'].includes(review.value?.status))
+
+// 새 조직별 검토는 승인 대기 상태일 때만 결정할 수 있다 (다시 작성 요청 뒤에는 새 초안을 먼저 만든다)
+const pending = computed(() => (isOrg.value && review.value?.status !== 'WAITING_APPROVAL') ? [] : (data.value?.drafts || []).filter((d) => d.decision === '승인대기'))
 const decided = computed(() => (data.value?.drafts || []).filter((d) => d.decision !== '승인대기'))
 const chosen = computed(() => pending.value.filter((d) => form[d.customer_id]?.choice))
 const choiceCounts = computed(() => {
@@ -118,6 +185,7 @@ async function submit() {
   })
 
   submitting.value = true
+  if (isOrg.value) return submitOrg(decisions)
   try {
     const res = await api.decide(props.assessmentId, decisions)
     showProgress.value = true
@@ -139,12 +207,31 @@ async function submit() {
     error.value = errorMessage(err)
   }
 }
+
+// 새 조직별 검토 제출: 진행 이벤트(SSE) 없이 바로 다시 불러온다. 버전이 바뀌었으면(다른 곳에서 먼저 결정) 새로 불러와 다시 고르게 한다
+async function submitOrg(decisions) {
+  try {
+    await api.decideReview(props.reviewId, review.value.version, decisions)
+    const rewrites = decisions.filter((d) => d.action === 'rewrite').length
+    message.value = `${decisions.length}건 결정을 반영했어요.` + (rewrites ? ` 다시 작성 ${rewrites}건은 "안내문 초안 만들기"로 새 초안을 받아요.` : '')
+    approvedSubmitted.value = decisions.some((d) => d.action === 'approve')
+    for (const d of decisions) form[d.customer_id].choice = null
+  } catch (err) {
+    const st = err.response?.status
+    if (st === 403) error.value = '내 담당 고객의 안내문만 결정할 수 있어요.'
+    else if (st === 409 && /버전/.test(errorMessage(err))) error.value = '그사이 검토 내용이 바뀌었어요. 최신 내용으로 다시 불러왔으니 확인 후 다시 제출해 주세요.'
+    else error.value = errorMessage(err)
+  } finally {
+    submitting.value = false
+    await load({ keepError: true })
+  }
+}
 </script>
 
 <template>
-  <RouterLink :to="{ name: 'alert-detail', params: { assessmentId } }" class="back-link">
+  <RouterLink :to="isOrg ? (stockCode ? { name: 'risk-detail', params: { stockCode } } : '/alerts') : { name: 'alert-detail', params: { assessmentId } }" class="back-link">
     <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-    경보 상세
+    {{ isOrg ? (stockCode ? '종목 상세' : '경보 목록') : '경보 상세' }}
   </RouterLink>
   <div class="page-head">
     <div>
@@ -163,7 +250,18 @@ async function submit() {
       <p v-if="message" class="success" role="status">{{ message }} <RouterLink v-if="approvedSubmitted" to="/tasks">연락 업무 보기</RouterLink></p>
       <section v-if="showProgress" class="card" aria-label="처리 진행"><RunProgress :state="runState" /></section>
 
-      <div v-if="data" class="banner" :class="needsExpressionCheck ? 'warn' : 'ok'" role="status">
+      <!-- 새 조직별 검토: 승인 대기가 아닐 때 지금 상태와 다음 할 일 -->
+      <div v-if="reviewGuide" class="banner" :class="reviewGuide.tone" role="status">
+        <span class="banner-text">
+          <strong>{{ reviewGuide.title }}</strong>
+          <span>{{ reviewGuide.text }}</span>
+        </span>
+        <span v-if="canRun" class="banner-action">
+          <button type="button" class="small" :disabled="running" @click="runDrafts">{{ running ? '만드는 중…' : '안내문 초안 만들기' }}</button>
+        </span>
+      </div>
+
+      <div v-if="data && data.drafts.length && !reviewGuide" class="banner" :class="needsExpressionCheck ? 'warn' : 'ok'" role="status">
         <span class="banner-icon">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
@@ -250,7 +348,7 @@ async function submit() {
         <span class="muted">제출한 결정은 여기에 쌓여요 (승인·반려 사유·수정본)</span>
       </section>
 
-      <p v-if="data && !data.drafts.length" class="card empty">내 담당 고객의 안내문이 없습니다.</p>
+      <p v-if="data && !data.drafts.length && !canRun" class="card empty">내 담당 고객의 안내문이 없습니다.</p>
     </div>
 
     <aside v-if="pending.length" class="card summary" aria-label="결정 요약">
