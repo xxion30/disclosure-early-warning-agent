@@ -1,6 +1,6 @@
 """OpenDART 호출 클라이언트 (httpx async, 재시도, 호출 속도 제한).
 
-지금 `scripts/data/fetch_dart.py`와 `mcp_servers/rag/dart_source.py`에 따로 있는 호출 코드를 합친 것이다.
+옛 `scripts/data/fetch_dart.py`(삭제됨)와 `mcp_servers/rag/dart_source.py`에 따로 있던 호출 코드를 합친 것이다.
 계약은 docs/contracts/collector.md 6장(오류·재시도)과 data_sources.md를 따른다.
 
 - `013`(조회된 데이터 없음)은 오류가 아니라 빈 결과다.

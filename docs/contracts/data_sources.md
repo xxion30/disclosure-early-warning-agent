@@ -119,10 +119,10 @@
 
 ## 7. 데이터
 
-- `data/demo_companies.json`: 데모 회사 5개, 사건, **기대 결과**(평가 정답).
+- `data/demo_companies.json`: 데모 회사 5개, 사건, **옛 기대 결과**(Low~Critical 등급 기준 평가 정답). 새 단계(🔴🟠🟡) 기준의 테스트 사례는 `eval/cases/r3_*`가 대신하고, 이 파일은 `seed_db`와 R5의 재생 시험이 아직 쓰므로 합의 후 정리한다.
 - `data/seed/customers.json`: PB 2명, 고객 20명, 보유 종목. 실제 사람과 무관한 가짜 데이터다.
-- `data/disclosures/<종목코드>.json`: `scripts/data/fetch_dart.py`가 OpenDART에서 받아 만든다. **공시 내용과 접수번호를 직접 지어내지 않는다.**
-- `rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md`: 공시 원문. 파일 맨 위에 아래 머리말을 둔다.
+- `data/disclosures/<종목코드>.json`: 예전에 `fetch_dart.py`(삭제됨)가 OpenDART에서 받아 만든 **공시 목록**(제목·접수번호·접수일)이다. 새 공시는 collector가 수집한다. 원문(`body_text`)은 테스트가 쓰는 6건에만 남기고 나머지는 비웠다. **공시 내용과 접수번호를 직접 지어내지 않는다.**
+- `rag_docs/companies/<종목코드>_<회사명>/<YYYYMMDD>_<공시종류>.md`: **테스트용 실제 공시 원문 6건만** 남겼다(예전 139건에서 줄임, `rag_docs/companies/README.md` 참고). 운영에서는 원문을 저장하지 않는다. 파일 맨 위에 아래 머리말을 둔다.
 
 ```
 ---

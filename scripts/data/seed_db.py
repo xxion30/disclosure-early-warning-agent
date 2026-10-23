@@ -4,8 +4,8 @@
     uv run python scripts/data/seed_db.py          # 비어 있는 테이블만 새로 만들고 채움 (이미 있으면 덮어씀)
     uv run python scripts/data/seed_db.py --reset  # 모든 테이블을 지우고 처음부터
 
-공시는 data/disclosures/<종목코드>.json (fetch_dart.py가 생성)에서 읽고,
-body_text가 비어 있으면 rag_docs/companies/ 의 같은 rcept_no 원문 md로 채운다.
+공시 목록은 data/disclosures/<종목코드>.json에서 읽는다. 원문(body_text)은 테스트가 실제로 쓰는 공시 6건에만 남아 있고(나머지는 비움),
+비어 있으면 rag_docs/companies/ 의 같은 rcept_no 원문 md로 채운다. 새 공시 수집은 collector(`python -m collector --once`)가 한다.
 """
 from __future__ import annotations
 
@@ -64,8 +64,8 @@ def seed_companies(s) -> dict[str, str]:
         exp = c.get("expected") or {}
         corp_code = c.get("corp_code")
         if not corp_code:
-            corp_code = c["stock_code"]  # 임시 키. fetch_dart.py 실행 후 --reset으로 다시 적재
-            print(f"  ! {c['name']}: corp_code 없음 → 종목코드를 임시 키로 사용 (fetch_dart.py 후 재적재)")
+            corp_code = c["stock_code"]  # 임시 키. data/demo_companies.json에 corp_code를 채운 뒤 --reset으로 다시 적재
+            print(f"  ! {c['name']}: corp_code 없음 → 종목코드를 임시 키로 사용 (corp_code를 채운 뒤 재적재)")
         base_score = c.get("base_score", exp.get("base_score"))
         if base_score is None:
             base_score = 0
@@ -107,7 +107,7 @@ def seed_disclosures(s, corp_of: dict[str, str]) -> None:
             )
             total += 1
     if total == 0:
-        print("[공시] 0건 — data/disclosures/가 비어 있음. scripts/data/fetch_dart.py를 먼저 실행하세요.")
+        print("[공시] 0건 — data/disclosures/가 비어 있음. git에서 받아 오거나 `python -m collector --once`로 수집하세요.")
     else:
         print(f"[공시] {total}건")
 
