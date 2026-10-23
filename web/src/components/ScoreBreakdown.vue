@@ -12,7 +12,7 @@ const props = defineProps({
 })
 
 const GROUPS = {
-  BASE: { label: '재무 상태', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
+  BASE: { label: '기본 점수', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
   A: { label: '확정 악재', hint: '점수와 상관없이 등급 고정', cls: 'g-a' },
   B: { label: '숨은 신호', hint: '공시에서 찾은 위험 신호', cls: 'g-b' },
 }
@@ -56,26 +56,35 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 </script>
 
 <template>
-  <table v-if="rows.length" class="score-table stack-table">
+  <table v-if="rows.length" class="score-table">
     <thead>
       <tr>
-        <th scope="col">위험 항목</th>
-        <th scope="col">근거 인용</th>
+        <th>구분</th>
+        <th>항목</th>
+        <th>등급 영향</th>
+        <th>설명</th>
+        <th>근거 인용</th>
       </tr>
     </thead>
     <tbody>
       <tr v-for="(r, i) in rows" :key="i">
-        <td class="item-cell">
-          <div class="tags">
-            <span class="group" :class="r.group.cls" :title="r.group.hint">{{ r.group.label }}</span>
-            <span v-if="r.fixedLevel" class="fixed" :class="`fixed-${r.fixedLevel.toLowerCase()}`">{{ r.fixedLevel }} 고정</span>
-          </div>
+        <td>
+          <span class="group" :class="r.group.cls" :title="r.group.hint">{{ r.group.label }}</span>
+        </td>
+        <td>
           <strong>{{ r.item }}</strong>
           <div class="sub">
             <template v-if="r.filedAt">{{ r.filedAt }} · </template>{{ r.kind }}
           </div>
+        </td>
+        <td>
+          <span v-if="r.fixedLevel" class="fixed" :class="`fixed-${r.fixedLevel.toLowerCase()}`">{{ r.fixedLevel }} 고정</span>
+          <span v-else class="muted">-</span>
+        </td>
+        <td>
           <div v-for="(d, j) in r.detail" :key="j" class="calc">{{ d }}</div>
           <div v-if="r.note" class="calc" :class="{ warn: r.needsCheck }">{{ r.note }}</div>
+          <span v-if="!r.detail.length && !r.note" class="muted">-</span>
         </td>
         <td class="evidence">
           <!-- 발표 때 근거가 바로 보이도록 첫 인용은 펼쳐 두고, 나머지는 접는다 -->
@@ -85,9 +94,8 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
               <a v-if="r.rcept" :href="dartUrl(r.rcept)" target="_blank" rel="noopener" class="src">DART 원문 {{ r.rcept }}</a>
               <span v-if="r.evidence[0].source" class="chip">{{ r.evidence[0].source }}</span>
             </figcaption>
-            <details v-if="r.evidence.length > 1 || r.evidence[0].quote?.length > 140">
-              <summary>{{ r.evidence.length > 1 ? `인용 ${r.evidence.length - 1}개 더 보기` : '전체 문장 보기' }}</summary>
-              <blockquote v-if="r.evidence[0].quote?.length > 140">“{{ r.evidence[0].quote }}”</blockquote>
+            <details v-if="r.evidence.length > 1">
+              <summary>인용 {{ r.evidence.length - 1 }}개 더 보기</summary>
               <blockquote v-for="(e, j) in r.evidence.slice(1)" :key="j">“{{ e.quote }}”<small> · {{ e.source }}</small></blockquote>
             </details>
           </figure>
@@ -97,7 +105,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
     </tbody>
     <tfoot v-if="fixedLevels.length || comboUpgraded">
       <tr>
-        <td colspan="2">
+        <td colspan="5">
           <span v-if="fixedLevels.length" class="calc fixed-note">확정 악재가 있어 등급이 {{ fixedLevels[0] }}(으)로 고정됨</span>
           <span v-else class="calc">서로 다른 신호 3종류 이상 → 조합 규칙으로 등급 한 단계 상향</span>
         </td>
@@ -108,6 +116,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 </template>
 
 <style scoped>
+.score-table { min-width: 960px; }
 .score-table td, .score-table th { vertical-align: top; }
 .num { text-align: right; white-space: nowrap; }
 .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -121,18 +130,9 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 .calc { font-size: 14px; line-height: 1.55; color: #2a3554; }
 .calc.warn { color: var(--warn); font-weight: 600; }
 .fixed-note { color: var(--bad); font-weight: 600; }
-.item-cell { display: flex; flex-direction: column; gap: 4px; }
-.item-cell .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
-.item-cell .calc { margin-top: 2px; overflow-wrap: anywhere; }
-.evidence { width: 48%; }
-.evidence figcaption { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
-@media (max-width: 640px) {
-  .evidence { width: auto; }
-  .score-table td.evidence { padding-top: 8px !important; }
-}
-.evidence .src { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
-.evidence .chip { white-space: normal; overflow-wrap: anywhere; }
-.evidence .quote blockquote { font-size: 15px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
+.evidence { width: 340px; }
+.evidence .src { font-size: 12px; font-weight: 600; }
+.evidence .quote blockquote { font-size: 13px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
 .evidence summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .evidence details blockquote { margin-top: 6px; }
 tfoot td { border-top: 2px solid var(--border); }

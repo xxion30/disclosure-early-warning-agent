@@ -3,19 +3,6 @@
 > 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 오후 회의로 되살아나고(점수는 응답에서 뺀다), `/states`·`/collect`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
-
-## R4 구현 계약 (2026-10-22)
-
-- 모든 PB 조회는 JWT의 PB·tenant와 DB 소속을 확인한다. states는 본인 담당 고객의 보유 종목만 조회한다. 회사 관리자는 수동 수집만 회사 전체 범위로 요청한다.
-- GET /states: stage(반복 가능), alert, manual_check, resolved, limit(1~100), offset. 응답 {items,total,limit,offset}. 서버가 전체 우선순위 정렬 후 페이지를 나눈다.
-- GET /states/{stock_code}: 목록 필드 + items(항목·인용·출처), timeline(접수번호·제목·일자·링크), resolution_evidence. 점수·weight·sort_value·composite_ratio는 어떤 중첩에도 내보내지 않는다.
-- POST /states/{stock_code}/ack: {version: int}. 요청 버전까지만 읽음 처리하며 새 버전을 읽은 것으로 취급하지 않는다. 응답 {stock_code,read_version,new}.
-- GET /collect/status: 본인 회사 작업과 공개 정기 작업의 최근 상태. POST /collect/run: 관리자 전용, 회사 보유 종목으로 제한, 202 {run_id,status}. 중복 실행은 기존 실행을 반환한다. 수집기 미연결은 503이며 성공을 가장하지 않는다.
-- /customers는 현재 stage와 연락 이력을 반환하고 평가금액 합계 큰 순으로 정렬한다. 기존 응답 모양은 호환을 위해 보존한다.
-- 오류: HTTP 상태 유지, {ok:false,error:{code,message}}. detail은 구형 클라이언트 호환용이다. 승인·초안·연락 업무 경로는 유지한다.
-- SSE/승인 런타임의 회사별 thread 전환은 R2와 함께 연결한다. 기존 그래프를 새 그래프로 간주하지 않는다.
-
-
 ## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
 - 되살리는 경로: `GET /alerts/{id}/drafts`, `POST /alerts/{id}/decision`(승인 / 수정 후 승인 / 다시 작성 / 반려, 반려 사유 필수, 다른 PB 고객 403), `GET /tasks`, `PATCH /tasks/{task_id}`. 화면 `/alerts/:id/drafts`, `/tasks`와 SSE `waiting_approval`도 돌아온다.
@@ -66,43 +53,3 @@ Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내
 점검: 서버를 켠 뒤 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>` (9장 5~12단계 확인, 연락 업무를 실제로 만듦).
 
 ---
-
-## R4 검증 후 보완 계약 (2026-10-22)
-
-- 승인·재작성 전 최신 공개 상태와 평가의 risk_state_version을 비교하고, Graph 초안의 판정 fingerprint와 저장된 판정도 대조한다. 해소·비경보·버전 불일치는 409이며 감사 결정과 Graph 재개를 만들지 않는다. 변경 후 명시적 새 분석이 필요하다. 전원 반려만 요청하면 오래된 검토도 종료할 수 있다.
-- 읽음은 DB의 원자적 최댓값 upsert로 처리하며 감소하지 않는다.
-- 설명문에 내부 점수·반영률 표현이 있으면 PB 응답에서 설명을 수동 확인 문구로 대체한다. 원문 인용은 별도 evidence에 그대로 보존한다. R4 adapter의 규칙 설명 fallback 자체도 점수를 포함하지 않는다.
-- 기존 /alerts도 새 stage 우선순위와 기준 대비 정렬값을 사용한다. 과거 level만 있는 행에 한해 기존 순위를 호환한다.
-- 수집 실행자는 heartbeat로 임대를 갱신하고 finish_stock으로 완료한다. 만료 실행은 다음 요청 또는 운영 복구 함수에서 실패 처리하며 같은 run_id로 재사용하지 않는다.
-
-## Pre-merge 실행·조직 검토 (2026-10-23)
-
-새 DB 작업은 수집 완료 mark_ready 이후 등록한다. 기본 큐는 비활성 상태다. 새 공개 판정/조직별 검토는 legacy /runs의 접수번호 단독 실행과 섞지 않는다. 새 검토 API는 서버의 tenant/PB 문맥을 사용한다. 검토 executor는 공개 판정 이후 고객 구간만 실행하며 start/resume/rewrite에서 공개 분석을 다시 실행하지 않는다. 구형 실행은 분리 완료를 뜻하지 않는다.
-
-R2가 제공하는 public executor와 review executor는 R4가 생성한 체크포인터/고정 thread ID/작업 lease를 주입받는다. R4는 Graph 노드와 프롬프트를 새로 구현하지 않는다. executor 미연결은 명시적 503이며 legacy fallback은 하지 않는다.
-
-### 새 경로와 R2 주입 계약
-
-- `POST /analysis/jobs`: 관리자만. `{rcept_no,as_of,reanalysis_request_id?:UUID}`. 준비된 공시만 등록하며 응답은 job_id/status다.
-- `GET /analysis/jobs/{job_id}`: 해당 고객사 보유 종목에 접근 가능한 PB/관리자만. 상태/시도 횟수/오류 코드/완료 판정 ID. 입력 manifest·점수·규칙 digest는 제외한다.
-- `POST /public-assessments/{assessment_id}/reviews`: 서버 tenant로 조직별 검토를 멱등 생성한다. 경보이고 현재 유효한 판정이어야 한다.
-- `GET /reviews/{review_id}`: 서버 tenant와 담당 고객으로 초안/결정을 필터링한다. 점수·내부 근거 조각은 반환하지 않는다.
-- `POST /reviews/{review_id}/run`: 주입된 조직별 초안 executor만 호출한다. 미연결은 503이다.
-- `POST /reviews/{review_id}/decisions`: `{expected_version,decisions:[{customer_id,action:approve|reject|rewrite,edited_draft?,reject_reason?}]}`. R4 저장 서비스가 담당 PB/조직/최신 판정/문안을 검사하고 승인 후에만 기존 contact_tasks에 멱등 생성한다. rewrite는 재생성 대기로 돌리며 이미 결정한 문안·업무는 보존한다.
-
-`PHASE1_RUNTIME_FACTORY=module:factory`가 설정된 호스트만 R2 새 포트를 시작한다. `factory(deps, initialized_checkpointer)`는 동기/비동기 생성 가능하며 다음 두 비동기 진입점을 제공해야 한다.
-
-1. `analyze_public(AnalysisContext) -> {status:DONE|MANUAL_CHECK, score_result?, ai_explanation?}`. 고객·초안·승인·업무를 실행하거나 자체 공개 저장하지 않는다. 실제 calculate_risk_score 출력의 메타데이터와 signals를 보존한다. R4가 lease/input hash/규칙/CAS를 확인하고 규칙 결과를 재계산 대조한 뒤 한 트랜잭션으로 발행한다. 일시 장애는 TransientAnalysisError/TimeoutError/ConnectionError, 근거 부족은 ManualAnalysisError 또는 MANUAL_CHECK로 구분한다.
-2. `draft_review(ReviewContext) -> {drafts:{customer_id:message}}`. 서버가 준 tenant/판정/thread/고객 ID 목록과 기존 결정·재작성 대상만 사용한다. 공개 분석을 재실행하거나 스스로 업무를 생성하지 않는다. R4는 반환 문안과 고객 범위를 검증·저장하고 PB 승인 기록 이후 업무를 생성한다.
-
-현재 R2 AgentRuntime.start(rcept_no)는 이 포트가 아니다. R2가 조직 문맥·판정 식별·근거 보존에 맞춘 진입점을 제공해야 하며, R4가 구형 start를 새 포트로 위장하지 않는다. 기존 /runs·SSE·구형 승인 경로의 전환도 R2/R5와 별도 확인한다. 새 경로를 기존 UI가 자동 사용한다는 의미가 아니다.
-
-## R5 화면 연결 보완 (2026-10-23, 후속 변경)
-
-- stage 코드는 유지하고 stage_label은 RED 즉시 경보 / ORANGE 사건 경보 / YELLOW 재무 경보 / COMPOSITE 복합 위험 / WATCH 관찰 중 / NONE 경보 없음으로 제공한다.
-- /alerts는 stage_available과 legacy를 함께 제공한다. 실제 새 NONE은 유효한 단계이며 구형 기본값 NONE과 구분한다. 새 단계 여부는 판정 버전/새 규칙 근거로 판별하며 level을 새 stage로 변환하지 않는다.
-- /customers exposure.top_stage는 현재 유효한 경보 노출의 대표 단계다. 경보 없음 또는 구형 노출이 섞여 새 단계끼리 비교할 수 없으면 null이다. top_level은 호환 유지한다. WATCH는 경보 노출에 포함하지 않는다. 같은 우선순위는 서버의 기존 단계/정렬값/최근 기준으로 선택한다.
-- /states/{code}는 changes 및 comparison_available/change_version/changed_at을 반환한다. 직전 종목 상태와 비교하며 최초 저장·변경 이력 미보유는 비교 불가다. 감쇠에 의한 하락을 해소로 표시하지 않는다. resolved에는 사건 식별자 또는 scope:stock을 제공한다.
-- items[].missing은 그대로 보존하고 missing_labels:[{code,label}]를 추가한다.
-- 상세 링크는 assessment_id(기존 정수), public_assessment_id(새 공개 판정 문자열), review_id(내 조직), review_status, review_backend, my_approval_pending, can_review를 구분한다. 현재 상태 버전과 일치하는 판정만 연결한다. 구형 Graph 조회 실패·미지원은 pending/can_review를 null로 표시하고 해소·비경보·구판정은 검토 가능으로 표시하지 않는다.
-- version은 기존 알림 버전이다. 변경 이력 change_version 및 검토 version과 혼용하지 않는다. ack 계약은 바꾸지 않는다.

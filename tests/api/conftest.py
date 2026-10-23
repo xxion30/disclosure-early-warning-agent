@@ -15,7 +15,7 @@ from api.graph_adapter import FakeGraphAdapter, get_graph_adapter
 from api.main import app
 from api.run_manager import RunManager, get_run_manager
 from shared.config import ROOT_DIR
-from shared.models import PB, Base, Customer, Holding, Company
+from shared.models import PB, Base, Customer
 from tests.api.helpers import login
 
 
@@ -33,9 +33,6 @@ def session_factory():
             s.add(PB(pb_id=p["pb_id"], name=p["name"], email=p["email"], password_hash=hash_password(p["password"])))
         for c in seed["customers"]:
             s.add(Customer(**{k: c[k] for k in ("customer_id", "pb_id", "name", "risk_profile", "total_assets")}))
-        s.add(Company(corp_code='TEST-CORP', stock_code='001570', name='테스트 회사'))
-        for h in seed['holdings']:
-            s.add(Holding(**{k:h[k] for k in ("customer_id","stock_code","eval_amount","on_credit")}))
         s.commit()
 
     @contextmanager

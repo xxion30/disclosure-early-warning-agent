@@ -43,7 +43,7 @@ function fill(e) {
       <div class="intro-copy">
         <span class="intro-label">PB를 위한 공시 조기경보</span>
         <h1>공시 속 숨은 위험 신호,<br />터지기 전에 먼저 알려 드려요</h1>
-        <p>공시 위험 확인 → 원문 근거 확인 → PB 승인 후 연락 업무. 보유 고객의 안내문을 검토하고 승인하면 연락 업무가 만들어져요.</p>
+        <p>신호를 점수로 쌓아 경보를 띄우고, 보유 고객의 연락 우선순위와 안내문 초안까지 준비합니다. 연락은 PB가 승인한 뒤에만 만들어져요.</p>
       </div>
 
       <div class="features">
@@ -53,8 +53,8 @@ function fill(e) {
               <path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" />
             </svg>
           </div>
-          <strong>공시 위험 확인</strong>
-          <span>공시에서 위험 신호를 찾아요</span>
+          <strong>규칙으로 점수 계산</strong>
+          <span>AI는 점수를 바꾸지 않아요</span>
         </div>
         <div class="feature">
           <div class="feature-icon">
@@ -62,7 +62,7 @@ function fill(e) {
               <path d="M4 4h12l4 4v12H4z" /><path d="M8 12h8M8 16h5" />
             </svg>
           </div>
-          <strong>원문 근거 확인</strong>
+          <strong>원문 근거 인용</strong>
           <span>공시 문장을 그대로 보여줘요</span>
         </div>
         <div class="feature">
@@ -71,8 +71,8 @@ function fill(e) {
               <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" />
             </svg>
           </div>
-          <strong>PB 승인 후 연락 업무</strong>
-          <span>승인한 고객만 업무가 생겨요</span>
+          <strong>PB 승인 후 연락</strong>
+          <span>매수·매도 권유는 넣지 않아요</span>
         </div>
       </div>
     </section>

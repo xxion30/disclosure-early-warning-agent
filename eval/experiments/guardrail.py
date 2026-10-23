@@ -28,21 +28,3 @@ def run() -> list[dict]:
         rows.append({"설정": f"가드레일 {'켬' if enabled else '끔'}", "초안 수": len(sent),
                      "PB에게 넘어간 초안": len(passed), "금지 표현이 들어간 초안": bad_out})
     return rows
-
-
-def compare_phase1(explanations: list[str], drafts: dict[str, str]) -> list[dict]:
-    """Apply the same explanation/draft inputs with validation disabled/enabled."""
-    rows = []
-    for enabled in (False, True):
-        passed_explanations = [text for text in explanations
-                               if not enabled or not guardrails.check_explanation(text)]
-        passed_drafts = [text for text in drafts.values()
-                         if not enabled or not guardrails.check_message(text)]
-        rows.append({"검사": "켬" if enabled else "끔", "설명문 수": len(explanations),
-                     "통과 설명문": len(passed_explanations), "안내문 수": len(drafts),
-                     "통과 안내문": len(passed_drafts),
-                     "통과 문안 중 금지 표현": sum(bool(guardrails.find_forbidden(t))
-                                                for t in [*passed_explanations, *passed_drafts]),
-                     "통과 문안 중 점수 노출": sum(bool(guardrails.find_score_disclosure(t))
-                                                for t in [*passed_explanations, *passed_drafts])})
-    return rows

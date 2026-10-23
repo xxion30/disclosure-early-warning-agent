@@ -1,9 +1,5 @@
-from harness.guardrails import check_message
-
-
 async def message_flags(message, deps):
-    # The Agent's output contract cannot be disabled by a permissive adapter.
-    flags = list(dict.fromkeys([*check_message(message), *await deps.harness.check_message(message)]))
+    flags = await deps.harness.check_message(message)
     if not message.strip():
         flags = [*flags, "빈 안내문"]
     if "{고객명}" not in message:

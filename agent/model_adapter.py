@@ -7,8 +7,7 @@ from __future__ import annotations
 import difflib
 import logging
 
-from agent.catalog import SignalCatalog, legacy_document
-from agent.public_risk import public_risk_context
+from risk_engine.loader import load_rules
 
 log = logging.getLogger("agent.model_adapter")
 
@@ -23,8 +22,7 @@ def _openai_chat(model: str, api_key: str):
             kwargs.setdefault("method", "function_calling")
             return super().with_structured_output(schema, **kwargs)
 
-    # Harness owns retries; provider SDK retries would multiply the budget.
-    return FunctionCallingChatOpenAI(model=model, api_key=api_key, max_retries=0)
+    return FunctionCallingChatOpenAI(model=model, api_key=api_key)
 
 
 def build_model(harness, settings):
@@ -44,7 +42,7 @@ def build_model(harness, settings):
     if name.startswith("claude") and settings.ANTHROPIC_API_KEY:
         from langchain_anthropic import ChatAnthropic
 
-        primary = ChatAnthropic(model=name, api_key=settings.ANTHROPIC_API_KEY, max_retries=0)
+        primary = ChatAnthropic(model=name, api_key=settings.ANTHROPIC_API_KEY)
     elif name.startswith("claude"):
         log.warning("ANTHROPIC_API_KEY 없음 → OpenAI(%s)를 기본 모델로 사용", settings.LLM_FALLBACK)
         primary = fallback
@@ -89,22 +87,14 @@ class KnownSignalsModel:
       (AI가 긴 인용문을 한 글자씩 똑같이 베끼지 못해 검증에서 멈추는 일을 막는다.)
     """
 
-    def __init__(self, inner, *, catalog: SignalCatalog | None = None):
+    def __init__(self, inner):
         self.inner = inner
-        self.catalog = catalog
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
 
     async def generate(self, prompt, schema, payload):
-        # Also protect direct use of this wrapper outside the Graph nodes.
-        if prompt in {"explain_risk", "draft_message", "rewrite_message"} and "score_result" in payload:
-            payload = {**payload, "score_result": public_risk_context(payload["score_result"])}
         result = await self.inner.generate(prompt, schema, payload)
-        # The legacy group A/B completion logic does not describe the new
-        # stage contract. Phase 1 explanations are validated by their node.
-        if prompt == "explain_risk" and "stage" in payload.get("score_result", {}):
-            return result
         if prompt == "explain_risk":
             breakdown = payload.get("score_result", {}).get("breakdown", [])
             if any(not row.get("evidence") for row in breakdown):
@@ -119,7 +109,8 @@ class KnownSignalsModel:
                 data = by_index.get(i) or {
                     # AI가 빠뜨린 항목은 규칙이 계산한 내용을 그대로 요약한다 (AI 설명이 아님을 표시)
                     "breakdown_index": i,
-                    "explanation": "[규칙 요약] 해당 공시 항목의 근거를 확인하고 담당 PB의 검토가 필요합니다.",
+                    "explanation": f"[규칙 요약] {row.get('item')}: {row.get('points')}점"
+                                   f" (반영률 {row.get('weight', 1)}). {row.get('note') or ''}".strip(),
                     "evidence": row.get("evidence") or [],
                 }
                 if row.get("evidence"):
@@ -128,9 +119,10 @@ class KnownSignalsModel:
             return schema.model_validate({"items": items})
         if prompt != "extract_facts":
             return result
-        catalog = self.catalog or SignalCatalog.from_document(legacy_document())
-        allowed = catalog.allowed
-        per_type = catalog.by_type.get(payload.get("disclosure_type"))
+        rules = load_rules()
+        allowed = set(rules["group_a"]) | set(rules["group_b"])
+        by_type = rules.get("allowed_signals_by_type") or {}
+        per_type = by_type.get(payload.get("disclosure_type"))
         if per_type is not None:  # 이 공시 유형에서 올릴 수 있는 신호만 (유형에 안 맞는 신호는 AI가 만들 수 없다)
             allowed = allowed & set(per_type)
         kept = [f for f in result.facts if str(f.signal_type).strip().upper() in allowed]

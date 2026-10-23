@@ -37,13 +37,11 @@ def verify_password(password: str, password_hash: str) -> bool:
 class CurrentPB(BaseModel):
     pb_id: str
     name: str
-    tenant_id: str = "default"
-    role: str = "PB"
 
 
 def create_access_token(pb: PB) -> str:
     now = datetime.now(timezone.utc)
-    payload = {"sub": pb.pb_id, "name": pb.name, "tenant_id": pb.tenant_id, "iat": now, "exp": now + TOKEN_TTL}
+    payload = {"sub": pb.pb_id, "name": pb.name, "iat": now, "exp": now + TOKEN_TTL}
     return jwt.encode(payload, get_settings().JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
@@ -67,9 +65,7 @@ def decode_token(token: str, db: Session) -> CurrentPB:
     pb = db.get(PB, payload.get("sub"))
     if pb is None:
         raise _unauthorized("존재하지 않는 PB입니다.")
-    if payload.get('tenant_id', 'default') != pb.tenant_id:
-        raise _unauthorized('소속이 변경된 토큰입니다.')
-    return CurrentPB(pb_id=pb.pb_id, name=pb.name, tenant_id=pb.tenant_id, role=pb.role)
+    return CurrentPB(pb_id=pb.pb_id, name=pb.name)
 
 
 def get_current_pb(
@@ -114,7 +110,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
         raise _unauthorized("이메일 또는 비밀번호가 올바르지 않습니다.")
     return LoginResponse(
         access_token=create_access_token(pb),
-        pb=CurrentPB(pb_id=pb.pb_id, name=pb.name, tenant_id=pb.tenant_id, role=pb.role),
+        pb=CurrentPB(pb_id=pb.pb_id, name=pb.name),
     )
 
 

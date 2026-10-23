@@ -323,7 +323,7 @@ class RealGraphAdapter:
     """
 
     def __init__(self, deps: Any = None, checkpoint_path: str | os.PathLike | None = None):
-        self.checkpoint_path = checkpoint_path or get_settings().CHECKPOINT_DB
+        self.checkpoint_path = checkpoint_path or ROOT_DIR / get_settings().CHECKPOINT_DB
         self._deps = deps
         self._runtime = None
         self._runtime_cm = None
@@ -332,11 +332,11 @@ class RealGraphAdapter:
     async def _get_runtime(self):
         async with self._open_lock:
             if self._runtime is None:
-                from agent.adapters.checkpoints import open_backend_runtime
+                from agent import open_runtime
 
                 deps = self._deps if self._deps is not None else await default_dependencies()
                 deps = dataclasses.replace(deps, harness=_EventTap(deps.harness))
-                self._runtime_cm = open_backend_runtime(deps, str(self.checkpoint_path))
+                self._runtime_cm = open_runtime(deps, str(self.checkpoint_path))
                 self._runtime = await self._runtime_cm.__aenter__()
         return self._runtime
 
@@ -455,10 +455,7 @@ class RealGraphAdapter:
             }
             for cid, d in (state.get("decisions") or {}).items()
         }
-        from risk_engine.states import score_fingerprint
-        review_fingerprint = score_fingerprint(score) if score.get('stage') else None
         return {
-            "review_fingerprint": review_fingerprint,
             "status": state.get("status"),
             "assessment_id": state.get("assessment_id"),
             "disclosure": state.get("disclosure", {}),

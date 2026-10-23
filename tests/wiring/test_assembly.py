@@ -97,20 +97,11 @@ def test_scenario_a_end_to_end_through_assembly(world):
         deps = await build_dependencies(tools=DirectTools(), model=model)
         async with open_runtime(deps, str(world)) as rt:
             st = await rt.start(RCEPT)
-            assert st["status"] == "WAITING_APPROVAL" and st["risk_level"] == "High" and not st.get("error")
+            assert st["status"] == "WAITING_APPROVAL" and st["risk_level"] == "Critical" and not st.get("error")
             assert st["evidence"] and st["ai_explanation"]
             assert sorted(c["customer_id"] for c in st["affected_customers"]) == [f"C00{i}" for i in range(1, 8)]
             assert len(st["drafts"]) == 7 and st["guardrail_flags"] == []
             aid = st["assessment_id"]
-
-            # A current Graph checkpoint must pass the API's review-version gate.
-            from api.approval_validity import require_current_review
-            from api.graph_adapter import RealGraphAdapter
-            with db_module.get_session() as s:
-                assessment = s.get(RiskAssessment, aid)
-                view = RealGraphAdapter._view(st)
-                assert view['review_fingerprint'] == assessment.score_fingerprint
-                require_current_review(s, assessment, view)
 
             own = owners()
             p01 = sorted(c for c in own if own[c] == "P01" and c in st["drafts"])

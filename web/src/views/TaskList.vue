@@ -27,6 +27,8 @@ const statusCounts = computed(() => tasks.value.reduce((counts, t) => {
   return counts
 }, {}))
 const remaining = computed(() => tasks.value.filter((t) => CHANGEABLE.includes(t.status)).length)
+const done = computed(() => statusCounts.value['연락완료'] || 0)
+const donePercent = computed(() => tasks.value.length ? Math.round(done.value / tasks.value.length * 100) : 0)
 
 async function load() {
   error.value = ''
@@ -73,7 +75,17 @@ async function change(task, status) {
   </div>
   <p v-if="error" class="error task-error" role="alert">{{ error }}</p>
 
-  <p v-if="tasks.length" class="summary-band">남은 연락 업무 <strong>{{ remaining }}건</strong></p>
+  <div v-if="tasks.length" class="summary-band">
+    <div class="remaining-summary">
+      <span class="muted">아직 연락하지 않은 고객</span>
+      <div v-if="remaining" class="remaining-count"><strong>{{ remaining }}</strong><span class="muted">명 남았어요</span></div>
+      <strong v-else class="all-done">모든 연락을 마쳤어요</strong>
+    </div>
+    <div class="completion-summary">
+      <div class="completion-label muted"><span>처리 {{ done }} / {{ tasks.length }}건</span><span>{{ donePercent }}%</span></div>
+      <div class="progress-bar" role="progressbar" aria-label="연락 업무 완료 현황" :aria-valuenow="done" :aria-valuemin="0" :aria-valuemax="tasks.length"><span :style="{ width: `${done / tasks.length * 100}%` }"></span></div>
+    </div>
+  </div>
 
   <div class="task-list">
     <article v-for="t in filteredTasks" :key="t.task_id" class="card task-card" :class="{ held: t.status === '보류', completed: t.status === '연락완료' }" :aria-label="`${t.customer_name} 연락 업무`">
@@ -127,11 +139,18 @@ async function change(task, status) {
 .task-filters .tabs { margin-bottom: 0; }
 .task-filters .tabs button { min-height: 44px; padding: 0 18px; font-size: 14px; }
 .task-filters .tabs button:not(.active) .count { color: inherit; }
-.task-error { margin: 0 0 24px; }
-.task-list { display: flex; flex-direction: column; gap: 16px; }
+.task-error { margin: 0 0 20px; }
+.remaining-summary { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px; }
+.remaining-summary > .muted { font-size: 14px; }
+.remaining-count { display: flex; align-items: baseline; gap: 6px; }
+.remaining-count strong { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.all-done { font-size: 24px; font-weight: 800; }
+.completion-summary { flex: 2; min-width: 260px; display: flex; flex-direction: column; gap: 8px; }
+.completion-label { display: flex; justify-content: space-between; font-size: 13px; }
+.task-list { display: flex; flex-direction: column; gap: 14px; }
 .task-list > .card { margin-bottom: 0; }
-.task-card { display: flex; flex-direction: column; gap: 16px; border-radius: 24px; padding: 24px; }
-.task-card.held { border: 1.5px solid var(--border-strong); }
+.task-card { display: flex; flex-direction: column; gap: 16px; border-radius: 24px; padding: 22px 24px; }
+.task-card.held { border: 1.5px solid #f7c9a6; }
 .task-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .customer-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
 .customer-text strong { font-size: 16px; }
@@ -139,13 +158,14 @@ async function change(task, status) {
 .task-corp .corp-mark { width: 28px; height: 28px; border-radius: 10px; background: var(--surface); font-size: 12px; }
 .task-corp strong { font-size: 14px; overflow-wrap: anywhere; }
 .task-corp a { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.task-corp a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
 .task-status { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .task-status .sub { white-space: nowrap; }
 .approved-message { white-space: normal; display: flex; flex-direction: column; gap: 8px; }
 .message-label { color: var(--muted); font-size: 12px; font-weight: 700; }
 .approved-message p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; color: #2a3554; }
 .task-footer { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.memo-field { flex: 1; min-width: min(280px, 100%); display: flex; flex-direction: column; gap: 8px; }
+.memo-field { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 8px; }
 .memo-field label { margin: 0; }
 .memo-field textarea { min-height: 52px; padding: 12px 16px; background: var(--surface-2); }
 .task-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -154,11 +174,12 @@ async function change(task, status) {
 button.message-toggle { background: transparent; color: var(--blue-strong); border-color: transparent; padding: 0 8px; font-size: 14px; font-weight: 600; }
 button.message-toggle:hover { background: var(--blue-soft); }
 .compact-toggle { align-self: flex-start; min-height: 44px; font-size: 13px; }
-.task-card.completed { background: #fafbfd; padding: 24px; gap: 12px; }
+.task-card.completed { background: #fafbfd; padding: 18px 24px; gap: 12px; }
 .completed .customer-text strong, .completed .task-corp strong { color: var(--muted); }
 .completed .task-corp { background: #f1f4f9; }
-.result-note { margin: 0; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: #2a3554; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.result-note { margin: 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: #2a3554; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 540px) {
+  .remaining-summary, .completion-summary { min-width: 0; flex-basis: 100%; }
   .memo-field { min-width: 0; flex-basis: 100%; }
   .task-corp { margin-left: 0; }
   .task-actions { width: 100%; }

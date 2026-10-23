@@ -4,7 +4,6 @@
 목록은 팀이 같이 고친다. 매수·매도 권유와 단정·과장 표현이 대상이다.
 """
 import re
-import unicodedata
 
 MAX_REWRITES = 2
 MANUAL_WRITE_FLAG = "직접 작성 필요"
@@ -23,42 +22,16 @@ FORBIDDEN_PHRASES: list[str] = [
 
 def find_forbidden(text: str) -> list[str]:
     """text에서 발견된 금지 표현 목록 (원래 표기)."""
-    squeezed = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+    squeezed = re.sub(r"\s+", "", text)
     return [p for p in FORBIDDEN_PHRASES if p in squeezed]
-
-
-def find_score_disclosure(text: str) -> list[str]:
-    """Detect explicit internal score/weight expressions, not all numerals.
-
-    Normalize width and invisible separators. This deterministic guard is a
-    regression barrier, not a semantic proof against every paraphrase.
-    """
-    normalized = unicodedata.normalize("NFKC", text)
-    compact = re.sub(r"[\s\u200b-\u200f\ufeff]+", "", normalized).lower()
-    patterns = (
-        r"\d+(?:\.\d+)?점(?!유|포)",
-        r"(?:총점|배점|위험점수|내부점수|가중치|반영률|복합비율|combined_ratio|orange_score|yellow_score)",
-        r"(?:risk|total|internal)[_ -]?score",
-        r"(?:score|points?|weight)[:=]",
-        r"(?:영|일|이|삼|사|오|육|칠|팔|구|십|한|두|세|네)점(?:입니다|으로|이상|이하|이므로|을|이고|에|$)",
-        r"\d+(?:\.\d+)?(?:points?\b|/\d+점)",
-    )
-    return ["내부 점수·배점·반영률 노출"] if any(re.search(p, compact) for p in patterns) else []
 
 
 def check_message(text: str) -> list[str]:
     """한 건의 안내문에 대한 문제점 목록. 비어 있으면 통과."""
-    problems = [f"금지 표현: {p}" for p in find_forbidden(text)] + find_score_disclosure(text)
+    problems = [f"금지 표현: {p}" for p in find_forbidden(text)]
     if NAME_PLACEHOLDER not in text:
         problems.append(f"{NAME_PLACEHOLDER} 자리표시 없음")
     return problems
-
-
-def check_explanation(text: str) -> list[str]:
-    """PB 설명문에는 고객명 자리표시를 요구하지 않는다."""
-    if not text.strip():
-        return ["빈 설명문"]
-    return [f"금지 표현: {p}" for p in find_forbidden(text)] + find_score_disclosure(text)
 
 
 def check_drafts(drafts: dict[str, str], enabled: bool = True) -> dict[str, list[str]]:
