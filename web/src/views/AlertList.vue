@@ -302,7 +302,7 @@ async function startRun() {
             <td>
               <div class="level-cell">
                 <span v-if="isUnscored(r)" class="unscored" title="점수 계산 전에 멈췄어요">미계산</span>
-                <StageBadge v-else :stage="r.stage" :stages="r.stages" :level="r.level" />
+                <StageBadge v-else :stage="r.stage" :stages="r.stages" :level="r.level" :legacy="r.legacy" :available="r.stage_available" />
                 <span v-if="r.new" class="new-pill">새 경보</span>
                 <StatusBadge :status="r.status" />
                 <span v-if="r.status === 'DONE'" class="sub">처리 완료 기록</span>

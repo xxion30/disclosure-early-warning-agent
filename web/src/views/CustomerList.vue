@@ -8,7 +8,10 @@ import StatusBadge from '../components/StatusBadge.vue'
 import { formatTime, formatWon, STAGES, stagesOf } from '../labels'
 
 // 고객별 가장 심한 단계: API가 top_stage를 주면 그 값, 없으면 경보 종목들의 단계 중 가장 심한 것 (목록 순서는 바꾸지 않는다)
-const topStage = (c) => c.exposure.top_stage || stagesOf({ stages: c.holdings.map((h) => h.alert?.stage).filter(Boolean) })[0] || null
+// 서버가 top_stage 칸을 주면 null이어도 그 값을 따른다(null = 경보 노출 없음 또는 예전 노출이라 단계끼리 비교 불가 → 예전 등급 배지)
+const topStage = (c) => ('top_stage' in (c.exposure || {})
+  ? c.exposure.top_stage
+  : stagesOf({ stages: c.holdings.map((h) => h.alert?.stage).filter(Boolean) })[0] || null)
 const stageReady = computed(() => data.value.customers.some((c) => topStage(c)))
 // 단계 값이 들어오면 '즉시 경보 노출', 예전 등급만 있으면 'Critical 노출'
 const customerTabs = computed(() => ({ all: '전체', exposed: '경보 종목 보유', critical: stageReady.value ? `${STAGES.RED.label} 노출` : 'Critical 노출' }))

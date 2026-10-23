@@ -54,9 +54,11 @@ export const ALERT_STAGES = ['RED', 'ORANGE', 'YELLOW', 'COMPOSITE']
 export function stagesOf(row) {
   if (!row) return []
   const list = Array.isArray(row.stages) && row.stages.length ? row.stages : row.stage ? [row.stage] : []
-  // 새 단계 칸이 생기기 전에 만든 평가는 stage가 기본값 NONE이고 예전 등급(level)만 의미가 있다.
-  // 서버 정렬(api/routes/alerts.py)과 같이, NONE인데 예전 경보 등급이 있으면 단계가 없는 것으로 본다
-  if (list.length === 1 && list[0] === 'NONE' && ['Critical', 'High', 'Medium'].includes(row.level)) return []
+  // 서버가 예전 평가인지 알려 주면 그 값을 따른다 (/alerts의 legacy·stage_available, R4 계약 "R5 화면 연결 보완")
+  if (row.legacy === true || row.stage_available === false) return []
+  // 서버가 그 값을 주지 않을 때만(예전 서버·가짜 모드) 추측한다: 새 단계 칸이 생기기 전 평가는 stage가 기본값 NONE이고
+  // 예전 등급(level)만 의미가 있으므로, NONE인데 예전 경보 등급이 있으면 단계가 없는 것으로 본다
+  if (row.stage_available !== true && list.length === 1 && list[0] === 'NONE' && ['Critical', 'High', 'Medium'].includes(row.level)) return []
   return [...new Set(list.filter((s) => STAGES[s]))].sort((a, b) => STAGES[a].order - STAGES[b].order)
 }
 export const hasStage = (row) => stagesOf(row).length > 0
@@ -86,6 +88,10 @@ export const MISSING_LABELS = {
   negotiation_failed: '협상 결렬 여부', normalized: '정상화 여부', distress_or_violation: '부실·위반 사유 여부',
 }
 export const missingLabel = (key) => MISSING_LABELS[key] || key
+/** 위험 항목의 빠진 값 이름 목록. 서버가 missing_labels([{code,label}])를 주면 그것을, 없으면 화면 이름표를 쓴다 */
+export const missingNames = (item) => (Array.isArray(item?.missing_labels) && item.missing_labels.length
+  ? item.missing_labels.map((m) => m.label || missingLabel(m.code))
+  : (item?.missing || []).map(missingLabel))
 
 // 위험 종류 이름 (API risk_types의 signal_type). risk_engine/rules.yaml의 label과 같게 둔다
 export const SIGNAL_LABELS = {
@@ -171,5 +177,14 @@ export function formatWon(n) {
 
 export function formatTime(iso) {
   if (!iso) return '-'
-  return iso.replace('T', ' ').replace(/\+09:00$/, '').slice(0, 16)
+  const text = String(iso)
+  // 시간대가 붙은 시각(…Z, …+00:00 등)은 한국 시간으로 바꿔 보여 준다. 서버는 UTC로 줄 때가 있다
+  if (/T\d{2}:\d{2}/.test(text) && /(Z|[+-]\d{2}:?\d{2})$/.test(text)) {
+    const d = new Date(text)
+    if (!Number.isNaN(d.getTime())) {
+      const kst = new Date(d.getTime() + 9 * 3600000)
+      return kst.toISOString().slice(0, 16).replace('T', ' ')
+    }
+  }
+  return text.replace('T', ' ').slice(0, 16)
 }
