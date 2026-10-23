@@ -1,4 +1,4 @@
-from agent.evidence import validate_known_evidence
+from agent.evidence import render_evidence, validate_known_evidence
 from agent.execution import generate
 from agent.ports import AgentError
 from agent.public_risk import disclosure_context, public_risk_context, reference_context
@@ -34,7 +34,7 @@ async def explain_risk(state, deps):
         if check_explanation(item.explanation):
             raise AgentError("설명문 금지 표현·내부 점수 노출 확인 필요")
         lines.append(item.explanation + "\n" + "\n".join(
-            f'“{e.quote}” ({e.source}, {e.rcept_no}, {e.location})' for e in item.evidence
+            render_evidence(e.model_dump()) for e in item.evidence
         ))
     return {"ai_explanation": "\n\n".join(lines)}
 
@@ -61,7 +61,7 @@ async def explain_phase1(state, deps):
             if problems:
                 raise ValueError(" / ".join(problems))
             lines.append(item.explanation + "\n" + "\n".join(
-                f'“{e.quote}” ({e.source}, {e.rcept_no}, {e.location})' for e in item.evidence))
+                render_evidence(e.model_dump()) for e in item.evidence))
         return {"ai_explanation": "\n\n".join(lines), "explanation_attempts": attempt, "explanation_errors": []}
     except (ValueError, AgentError) as exc:
         if isinstance(exc, AgentError) and exc.status == "FAILED":
