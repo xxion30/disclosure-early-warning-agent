@@ -76,21 +76,30 @@ def stage_short(code):
 def render(rows: list[tuple[str, str, dict]]) -> str:
     base = rows[0][2]
     L = ["_생성: `uv run python scripts/demo/compare_thresholds.py --write` · 같은 사례 50건을 규칙 설정만 바꿔 다시 채점 · rules.yaml은 그대로_", ""]
-    L.append("| 설정 | 단건 정답 | 기간 기대 단계 | 적중 | 오탐 | 주당 경보 | 금양 첫 경보 | CJ CGV | 현대차 |")
-    L.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    L.append("| 설정 | 단건 정답 | 기간 계산 정답 | 적중 | 오탐 | 주당 경보 | 금양 최초 전체 경보(재생) | 금양 최초 사건 경보(🔴·🟠) | CJ CGV | 현대차 |")
+    L.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for name, desc, m in rows:
         lead = m["lead_days"].get("r5-timeline-001")
+        event_lead = m["event_lead_days"].get("r5-timeline-001")
+        first = f"{stage_short(m['first_alert_stage']['r5-timeline-001'])} {lead}일 전" if lead is not None else "없음"
+        note = m["first_alert_note"].get("r5-timeline-001")
+        if note:
+            first += f" · {note}"
+        event = f"{stage_short(m['first_event_alert_stage']['r5-timeline-001'])} {event_lead}일 전" if event_lead is not None else "없음"
+        first_diff = " ←" if (lead, m["first_alert_stage"]["r5-timeline-001"]) != (base["lead_days"]["r5-timeline-001"], base["first_alert_stage"]["r5-timeline-001"]) else ""
+        event_diff = " ←" if (event_lead, m["first_event_alert_stage"]["r5-timeline-001"]) != (base["event_lead_days"]["r5-timeline-001"], base["first_event_alert_stage"]["r5-timeline-001"]) else ""
         diff = lambda key: "" if m[key] == base[key] else " ←"  # noqa: E731
         L.append(
             f"| **{name}**<br><small>{desc}</small> | {frac(m['single'])}{diff('single')} | {frac(m['expected'])}{diff('expected')} | "
             f"{frac(m['hits'])}{diff('hits')} | {frac(m['false_alarms'])}{diff('false_alarms')} | {m['weekly']:.2f} | "
-            f"{f'{lead}일 전' if lead is not None else '없음'} | {stage_short(m['final'].get('r5-timeline-002'))} | "
+            f"{first}{first_diff} | {event}{event_diff} | {stage_short(m['final'].get('r5-timeline-002'))} | "
             f"{' + '.join(stage_short(a) for a in m['active'].get('r5-normal-001', []))} |"
         )
     L.append("")
-    L.append("← 표시는 지금 기준과 달라진 칸이다. 금양 첫 경보는 감사의견 거절(2025-03-21)보다 며칠 앞서 처음 경보가 울렸는지, CJ CGV는 유상증자 날의 맨 위 단계, 현대차는 기준일에 켜진 단계다.")
+    L.append("← 표시는 지금 기준과 달라진 칸이다. 금양 선행 기간은 평가 기간 안의 최초 전체 경보와 최초 사건 경보(🔴·🟠)를 감사의견 거절 공시일(2025-03-21)과 각각 비교한 달력 일수다. 저장 데이터 재생의 🟡 기대값은 R3 검증 대기이며, 종류·날짜·일수가 다른 계산 결과는 '기대값과 다름'으로 구분한다. 운영 실적이 아니다. CJ CGV는 유상증자 날의 맨 위 단계, 현대차는 기준일에 켜진 단계다.")
     L.append("")
-    changed = [(name, m) for name, _, m in rows[1:] if m["false_alarm_ids"] != base["false_alarm_ids"] or m["hits"] != base["hits"] or m["single"] != base["single"]]
+    changed = [(name, m) for name, _, m in rows[1:] if any(m[key] != base[key] for key in
+               ("false_alarm_ids", "hits", "single", "expected", "lead_days", "event_lead_days"))]
     if changed:
         L.append("**지금 기준과 결과가 달라지는 설정**")
         L.append("")
@@ -102,6 +111,15 @@ def render(rows: list[tuple[str, str, dict]]) -> str:
                 parts.append(f"오탐 {', '.join(base['false_alarm_ids']) or '없음'} → {', '.join(m['false_alarm_ids']) or '없음'}")
             if m["single"] != base["single"]:
                 parts.append(f"단건 정답 {frac(base['single'])} → {frac(m['single'])}")
+            if m["expected"] != base["expected"]:
+                parts.append(f"기간 계산 정답 {frac(base['expected'])} → {frac(m['expected'])}")
+            for key, label in (("lead_days", "최초 전체"), ("event_lead_days", "최초 사건")):
+                for cid in base[key]:
+                    if m[key].get(cid) != base[key].get(cid):
+                        before, after = base[key].get(cid), m[key].get(cid)
+                        parts.append(f"{cid} {label} 선행 기간 "
+                                     f"{str(before) + '일' if before is not None else '없음'} → "
+                                     f"{str(after) + '일' if after is not None else '없음'}")
             L.append(f"- {name}: " + " · ".join(parts))
         L.append("")
     return "\n".join(L)

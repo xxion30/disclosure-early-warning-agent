@@ -27,7 +27,7 @@
    },
    "expected_final_stage": "ORANGE",
    "expected_alert": true,
-   "expectation_source": "R1 위험 정책 3-3 (docs/risk_policy.md, 2026-10-23): 🟠 사건 경보가 먼저 켜지고, 감사의견 거절 공시(20250321802001)에서 🟡 재무 경보가 추가된다. 맨 위 배지는 🟠. 이전 시나리오의 Critical·P1 5·P2 2는 폐기",
+   "expectation_source": "R1 위험 정책 3-3~3-5 (docs/risk_policy.md, 2026-10-23): 최초 사건 경보(🔴·🟠 대상)는 🟠 2024-10-31, 141일 전으로 확정. 최초 전체 경보는 저장 데이터 재생상 🟡 2024-03-27, 359일 전이며 R3 검증 대기(pending_data_check). 기준일 대표 🟠, 활성 🟠·🟡.",
    "window_disclosure_count": 105,
    "list_source": "OpenDART list.json",
    "steps": [
@@ -668,12 +668,35 @@
      "disclosure_type": "DELISTING"
     }
    ],
-   "notes": "이전 프로젝트의 주인공 사례. 사건일보다 앞서 경보가 울렸는지(조기경보)는 정답이 아니라 측정값으로 본다.",
+   "notes": "평가 기간(2024-03-21~2025-03-21) 안의 최초 전체/사건 경보를 구분한다. 359일은 당시 원본 재무 값에 대한 R3 검증 대기인 과거 데이터 재생 결과이며 운영 실적이 아니다. 계산 통과를 원본 검증 완료로 취급하지 않는다.",
    "expected_final_stages": [
     "ORANGE",
     "YELLOW"
    ],
-   "expected_first_alert_stage": "ORANGE"
+   "expected_first_alert": {
+    "stage": "YELLOW",
+    "date": "2024-03-27",
+    "lead_days": 359,
+    "status": "pending_data_check"
+   },
+   "expected_first_event_alert": {
+    "stage": "ORANGE",
+    "date": "2024-10-31",
+    "lead_days": 141,
+    "status": "confirmed"
+   },
+   "data_check_filings": [
+    {
+     "date": "2024-03-27",
+     "rcept_no": "20240327001225",
+     "role": "원본"
+    },
+    {
+     "date": "2024-04-17",
+     "rcept_no": "20240417000287",
+     "role": "정정본"
+    }
+   ]
   },
   {
    "case_id": "r5-timeline-002",
