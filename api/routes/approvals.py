@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from api.audit import write_audit
 from api.approval_validity import require_current_review
@@ -108,16 +109,24 @@ async def decide(
         except Exception:  # 검사 중 Graph 연결이 끊김 — 결정은 기록하지 않는다
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, GRAPH_DOWN)
 
-    for item in decisions:
-        action = "decision.approve_edited" if item["edited_draft"] else f"decision.{item['action']}"
-        write_audit(db, pb.pb_id, action, f"assessment:{assessment_id}/customer:{item['customer_id']}",
-                    {"rcept_no": a.rcept_no, **item, "decided_at": decided_at})
-
+    rcept_no = a.rcept_no  # avoid an implicit ORM refresh after commit
     try:
-        manager.resume(a.rcept_no, payload)
+        with manager.reserve_resume(rcept_no, payload) as release:
+            for item in decisions:
+                action = "decision.approve_edited" if item["edited_draft"] else f"decision.{item['action']}"
+                write_audit(db, pb.pb_id, action, f"assessment:{assessment_id}/customer:{item['customer_id']}",
+                            {"rcept_no": rcept_no, **item, "decided_at": decided_at})
+            # Yield-dependency cleanup may run after the background task. Commit
+            # explicitly before opening its gate to avoid SQLite writer contention.
+            db.commit()
+            release()
     except RunConflict as exc:
         db.rollback()  # 재개를 못 했으면 결정 기록도 남기지 않는다
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "결정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.") from None
 
-    return {"assessment_id": assessment_id, "rcept_no": a.rcept_no, "accepted": len(decisions),
-            "events_url": f"/runs/{a.rcept_no}/events"}
+    return {"assessment_id": assessment_id, "rcept_no": rcept_no, "accepted": len(decisions),
+            "events_url": f"/runs/{rcept_no}/events"}

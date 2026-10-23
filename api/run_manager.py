@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from api.graph_adapter import FAILED, QUEUED, TERMINAL_EVENTS, Event, GraphAdapter, make_event
@@ -76,14 +77,51 @@ class RunManager:
 
     def resume(self, rcept_no: str, decision: dict) -> RunChannel:
         """결정 API(다음 단계)가 부른다. 승인 대기 중인 채널만 재개할 수 있다."""
+        with self.reserve_resume(rcept_no, decision) as release:
+            release()
+        return self._channels[rcept_no]
+
+    @contextmanager
+    def reserve_resume(self, rcept_no: str, decision: dict):
+        """Reserve now, but never enter the adapter before the caller commits.
+
+        The task waits outside _pump so canceling an uncommitted reservation
+        cannot publish failures or close subscribers for a later request.
+        """
         ch = self._channels.get(rcept_no)
+        created = ch is None
         if ch is None:  # 서버 재시작 뒤: 채널은 없지만 체크포인트에서 이어서 실행할 수 있다
             ch = self._channels[rcept_no] = RunChannel(rcept_no)
         elif ch.running:
             raise RunConflict(f"{rcept_no}는 아직 실행 중입니다.")
-        ch.history = []  # 새 구간
-        self._spawn(ch, self.adapter.resume(rcept_no, decision))
-        return ch
+        ready = asyncio.Event()
+        previous_task = ch.task
+
+        async def events():
+            async for event in self.adapter.resume(rcept_no, decision):
+                yield event
+
+        async def dispatch():
+            await ready.wait()
+            await self._pump(ch, events())
+
+        task = asyncio.create_task(dispatch(), name=f"run-{rcept_no}")
+        ch.task = task  # reserves the channel even while waiting for commit
+
+        def release():
+            if ready.is_set():
+                raise RunConflict(f"{rcept_no}는 이미 재개되었습니다.")
+            ch.history = []
+            ready.set()
+
+        try:
+            yield release
+        finally:
+            if not ready.is_set():
+                task.cancel()
+                ch.task = previous_task
+                if created:
+                    self._channels.pop(rcept_no, None)
 
     def _spawn(self, ch: RunChannel, events: AsyncIterator[Event]) -> None:
         ch.task = asyncio.create_task(self._pump(ch, events), name=f"run-{ch.rcept_no}")
