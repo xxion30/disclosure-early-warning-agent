@@ -59,10 +59,17 @@ def time_weight(filed: date, as_of: date, rules: dict) -> float:
 EVIDENCE_KEYS = ("source", "quote", "rcept_no", "location")
 
 
-def clean_evidence(items) -> list[dict]:
+def clean_evidence(items, *, allow_api=False) -> list[dict]:
     """근거 {source, quote, rcept_no, location}만 남긴다. 모양이 틀린 항목은 버린다(지어내지 않는다)."""
     out = []
     for e in items or []:
+        if allow_api and isinstance(e, dict) and e.get('kind') == 'api':
+            from shared.facts import API_REFERENCE_KEYS
+            if (all(k in e for k in API_REFERENCE_KEYS)
+                    and all(isinstance(e[k], str) and e[k].strip() for k in ('api', 'field', 'rcept_no'))
+                    and type(e['value']) in (str, int, float, bool)):
+                out.append({'kind': 'api', **{k: e[k] for k in API_REFERENCE_KEYS}})
+            continue
         if isinstance(e, dict) and all(isinstance(e.get(k), str) and e[k].strip() for k in EVIDENCE_KEYS):
             out.append({k: e[k] for k in EVIDENCE_KEYS})
     return out
@@ -71,7 +78,7 @@ def clean_evidence(items) -> list[dict]:
 def with_source_chunks(item: dict) -> dict:
     """과거 근거는 저장된 인용문 자체를 조각으로 삼아 검증할 수 있게 한다 (docs/contracts/agent.md)."""
     if item.get("evidence"):
-        item["source_chunks"] = [{**e, "text": e["quote"]} for e in item["evidence"]]
+        item["source_chunks"] = [{**e, "text": e["quote"]} for e in item["evidence"] if 'quote' in e]
     return item
 
 

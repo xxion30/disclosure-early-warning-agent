@@ -1,7 +1,7 @@
 """DB worker. The injected R2 public executor must not perform private/customer writes."""
 import asyncio
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from shared.analysis import claim, heartbeat, fail_job, LostLease
 from shared.db import get_session
 from shared.config import get_settings
@@ -27,6 +27,8 @@ class AnalysisContext:
     rules_digest: str
     thread_id: str
     attempt: int
+    lease_token: str | None = field(default=None, repr=False)
+    execution_budget: dict = field(default_factory=dict, repr=False)
 
     @property
     def facts_version(self):
@@ -63,7 +65,8 @@ class AnalysisWorker:
             if job is None:return None
             job_id,token=job.job_id,job.lease_token
             context=AnalysisContext(job_id,job.corp_code,job.rcept_no,job.as_of,job.input_manifest,
-                                    job.input_hash,job.rules_digest,'public:'+job_id,job.attempts)
+                                    job.input_hash,job.rules_digest,'public:'+job_id,job.attempts,
+                                    lease_token=token, execution_budget=dict(job.execution_budget or {}))
         task=asyncio.create_task(self.executor(context))
         async def renew():
             while not task.done():

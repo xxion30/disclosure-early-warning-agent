@@ -12,8 +12,11 @@ from agent.adapters.assembly import build_dependencies
 from agent.adapters.executors import open_executors
 
 
-async def run(factory, once=False):
-    deps=await build_dependencies()
+async def run(factory, once=False, *, factory_path=None):
+    settings=get_settings()
+    if factory_path is not None:
+        settings=settings.model_copy(update={'PHASE1_RUNTIME_FACTORY':factory_path})
+    deps=await build_dependencies(settings)
     try:
         async with open_executors(factory,deps,get_settings().CHECKPOINT_DB) as ports:
             await serve(ports.public,once)
@@ -29,7 +32,7 @@ def main():
     args=parser.parse_args()
     module,name=args.factory.rsplit(':',1)
     factory=getattr(importlib.import_module(module),name)
-    asyncio.run(run(factory,args.once))
+    asyncio.run(run(factory,args.once,factory_path=args.factory))
 
 
 if __name__=='__main__':main()
