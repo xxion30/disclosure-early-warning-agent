@@ -1,7 +1,21 @@
 # business-mcp 도구 계약
 
+> 2026-10-23 전환 상태: `purge_disclosure_text`는 기존 Graph 호출자를 위한 호환 도구로만 남는다. 새 공개 분석 경로는 본문을 저장하지 않고 해시·성공 완료 시각을 별도 기록한다. 최종 명세는 purge 불필요이며, 기존 호출자 전환 전 즉시 삭제하지 않는다.
+
 > 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `create_contact_task`·`update_task_status`는 오후 회의로 되살아나고, `compute_customer_impact`와 `purge_disclosure_text`는 삭제 대상이다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
+
+
+## R4 구현 계약 (2026-10-22)
+
+- calculate_risk_score: 새 위험 규칙 출력(stage, 그룹 점수, active_stages, 근거, 정규화 signals). 회사·공시 메타데이터를 DB로 검증하며 클라이언트 points는 무시한다.
+- save_assessment: 공시별 공개 평가 upsert. score_result가 새 stage 형식이면 risk_states도 트랜잭션 안에서 갱신한다. 과거 평가 재저장이 최신 상태를 덮지 않는다.
+- get_risk_state(corp_code), save_risk_state(corp_code, score_result, filed_at, resolution_evidence?)로 상태를 조회·저장한다. 해소는 근거가 필요하다.
+- get_holders(stock_code, tenant_id): 회사 필터를 적용하며 평가금액 내림차순, 고객 ID 순으로 반환한다. tenant_id 생략은 기존 연결용 default 테넌트로 제한한다.
+- create_contact_task는 기존 승인 후 코드 호출 경로를 유지한다. (assessment_id,customer_id) 유일 제약으로 중복 생성을 방지한다. PB의 소유권은 adapter/API가 검증한다.
+- tenant_runs의 회사별 실행 키는 API adapter가 제공한다. 모델은 회사·PB 권한을 지정할 수 없다.
+- 수집 요청 실행은 API의 명시적 dispatcher 경계를 사용한다. R3 수집기가 이 경계로 실제 실행·커서 갱신을 연결한다.
+
 
 ## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
@@ -100,3 +114,33 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 - `create_contact_task`: (assessment_id, customer_id)당 1건. 다시 부르면 기존 task_id를 `created: false`로 돌려준다. 평가 상태가 WAITING_APPROVAL/DONE이고
   규칙표로 다시 계산한 우선순위(P1·P2)와 같아야 만든다.
 - `update_task_status`: 승인·보류 → 연락완료·보류만. 모델 허용 목록에는 없다.
+
+### R2 연결 시 확인할 사항
+
+- 구형 level은 임시 호환 필드다. 감사의견 거절은 현재 YELLOW이며 호환 level은 High다. 기존 Critical 기대값을 새 판정으로 사용하지 않는다.
+- R2는 새 YAML의 red/orange/yellow signal_type을 분류·추출하고 stage를 기준으로 분기해야 한다. 구형 group_a/group_b와 옛 프롬프트는 새 위험 항목 전체를 지원하지 않는다.
+- 이벤트 관계는 R3가 검증한 disclosures.event_id/original_rcept_no를 사용한다. 모델이 event_id를 지정해 독립 사건을 임의로 합칠 수 없다.
+
+## R4 검증 후 보완 계약 (2026-10-22)
+
+- 계산 결과에 `as_of`, `rules_digest`, `expected_state_version`을 포함한다. 저장 결과의 `risk_state_version`을 초안 판정 버전으로 보존한다. 오래된 판정과 경합 결과는 최신 공개 상태를 덮을 수 없다.
+- R4 도구 adapter는 과거 근거를 RAG에서 다시 조회하고 source/rcept_no/location/quote를 실제 반환 조각과 검증한 경우에만 source_chunks를 붙인다. 저장된 인용을 원문인 것처럼 복사해 만들지 않는다. 원문 재조회 불가 시 수동 확인한다.
+- 재무 스냅샷은 지표별 유효 기간·최신 revision·연결 우선으로 선택한다. 연간 전용 지표를 최신 분기 자료로 지우지 않는다. R3의 지표 계산식·출처 실제 확인은 계속 필요하다.
+
+과거 근거 source_chunks는 실제 RAG 반환값에 대한 재검증 뒤 추출한 인용 부분과 조각 해시만 포함한다. 전체 검색 조각을 새 체크포인트·DB에 영속 저장하지 않는다.
+
+## Pre-merge R4 도구 계약 (2026-10-23)
+
+get_disclosure_facts(rcept_no)는 `{ok,data:{availability,rcept_no,corp_code,schema_version,collected_at,facts,data_version}}`를 반환한다. R2는 ToolResponse.data를 그대로 validate_facts에 전달한다. AVAILABLE일 때 facts는 최상위 목록이고, 저장용 dtype `number`는 응답에서만 `decimal`로 투영한다. integer/string/boolean 및 raw/value/unit/status/reason/source 값은 바꾸지 않는다. 저장 스키마와 R3 store_facts 입력은 유지한다.
+
+`data_version`은 dtype 변환 **전** StructuredFacts 검증·정규화된 저장 payload 전체의 facts_hash이며 store_facts 반환값과 같다. 수집·조회 시각도 해시 대상이다. 응답 DTO를 다시 해시하거나 원문 content_hash로 대체하지 않는다. 기존 R3 호출자 전환을 위해 `structured_facts`(저장 형식)와 `facts_hash`(data_version 별칭)를 당분간 함께 반환한다. 신규 호출자는 최상위 facts/data_version만 사용한다.
+
+공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 schema_version/collected_at/facts/data_version은 null이다. 실패 여부를 추측하거나 facts=[]로 바꾸지 않는다. 저장된 정상 빈 목록은 AVAILABLE + facts=[]로 구분한다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
+
+R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번 접수번호의 저장 payload를 같은 규칙으로 해시한 값이다. input_hash(전체 분석 입력) 및 원문 content_hash와 구분한다. R2 factory는 `context.execution_context`를 runtime.start(rcept_no, context=...)에 전달한다. 이 매핑은 R4 adapter가 만든 공개 ExecutionContext이며 facts_version을 명시한다. 최신 DB 값으로 스냅샷 버전을 덮어쓰지 않는다. UNAVAILABLE은 facts_version=null이며 R2에서 수동 확인/원문 분석 경로를 별도로 결정해야 한다.
+
+수집기의 전체 mark_ready 인계는 유지한다. enqueue_ready는 이번 변경에서 선별하지 않는다. 자동 분석 제외 기준은 R1과 합의 후 별도로 구현하며, structured_facts NULL만으로 제외하거나 미분석 건을 성공 처리하지 않는다.
+
+UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한다. get_disclosure_facts는 네트워크를 호출하지 않는다.
+
+본문 삭제와 공개 분석 완료 기록은 분리한다. 새 작업 완료는 공개 판정 저장과 processed_at 갱신을 같은 트랜잭션에서 수행한다. MANUAL_CHECK는 성공 processed_at을 쓰지 않는다. 구형 purge는 모든 legacy 호출자 전환 전까지 호환용으로만 유지하며 새 실행 경로는 사용하지 않는다.

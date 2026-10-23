@@ -14,7 +14,7 @@ def test_login_success_returns_token(client):
     assert res.status_code == 200
     body = res.json()
     assert body["token_type"] == "bearer"
-    assert body["pb"] == {"pb_id": "P01", "name": "김하늘"}
+    assert body["pb"] == {"pb_id": "P01", "name": "김하늘", "tenant_id": "default", "role": "PB"}
     payload = jwt.decode(body["access_token"], get_settings().JWT_SECRET, algorithms=[JWT_ALGORITHM])
     assert payload["sub"] == "P01"
 

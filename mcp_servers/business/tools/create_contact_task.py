@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from mcp_servers.business.tools._common import guarded, invalid, not_found, now_iso, task_dict
 from shared.db import get_session
@@ -44,8 +45,17 @@ def create_contact_task(assessment_id: int, customer_id: str, draft_message: str
         if existing:
             return ok({"task_id": existing.task_id, "created": False, "status": existing.status})
 
+        # A job accepted just before a newer public analysis must not create a stale contact task.
+        from shared.models import RiskState
+        from risk_engine.stages import ALERT_STAGES
+        s.scalar(select(Company).where(Company.corp_code == a.corp_code).with_for_update())
+        current = s.scalar(select(RiskState).where(RiskState.corp_code == a.corp_code).with_for_update())
+        if current and (current.resolved or current.stage not in ALERT_STAGES or a.risk_state_version is None
+                        or a.risk_state_version != current.state_version):
+            raise invalid('초안의 위험 판정이 변경되거나 해소되었습니다. 기존 승인으로 업무를 만들 수 없습니다.')
         now = now_iso()
         task = ContactTask(
+            tenant_id=customer.tenant_id,
             assessment_id=assessment_id,
             customer_id=customer_id,
             pb_id=customer.pb_id,
@@ -54,6 +64,13 @@ def create_contact_task(assessment_id: int, customer_id: str, draft_message: str
             created_at=now,
             updated_at=now,
         )
-        s.add(task)
-        s.flush()
+        try:
+            with s.begin_nested():
+                s.add(task)
+                s.flush()
+        except IntegrityError:
+            existing = s.scalar(select(ContactTask).where(ContactTask.assessment_id == assessment_id, ContactTask.customer_id == customer_id))
+            if existing is None:
+                raise
+            return ok({'task_id': existing.task_id, 'created': False, 'status': existing.status})
         return ok({"task_id": task.task_id, "created": True, "status": task.status})

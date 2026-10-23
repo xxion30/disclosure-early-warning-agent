@@ -5,7 +5,7 @@ from sqlalchemy import select
 from api.graph_adapter import FakeGraphAdapter, get_graph_adapter, now_iso
 from api.main import app
 from api.routes.alerts import GRAPH_DOWN
-from shared.models import AuditLog, RiskAssessment
+from shared.models import AuditLog, RiskAssessment, Company
 from tests.api.helpers import RCEPT, read_events
 
 LOW_RCEPT = "20240426000001"
@@ -21,6 +21,7 @@ class GraphDown(FakeGraphAdapter):
 @pytest.fixture
 def down_client(client, session_factory):
     with session_factory() as s:
+        s.add(Company(corp_code="X", stock_code="001570", name="금양"))
         for rcept, level in ((RCEPT, "Critical"), (LOW_RCEPT, "Low")):
             s.add(RiskAssessment(corp_code="X", rcept_no=rcept, total_score=1, level=level,
                                  reasons=[{"group": "A", "item": "감사의견", "fixed_level": "Critical"}],
