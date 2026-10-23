@@ -8,7 +8,7 @@ import RunProgress from '../components/RunProgress.vue'
 import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { ALERT_STAGES, ASSESSMENT_STATUS, formatTime, hasStage, isAlertRow, isUnscored, STAGES, stagesOf } from '../labels'
+import { ALERT_STAGES, ASSESSMENT_STATUS, COLLECT_STATUS, formatTime, hasStage, isAlertRow, isUnscored, signalLabel, STAGES, stagesOf } from '../labels'
 
 const router = useRouter()
 
@@ -32,6 +32,7 @@ const error = ref('')
 async function load() {
   loading.value = true
   error.value = ''
+  loadDashboard()
   try {
     allRows.value = await api.listAlerts({})
   } catch (err) {
@@ -40,6 +41,36 @@ async function load() {
     loading.value = false
   }
 }
+
+// ---- 메인 대시보드: 종목 경보 (GET /states?alert=true, 서버가 우선순위로 정렬) + 수집 상태 ----
+// 서버가 아직 /states를 모르면(예전 서버) 카드를 숨기고, 수집 상태를 못 읽으면 그 줄만 숨긴다
+const states = ref([])
+const statesReady = ref(false)
+const runs = ref(null)
+const showAllStates = ref(false)
+async function loadDashboard() {
+  const [st, col] = await Promise.allSettled([api.listStates({ alert: true, limit: 100 }), api.collectStatus()])
+  statesReady.value = st.status === 'fulfilled'
+  states.value = st.status === 'fulfilled' ? st.value.items || [] : []
+  runs.value = col.status === 'fulfilled' ? col.value.runs || [] : null
+}
+const shownStates = computed(() => (showAllStates.value ? states.value : states.value.slice(0, 6)))
+const newStates = computed(() => states.value.filter((st) => st.new).length)
+// 수집 한 줄: 가장 최근 실행의 상태, 실패면 이유와 마지막 성공 시각을 함께
+const collect = computed(() => {
+  if (runs.value === null) return null
+  const last = runs.value[0]
+  if (!last) return { text: '수집 기록 없음', tone: 'muted' }
+  const s = COLLECT_STATUS[last.status] || { text: last.status, tone: 'muted' }
+  const okRun = runs.value.find((r) => ['DONE', 'PARTIAL'].includes(r.status) && r.finished_at)
+  if (last.status === 'DONE') return { text: `마지막 수집 ${formatTime(last.finished_at)}`, tone: 'ok' }
+  if (['RUNNING', 'PENDING'].includes(last.status)) return { text: `${s.text} · ${formatTime(last.started_at)} 시작`, tone: s.tone }
+  return {
+    text: `${s.text} · ${formatTime(last.finished_at || last.started_at)}`,
+    tone: s.tone,
+    detail: [last.error ? `이유: ${last.error}.` : null, okRun ? `마지막으로 성공한 수집은 ${formatTime(okRun.finished_at)}이에요.` : '아직 성공한 수집이 없어요.'].filter(Boolean).join(' '),
+  }
+})
 
 // 단계 값이 있으면 단계로, 없으면(예전 평가) 등급으로 탭을 나눈다
 function inTab(r, key) {
@@ -181,6 +212,35 @@ async function startRun() {
     </span>
   </div>
 
+  <!-- 메인 대시보드 알림: 종목 단위 경보(관찰 중 제외)를 서버가 정한 우선순위로. 점수 숫자는 보여 주지 않는다 -->
+  <section v-if="statesReady" class="card flush stock-alerts" aria-label="종목 경보">
+    <div class="card-head">
+      <h2>종목 경보 <small>{{ states.length }}건<template v-if="newStates"> · 새 경보 {{ newStates }}</template> · 우선순위순</small></h2>
+      <span v-if="collect" class="collect-line" :class="`collect-${collect.tone}`" role="status"><span class="collect-dot" aria-hidden="true"></span>{{ collect.text }}</span>
+    </div>
+    <p v-if="collect?.detail" class="notice" :class="collect.tone === 'bad' ? 'error-note' : 'warn'">{{ collect.detail }}</p>
+    <ol v-if="states.length" class="stock-alert-list">
+      <li v-for="st in shownStates" :key="st.stock_code">
+        <RouterLink :to="{ name: 'risk-detail', params: { stockCode: st.stock_code } }" class="stock-alert">
+          <span class="stock-alert-badges">
+            <StageBadge :stage="st.stage" :stages="st.active_stages" />
+            <span v-if="st.new" class="new-pill">새 경보</span>
+          </span>
+          <span class="stock-alert-text">
+            <strong>{{ st.corp_name || st.stock_code }}</strong>
+            <span class="sub">{{ (st.risk_types || []).map(signalLabel).join(' · ') || '위험 종류 확인 중' }}<template v-if="st.latest_filed_at"> · 최근 공시 {{ st.latest_filed_at }}</template></span>
+          </span>
+          <span v-if="st.manual_check" class="badge tone-warn">확인 필요</span>
+          <svg class="stock-alert-go" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        </RouterLink>
+      </li>
+    </ol>
+    <p v-else class="muted empty-note">지금은 종목 경보가 없어요.</p>
+    <button v-if="states.length > 6" type="button" class="ghost small more-states" @click="showAllStates = !showAllStates">
+      {{ showAllStates ? '접기' : `나머지 ${states.length - 6}건 더 보기` }}
+    </button>
+  </section>
+
   <section class="card flush alert-list" aria-label="경보 목록">
     <div class="card-head">
       <div class="tabs" role="group" aria-label="보기">
@@ -303,6 +363,32 @@ async function startRun() {
   .alert-list td { padding-top: 4px; padding-bottom: 4px; }
 }
 .stock-link { align-self: flex-start; font-size: 13px; font-weight: 600; }
+.stock-alerts .card-head h2 small { margin-left: 6px; font-size: 14px; font-weight: 500; }
+.collect-line { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.collect-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--border-strong); flex: none; }
+.collect-ok .collect-dot { background: var(--ok-dot); }
+.collect-info .collect-dot { background: var(--blue); }
+.collect-warn { color: var(--warn); }
+.collect-warn .collect-dot { background: var(--warn-dot); }
+.collect-bad { color: var(--bad); }
+.collect-bad .collect-dot { background: var(--critical); }
+.stock-alerts > .notice { margin: 0 24px 16px; }
+.stock-alerts > .notice.error-note { color: var(--bad); background: var(--bad-soft); }
+.stock-alert-list { list-style: none; margin: 0; padding: 0; }
+.stock-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 56px; padding: 12px 24px; border-top: 1px solid #edf1f7; color: var(--text); }
+.stock-alert:hover { background: #f8faff; text-decoration: none; }
+.stock-alert-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stock-alert-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.stock-alert-text strong { font-size: 15px; }
+.stock-alert-go { color: var(--muted); flex: none; }
+.stock-alerts .empty-note { margin: 0; padding: 0 24px 16px; }
+.more-states { margin: 8px 24px 8px; }
+@media (max-width: 640px) {
+  .stock-alert { padding: 12px 16px; }
+  .stock-alerts > .notice { margin: 0 16px 16px; }
+  .stock-alerts .empty-note { padding: 0 16px 16px; }
+  .more-states { margin: 8px 16px; }
+}
 @media (max-width: 540px) {
   .run-start { width: 100%; border-radius: var(--radius); }
   .run-start input { flex: 1 1 160px; }

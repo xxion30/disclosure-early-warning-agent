@@ -54,6 +54,9 @@ export const api = {
   // ?mock=stages면 화면 확인용 가짜 데이터(api/mock.js)를 쓴다. 실제 서버는 부르지 않는다
   listAlerts: (params) => (mockMode() ? mockApi.listAlerts(params) : http.get('/alerts', { params }).then((r) => r.data)),
   getAlert: (id) => (mockMode() && mockApi.isMockId(id) ? mockApi.getAlert(id) : http.get(`/alerts/${id}`).then((r) => r.data)),
+  // 대시보드 종목 경보 (GET /states?alert=true, 서버가 우선순위로 정렬)와 수집 상태
+  listStates: (params) => (mockMode() ? mockApi.listStates(params) : http.get('/states', { params }).then((r) => r.data)),
+  collectStatus: () => (mockMode() ? mockApi.collectStatus() : http.get('/collect/status').then((r) => r.data)),
   // 종목 상세 (R4 /states). 가짜 데이터 모드에서는 예시 종목(MOCK01…)을 돌려준다
   getState: (code) => (mockMode() && mockApi.isMockStock(code) ? mockApi.getState(code) : http.get(`/states/${code}`).then((r) => r.data)),
   // 읽음 표시: 지금 본 알림 버전(version)까지만 읽음으로 남긴다 (R4 계약)
