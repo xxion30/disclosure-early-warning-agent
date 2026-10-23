@@ -182,6 +182,19 @@ def _derived(api: str, facts: list[dict], rcept_no: str, fetched_at: str) -> lis
     return out
 
 
+def build_ambiguous_payload(api: str, row_count: int, *, rcept_no: str, corp_code: str, fetched_at: str) -> dict:
+    """같은 접수번호에 항목 API 행이 여러 개일 때: 첫 행을 임의로 고르지 않고 모든 사실을 NEEDS_CHECK로 둔다.
+
+    행을 구분할 안정된 값(대상·기간 등)을 아직 확인하지 못했으므로 `row_key`를 만들지 않는다. 원문 검색으로 확인한다.
+    """
+    reason = f"같은 접수번호에 항목 API 행이 {row_count}개라 첫 행을 고르지 않았다. 원문에서 확인한다"
+    facts = []
+    for spec in SPECS[api]:
+        dtype = {"int": "integer", "float": "number"}.get(spec.kind, "string")
+        facts.append(_fact(spec.name, dtype, None, None, spec.unit, "NEEDS_CHECK", reason, _source(api, spec.field, rcept_no, fetched_at)))
+    return {"schema_version": "1", "rcept_no": rcept_no, "corp_code": corp_code, "collected_at": fetched_at, "facts": facts}
+
+
 def build_payload(api: str, row: dict, *, rcept_no: str, corp_code: str, fetched_at: str) -> dict:
     """항목 API 행 1개 → StructuredFacts v1 payload. 응답에 없는 필드는 만들지 않는다."""
     facts = [make_fact(spec, row[spec.field], api, rcept_no, fetched_at) for spec in SPECS[api] if spec.field in row]

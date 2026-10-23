@@ -11,7 +11,7 @@ import pytest
 
 import shared.db as db_module
 from collector import repo
-from collector.dart_client import DartBadRequest, DartRateLimited, DartUnavailable, Document, content_sha256
+from collector.dart_client import NORMALIZATION_VERSION, DartBadRequest, DartRateLimited, DartUnavailable, Document, content_sha256
 from collector.watchlist import Target
 from mcp_servers.rag import filing, memory, store
 from mcp_servers.rag.tools import release_disclosure_index, search_disclosure_text, search_reference
@@ -75,6 +75,7 @@ def test_first_search_downloads_from_dart_once_and_returns_citable_chunks(mem):
     assert chunks[0]["location"].startswith("chunk-") and chunks[0]["location"].endswith("자)")  # 이전과 같은 위치 형식
     assert res["data"]["content_sha256"] == content_sha256(BODY) == again["data"]["content_sha256"]
     assert res["data"]["truncated"] is False
+    assert res["data"]["normalization_version"] == NORMALIZATION_VERSION  # 해시·location을 비교할 때 같은 정규화인지 확인하는 용도
     assert all(c["text"] in BODY.replace("\n", " ") for c in chunks)  # 인용은 조각 text 안의 글자 그대로
 
 

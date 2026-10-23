@@ -222,8 +222,25 @@ class FakeGraphAdapter:
         if state is None or state["status"] != "WAITING_APPROVAL":
             yield make_event(FAILED, rcept_no, message="승인 대기 중인 thread가 아닙니다.")
             return
-        state["status"] = "RUNNING"
         self._set_assessment_status(state["assessment_id"], "RUNNING")
+        state["status"] = "RUNNING"
+
+        try:
+            async for event in self._resume_decisions(rcept_no, decision):
+                yield event
+        except Exception:
+            # Decisions/tasks may already be committed. Do not pretend that all
+            # customers are pending again or blindly replay their task writes.
+            state["status"] = "MANUAL_CHECK"
+            state["error"] = "결정 처리 중 오류가 발생했습니다. 반영 내역 확인이 필요합니다."
+            try:
+                self._set_assessment_status(state["assessment_id"], "MANUAL_CHECK")
+            except Exception:
+                pass  # retain the original failure, even if DB recovery also fails
+            raise
+
+    async def _resume_decisions(self, rcept_no: str, decision: dict) -> AsyncIterator[Event]:
+        state = self._states[rcept_no]
 
         pb_id = decision["pb_id"]
         approved, rewrite = [], []
