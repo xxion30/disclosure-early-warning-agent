@@ -11,12 +11,14 @@ from agent.state import AgentState
 
 if TYPE_CHECKING:
     from agent.phase1 import Phase1Bindings
+    from agent.integration import UnifiedBindings
 
 
 class AgentError(Exception):
-    def __init__(self, message: str, status: str = "MANUAL_CHECK"):
+    def __init__(self, message: str, status: str = "MANUAL_CHECK", *, retryable=False):
         super().__init__(message)
         self.status = status
+        self.retryable = retryable
 
 
 class Tools(Protocol):
@@ -63,3 +65,5 @@ class Dependencies:
     max_model_turns: int = MAX_TURNS
     # R2's opt-in Phase 1 graph. Real bindings/persistence need R4 agreement.
     phase1: Phase1Bindings | None = None
+    # New unified tool path; legacy Phase1Bindings remains opt-in compatible.
+    unified: UnifiedBindings | None = None

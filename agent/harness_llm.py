@@ -15,7 +15,9 @@ from harness.tracing import audit_system
 from agent.ports import AgentError
 
 PROTECTED_KEYS = frozenset({"source", "rcept_no", "location", "quote", "customer_id",
-                            "item", "flag", "stage", "disclosure_type"})
+                            "item", "flag", "stage", "disclosure_type", 'api', 'field',
+                            'row_key', 'unit', 'period', 'basis', 'data_version',
+                            'content_sha256', 'normalization_version', 'value'})
 
 
 def _shrink_strings(obj: Any, limit: int) -> Any:
@@ -83,13 +85,13 @@ async def recover_llm(primary, fallback):
             if not recovery.is_retryable(exc):
                 raise
             last = exc
-            await audit_system("llm_retry", None, exc, attempt=attempt + 1)
+            await audit_system("llm_retry", None, type(exc).__name__, attempt=attempt + 1)
             if attempt < len(delays):
                 await asyncio.sleep(delays[attempt])
-    await audit_system("llm_fallback", None, last)
+    await audit_system("llm_fallback", None, type(last).__name__)
     try:
         return await fallback()
     except Exception as exc:  # noqa: BLE001
         last = exc
-    await audit_system("llm_failed", None, last)
-    raise recovery.LLMUnavailable(str(last)) from last
+    await audit_system("llm_failed", None, type(last).__name__)
+    raise recovery.LLMUnavailable(type(last).__name__) from last

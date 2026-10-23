@@ -12,6 +12,11 @@ def pending_customers(state):
 
 
 async def validate_batch(state, batch, pb, deps):
+    if deps.unified is not None:
+        from agent.integration import ensure_current
+        if pb.tenant_id != state.get('execution_context', {}).get('tenant_id'):
+            raise PermissionError('다른 이용 조직의 승인입니다')
+        await ensure_current(state, deps)
     pending = set(pending_customers(state))
     for decision in batch.decisions:
         cid = decision.customer_id
@@ -34,6 +39,9 @@ async def pb_approval(state, deps):
         "drafts": {cid: state["drafts"].get(cid, "") for cid in pending},
         "manual_drafts": state.get("manual_drafts", []),
         "guardrail_flags": state.get("guardrail_flags", []),
+        **({'assessment_key': state['execution_context']['assessment_key'],
+            'tenant_id': state['execution_context']['tenant_id']}
+           if deps.unified is not None else {}),
     })
     pb = PBContext.model_validate(raw["verified_pb"])
     batch = ApprovalBatch.model_validate(raw["batch"])
