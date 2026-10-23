@@ -64,6 +64,14 @@ export const api = {
   getDrafts: (id) => http.get(`/alerts/${id}/drafts`).then((r) => r.data),
   decide: (id, decisions) => http.post(`/alerts/${id}/decision`, { decisions }).then((r) => r.data),
 
+  // 새 조직별 검토 (R4 계약 "Pre-merge 실행·조직 검토"). 초안 생성은 R2 실행기가 연결돼야 동작하고, 없으면 서버가 503을 준다
+  createReview: (publicAssessmentId) => (mockMode() && mockApi.isMockReview(publicAssessmentId) ? mockApi.createReview(publicAssessmentId) : http.post(`/public-assessments/${publicAssessmentId}/reviews`).then((r) => r.data)),
+  getReview: (id) => (mockMode() && mockApi.isMockReview(id) ? mockApi.getReview(id) : http.get(`/reviews/${id}`).then((r) => r.data)),
+  runReview: (id) => (mockMode() && mockApi.isMockReview(id) ? mockApi.runReview(id) : http.post(`/reviews/${id}/run`).then((r) => r.data)),
+  decideReview: (id, expectedVersion, decisions) => (mockMode() && mockApi.isMockReview(id)
+    ? mockApi.decideReview(id, expectedVersion, decisions)
+    : http.post(`/reviews/${id}/decisions`, { expected_version: expectedVersion, decisions }).then((r) => r.data)),
+
   listCustomers: () => http.get('/customers').then((r) => r.data),
 
   listTasks: (params) => http.get('/tasks', { params }).then((r) => r.data),
