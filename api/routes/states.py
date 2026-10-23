@@ -24,6 +24,10 @@ def public_item(item):
             'filed_at', 'active', 'resolved', 'missing')} | {
         'explanation': public_explanation(item.get('explanation')),
         'missing_labels': missing_labels(item.get('missing')),
+        'fs_div': item.get('fs_div'),
+        'basis_checks': [{key: basis.get(key) for key in
+                          ('fs_div', 'period', 'rcept_no', 'revision', 'status', 'impairment_pct')}
+                         for basis in item.get('basis_checks', []) if isinstance(basis, dict)],
         'evidence': [{key: e.get(key) for key in ('source', 'quote', 'rcept_no', 'location')}
                      for e in item.get('evidence', []) if isinstance(e, dict)]}
 

@@ -1,5 +1,9 @@
 # API·화면 계약
 
+## 재무 판정 근거 보완 (2026-10-23)
+
+자본잠식 항목은 선택한 fs_div(OFS/CFS)와 basis_checks를 포함한다. basis_checks에는 각 기준의 fs_div/period/rcept_no/revision/status/impairment_pct만 공개한다. 실제 재무 비율은 보존하고 점수·가중치·정렬값은 공개하지 않는다. OFS/CFS 점수 합산이나 전체 단계 임계값 변경은 없다.
+
 > 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 오후 회의로 되살아나고(점수는 응답에서 뺀다), `/states`·`/collect`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
