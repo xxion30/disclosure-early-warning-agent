@@ -32,9 +32,14 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
         model = build_model(harness, settings)
     if settings.FAKE_UNSAFE_DRAFT:
         model = UnsafeDraftInjector(model)
+    hosted = settings.PHASE1_RUNTIME_FACTORY == 'agent.hosted:build_runtime'
+    if hosted:
+        from agent.adapters.unified import bindings
+        from agent.adapters.budgets import BudgetTools, BudgetModel
     return Dependencies(
-        tools=EvidenceTools(tools, harness),
-        model=Phase1Model(model, harness),
+        tools=BudgetTools(tools) if hosted else EvidenceTools(tools, harness),
+        model=BudgetModel(model) if hosted else Phase1Model(model, harness),
+        unified=bindings() if hosted else None,
         harness=harness,
         persistence=AssessmentStore(tools, audit, harness, upsert_confirmed=True),
         classify=make_phase1_classifier(),

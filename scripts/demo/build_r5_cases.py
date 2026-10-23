@@ -50,10 +50,15 @@ TIMELINES = [
         "title": "금양 감사의견 거절까지 12개월 (2024-03-21 ~ 2025-03-21)",
         "expected_final_stage": "ORANGE",
         "expected_final_stages": ["ORANGE", "YELLOW"],
-        "expected_first_alert_stage": "ORANGE",
+        "expected_first_alert": {"stage": "YELLOW", "date": "2024-03-27", "lead_days": 359, "status": "pending_data_check"},
+        "expected_first_event_alert": {"stage": "ORANGE", "date": "2024-10-31", "lead_days": 141, "status": "confirmed"},
+        "data_check_filings": [
+            {"date": "2024-03-27", "rcept_no": "20240327001225", "role": "원본"},
+            {"date": "2024-04-17", "rcept_no": "20240417000287", "role": "정정본"},
+        ],
         "expected_alert": True,
-        "expectation_source": "R1 위험 정책 3-3 (docs/risk_policy.md, 2026-10-23): 🟠 사건 경보가 먼저 켜지고, 감사의견 거절 공시(20250321802001)에서 🟡 재무 경보가 추가된다. 맨 위 배지는 🟠. 이전 시나리오의 Critical·P1 5·P2 2는 폐기",
-        "notes": "이전 프로젝트의 주인공 사례. 사건일보다 앞서 경보가 울렸는지(조기경보)는 정답이 아니라 측정값으로 본다.",
+        "expectation_source": "R1 위험 정책 3-3~3-5 (docs/risk_policy.md, 2026-10-23): 최초 사건 경보(🔴·🟠 대상)는 🟠 2024-10-31, 141일 전으로 확정. 최초 전체 경보는 저장 데이터 재생상 🟡 2024-03-27, 359일 전이며 R3 검증 대기(pending_data_check). 기준일 대표 🟠, 활성 🟠·🟡.",
+        "notes": "평가 기간(2024-03-21~2025-03-21) 안의 최초 전체/사건 경보를 구분한다. 359일은 당시 원본 재무 값에 대한 R3 검증 대기인 과거 데이터 재생 결과이며 운영 실적이 아니다. 계산 통과를 원본 검증 완료로 취급하지 않는다.",
     },
     {
         "case_id": "r5-timeline-002", "stock_code": "079160", "from": "2022-06-20", "as_of": "2023-06-20",
@@ -177,6 +182,34 @@ async def build_steps(client, corp_code, rows, frm, to, classify, allowed):
     return steps
 
 
+def build_timeline_case(spec: dict, corp_code: str, corp_name: str, steps: list[dict], disclosure_count: int) -> dict:
+    """수집한 공시·지표와 R1 기대값을 조립한다. 저장 데이터로도 오프라인 재생성 가능."""
+    return {
+        "case_id": spec["case_id"], "title": spec["title"], "group": "TIMELINE", "scope": "timeline",
+        "stock_code": spec["stock_code"], "corp_code": corp_code, "corp_name": corp_name,
+        "as_of": spec["as_of"], "window": {"from": spec["from"], "to": spec["as_of"]},
+        "expected_final_stage": spec["expected_final_stage"], "expected_alert": spec["expected_alert"],
+        "expectation_source": spec["expectation_source"], **({"ambiguity": spec["ambiguity"]} if spec.get("ambiguity") else {}),
+        "window_disclosure_count": disclosure_count, "list_source": "OpenDART list.json",
+        "steps": steps, "notes": spec["notes"],
+        **{k: spec[k] for k in ("expected_final_stages", "expected_first_alert", "expected_first_event_alert", "data_check_filings") if spec.get(k)},
+    }
+
+
+def build_normal_case(spec: dict, corp_code: str, corp_name: str, steps: list[dict],
+                      disclosure_count: int, frm: str, to: str) -> dict:
+    """정상 회사도 CLI와 저장본 재생성 검사가 같은 조립 경로를 사용한다."""
+    return {
+        "case_id": spec["case_id"], "title": f"{corp_name} — 2024 사업보고서까지 12개월, 위험 공시 없음 확인", "group": "NORMAL",
+        "scope": "company_year", "stock_code": spec["stock_code"], "corp_code": corp_code, "corp_name": corp_name,
+        "as_of": to, "window": {"from": frm, "to": to}, "expected_final_stage": None, "expected_alert": False,
+        "expectation_source": "설계서 STEP 06 (정상: 경보가 안 울려야 함)",
+        "window_disclosure_count": disclosure_count, "list_source": "OpenDART list.json", "steps": steps,
+        "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다.",
+        **({"false_alarm_policy": spec["false_alarm_policy"]} if spec.get("false_alarm_policy") else {}),
+    }
+
+
 async def main(dry_run: bool) -> int:
     classify, allowed = classifier()
     cases = []
@@ -186,17 +219,8 @@ async def main(dry_run: bool) -> int:
             corp_code, corp_name = corp_map[spec["stock_code"]]
             rows = [normalize_row(r) for r in await client.list_disclosures(corp_code, D(spec["from"]), D(spec["as_of"]))]
             steps = await build_steps(client, corp_code, rows, spec["from"], spec["as_of"], classify, allowed)
-            cases.append({
-                "case_id": spec["case_id"], "title": spec["title"], "group": "TIMELINE", "scope": "timeline",
-                "stock_code": spec["stock_code"], "corp_code": corp_code, "corp_name": corp_name,
-                "as_of": spec["as_of"], "window": {"from": spec["from"], "to": spec["as_of"]},
-                "expected_final_stage": spec["expected_final_stage"], "expected_alert": spec["expected_alert"],
-                "expectation_source": spec["expectation_source"], **({"ambiguity": spec["ambiguity"]} if spec.get("ambiguity") else {}),
-                **{k: spec[k] for k in ("expected_final_stages", "expected_first_alert_stage") if spec.get(k)},
-                "window_disclosure_count": sum(spec["from"] <= r["filed_at"] <= spec["as_of"] for r in rows),
-                "list_source": "OpenDART list.json",
-                "steps": steps, "notes": spec["notes"],
-            })
+            cases.append(build_timeline_case(spec, corp_code, corp_name, steps,
+                sum(spec["from"] <= r["filed_at"] <= spec["as_of"] for r in rows)))
         for spec in NORMALS:
             corp_code, corp_name = corp_map[spec["stock_code"]]
             # 2024 사업보고서 접수일을 찾아 그날까지 12개월
@@ -206,16 +230,7 @@ async def main(dry_run: bool) -> int:
             frm = (date.fromisoformat(to) - timedelta(days=365)).isoformat()
             rows = [normalize_row(r) for r in await client.list_disclosures(corp_code, D(frm), D(to))]
             steps = await build_steps(client, corp_code, rows, frm, to, classify, allowed)
-            cases.append({
-                "case_id": spec["case_id"], "title": f"{corp_name} — 2024 사업보고서까지 12개월, 위험 공시 없음 확인", "group": "NORMAL",
-                "scope": "company_year", "stock_code": spec["stock_code"], "corp_code": corp_code, "corp_name": corp_name,
-                "as_of": to, "window": {"from": frm, "to": to}, "expected_final_stage": None, "expected_alert": False,
-                "expectation_source": "설계서 STEP 06 (정상: 경보가 안 울려야 함)",
-                "window_disclosure_count": len(rows), "list_source": "OpenDART list.json",
-                "steps": steps,
-                "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다.",
-                **({"false_alarm_policy": spec["false_alarm_policy"]} if spec.get("false_alarm_policy") else {}),
-            })
+            cases.append(build_normal_case(spec, corp_code, corp_name, steps, len(rows), frm, to))
     payload = {
         "_note": "R5가 만든 테스트 사례 (회귀 타임라인·정상 회사). 접수번호·제목·접수일은 DART 공시 목록의 실제 값, facts는 DART API 원본 또는 R3 수집기(collector.indicators)로 계산한 값이며 지어낸 값이 없다. "
                  "scripts/demo/build_r5_cases.py로 다시 만들 수 있고, scripts/demo/eval_cases.py로 채점한다. expected_*가 null이면 정답 미정(R1 확인 필요)이다.",

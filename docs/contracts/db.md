@@ -76,3 +76,6 @@ R3는 `shared.facts.store_facts(session,rcept_no,payload)`로 구조화 사실�
 ## R5 변경 요약 이력 (2026-10-23)
 
 risk_state_changes는 corp_code/state_version 유일 키로 변경 시각, 이전·현재 단계, 점수 없는 changes를 저장한다. 현재 상태 저장과 같은 트랜잭션이다. 최초 저장은 이전 상태를 추정하지 않는다. 기존 risk_states를 과거 평가와 임의 조합해 이력을 역산하지 않는다. 같은 상태를 다시 저장하면 변경 이력을 늘리지 않는다.
+# 실행 예산 장부 (2026-10-23, R4)
+
+`analysis_jobs.execution_budget`, `organization_reviews.execution_budget` JSON 컬럼을 추가한다(마이그레이션 `20261023_06`). 모델 요청 수, 실제 실행 초, 동일 도구 입력별 호출 수만 저장한다. 고객 정보·원문·프롬프트·API 키는 저장하지 않는다. 작업 선점 토큰·만료 시각을 검사하고 단조 증가하도록 저장한다. 공개 재시도와 조직별 재선점 모두 같은 행의 누적 한도를 사용한다.

@@ -2,6 +2,7 @@ from mcp_servers.business.tools._common import guarded, invalid, not_found
 from shared.db import get_session
 from shared.models import Company, Disclosure
 from shared.schemas import ok
+from shared.title_policy import title_disposition
 
 
 @guarded
@@ -26,6 +27,7 @@ def get_disclosure(rcept_no: str) -> dict:
                 "corp_name": c.name if c else None,
                 "market": c.market if c else None,
                 "title": d.title,
+                "reference_only": title_disposition(d.title, None) == 'reference',
                 "disclosure_type": d.disclosure_type,
                 "filed_at": d.filed_at,
                 "url": d.url,

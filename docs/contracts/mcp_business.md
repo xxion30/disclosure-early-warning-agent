@@ -146,3 +146,11 @@ R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번
 UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한다. get_disclosure_facts는 네트워크를 호출하지 않는다.
 
 본문 삭제와 공개 분석 완료 기록은 분리한다. 새 작업 완료는 공개 판정 저장과 processed_at 갱신을 같은 트랜잭션에서 수행한다. MANUAL_CHECK는 성공 processed_at을 쓰지 않는다. 구형 purge는 모든 legacy 호출자 전환 전까지 호환용으로만 유지하며 새 실행 경로는 사용하지 않는다.
+# R4 hosted 런타임 연결 (2026-10-23)
+
+- `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`일 때 R4 조립이 실제 `UnifiedBindings`를 주입한다. 구형 `Phase1Model/EvidenceTools`는 이 경로에서 사용하지 않는다. R2 Graph와 수집기는 수정하지 않는다.
+- 텍스트 조건은 YAML의 flags/values/zero_if에서 지정하고 수치값은 `structured_facts`의 확정된 필드만 매핑한다. 비율 단위는 `%`를 검증하며 다중 행·상충 값·필수 수치 누락은 수동 확인한다. 수치 추측과 결측의 0/false 대체는 하지 않는다.
+- 현재 승인된 수치 매핑은 유상증자 `issue_ratio_common_pct→ratio_pct`, `third_party_allocation→third_party`, 감자 `reduction_ratio_common_pct→reduction_ratio_pct`다. 소송·양수도·풋백옵션의 자기자본 대비 비율은 R3 확정 사실이 없으면 수동 확인한다. 재무 지표는 기존 DB 스냅샷으로만 계산한다.
+- API 근거는 API/field/receipt/row/value/unit/period/basis/data_version을 보존하고 계산 도구가 저장된 PRESENT 사실과 대조한다. 과거 API 근거도 해당 접수번호의 저장본으로 검증한다. 문서 인용문을 만들어 대신하지 않는다.
+- 공개 분석·조직별 초안은 각각 작업/검토 ID에 누적 예산을 저장한다. 호출 전에 소비량을 기록하고 재선점·재작성 버전 변경에도 초기화하지 않는다. 임대가 바뀐 실행자의 기록은 거절한다. PB 승인 대기 시간은 실행 시간에서 제외한다.
+- 구조화 사실 UNAVAILABLE의 원문 fallback은 R2 후속 연결 사항이다. 현재 수동 확인을 유지하며 운영 설정만으로 해당 경로가 완성됐다고 보지 않는다.
