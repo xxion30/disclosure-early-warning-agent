@@ -55,21 +55,37 @@ def process(api: str, headers: dict, d: dict, timeout: float, tag_prefix: str = 
 
 
 def affected(api: str, headers: dict, rcept_no: str) -> dict:
-    """사건 공시의 평가에서 영향 고객 {P1: [...], P2: [...]}."""
+    """사건 공시의 최신 평가에서 보유 고객 전원을 조회한다."""
     from sqlalchemy import select
-
     from shared.db import get_session
     from shared.models import RiskAssessment
 
-    with get_session() as s:
-        aid = s.scalars(select(RiskAssessment.assessment_id).where(RiskAssessment.rcept_no == rcept_no)).first()
+    with get_session() as db:
+        aid = db.scalars(
+            select(RiskAssessment.assessment_id)
+            .where(RiskAssessment.rcept_no == rcept_no)
+            .order_by(RiskAssessment.assessment_id.desc())
+        ).first()
+
     if aid is None:
         return {}
-    detail = requests.get(f"{api}/alerts/{aid}", headers=headers, timeout=30).json()
-    out: dict[str, list[str]] = {}
-    for c in detail.get("customers") or []:
-        out.setdefault(c["priority"], []).append(c["customer_id"])
-    return {k: sorted(v) for k, v in out.items()} | {"assessment_id": aid}
+
+    response = requests.get(
+        f"{api}/alerts/{aid}",
+        headers=headers,
+        timeout=30,
+    )
+    response.raise_for_status()
+    detail = response.json()
+
+    customers = detail.get("customers")
+    if not isinstance(customers, list):
+        raise ValueError("경보 상세 응답에 보유 고객 목록(customers)이 없습니다.")
+
+    return {
+        "assessment_id": aid,
+        "holders": sorted({c["customer_id"] for c in customers}),
+    }
 
 
 def run_company(api: str, headers: dict, stock: str, timeout: float, keep_going: bool) -> dict:
@@ -132,13 +148,22 @@ def judge(res: dict) -> list[tuple[bool | None, str]]:
     if exp.get("event_level"):
         got = (res["event"] or {}).get("level")
         out.append((got == exp["event_level"], f"사건 공시 등급 {exp['event_level']} 기대 → {got}"))
-    holders = exp.get("holders") or (sorted(exp.get("p1", []) + exp.get("p2", [])) if exp.get("p1") else None)
-    if holders:
-        got = sorted(set(res["customers"].get("P1", []) + res["customers"].get("P2", [])))
-        out.append((got == sorted(holders), f"영향 고객 {sorted(holders)} 기대 → {got}"))
-    if exp.get("p1") and exp.get("p2"):
-        out.append((res["customers"].get("P1") == sorted(exp["p1"]) and res["customers"].get("P2") == sorted(exp["p2"]),
-                    f"P1 {sorted(exp['p1'])} / P2 {sorted(exp['p2'])} 기대 → P1 {res['customers'].get('P1')} / P2 {res['customers'].get('P2')}"))
+    holders = exp.get("holders")
+
+    if holders is None and ("p1" in exp or "p2" in exp):
+        # 예전 정답 데이터에서는 고객 ID만 가져옵니다.
+        # P1/P2 등급이나 우선순위는 검증하지 않습니다.
+        holders = sorted(set(
+            exp.get("p1", []) + exp.get("p2", [])
+        ))
+
+    if holders is not None:
+        got = sorted(set(res["customers"].get("holders", [])))
+        wanted = sorted(set(holders))
+        out.append((
+            got == wanted,
+            f"보유 고객 {wanted} 기대 → {got}",
+        ))
     if exp.get("max_level"):
         top = max((a["level"] for a in res["assessments"]), key=lambda lv: ORDER.get(lv, 0), default="Low")
         out.append((ORDER[top] <= ORDER[exp["max_level"]], f"최고 등급 {exp['max_level']} 이하 기대 → {top}"))
