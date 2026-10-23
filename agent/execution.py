@@ -55,6 +55,10 @@ current_execution: ContextVar[Execution] = ContextVar("agent_execution")
 
 
 async def invoke_tool(tools, harness, name, arguments):
+    from agent.retrieval import current_rag_scope, require_complete
+    rag = current_rag_scope.get()
+    if rag is not None:
+        arguments = rag.arguments(name, arguments)
     scope = current_execution.get()
     key = name + ":" + hashlib.sha256(
         json.dumps(arguments, sort_keys=True, ensure_ascii=False).encode()
@@ -79,6 +83,13 @@ async def invoke_tool(tools, harness, name, arguments):
         retryable = bool(scope.budget_context) and code in {'TIMEOUT', 'UPSTREAM_ERROR'}
         raise AgentError(f"MCP 도구 실패: {name} ({code})",
                          'FAILED' if retryable else 'MANUAL_CHECK', retryable=retryable)
+    if name == 'search_disclosure_text':
+        if rag is not None:
+            rag.validate(arguments['rcept_no'], result.data)
+        elif isinstance(result.data, dict):
+            # Legacy unit ports also accept a bare chunk list. Preserve that
+            # format while still rejecting an explicit truncation flag.
+            require_complete(result.data)
     return result.data
 
 

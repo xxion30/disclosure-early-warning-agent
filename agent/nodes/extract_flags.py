@@ -6,6 +6,7 @@ from agent.execution import call_tool, generate
 from agent.nodes.phase1_common import routes_for
 from agent.phase1 import FlagsOutput
 from agent.ports import AgentError
+from agent.retrieval import RAGContractError
 from agent.public_risk import disclosure_context
 from agent.tool_loop import select_and_run
 
@@ -59,6 +60,8 @@ async def extract_flags(state, deps):
                 "verified_sources": sources,
                 "flag_attempts": attempt, "retry_count": attempt - 1}
     except (ValidationError, ValueError, AgentError) as exc:
+        if isinstance(exc, RAGContractError):
+            raise
         if isinstance(exc, AgentError) and exc.status == "FAILED":
             raise
         update = {"flag_attempts": attempt, "retry_count": attempt - 1}

@@ -3,6 +3,10 @@ from agent.ports import AgentError
 
 
 async def save_state(state, deps):
+    if deps.unified is not None and getattr(deps, 'defer_publication', False):
+        # R4 AnalysisWorker.complete_analysis is the only publication writer.
+        # A checkpoint is a computation snapshot, not a published assessment.
+        return {'status': 'DONE', 'analysis_complete': True}
     status = 'DONE' if deps.unified is not None else 'RUNNING'
     assessment_id = await deps.persistence.save(state, status)
     if not isinstance(assessment_id, int) or isinstance(assessment_id, bool) or assessment_id <= 0:

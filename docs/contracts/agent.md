@@ -239,5 +239,71 @@ R3 담당 #50 시험은 xfail을 제거하되, 모양 시험에서 facts를 지�
 한다(또는 실제 응답을 그대로 사용). 버전 기대값도 facts_hash로 변경한다. 변조를 통과시키기
 위해 R2 검증을 약화하지 않는다. 별도 리뷰 요청 패치로 제공하며 담당 파일을 대신 수정하지 않는다.
 
+## 13. R2 운영 진입점·검색 수명 보완 (2026-10-23)
+
+### R4 호스트의 호출 경계
+
+`agent.hosted.build_runtime(deps, saver)`는 동기 factory이며 R4
+`agent.adapters.executors.open_executors`가 주입한 체크포인터를 두 Graph에 사용한다.
+객체를 생성·종료하거나 DB를 선택하지 않는다. 반환 객체의 메서드는 다음과 같다.
+
+| 메서드 | 입력 | 반환·책임 |
+| --- | --- | --- |
+| `analyze_public(context)` | R4 `AnalysisContext` (`rcept_no`, `execution_context`) | DONE일 때 `status/score_result/ai_explanation`. 수동 확인은 MANUAL_CHECK. 일시 오류는 worker가 재시도 가능한 `TimeoutError` |
+| `draft_review(context)` | R4 `ReviewContext`의 11개 필드 | 보유 고객 전원의 검사된 `drafts`만 반환. 승인·업무 생성·DB 저장은 하지 않음 |
+
+**활성화 선행조건:** R4 조립에서 `UnifiedBindings.classify/prepare_signals/ensure_current`
+및 필요한 `record_budget`을 실제 구현으로 주입한다. 현재 `build_dependencies()`가
+이를 제공하지 않으므로 이번 R2 변경만으로 운영 활성화가 완료되지는 않는다.
+연결 후 설정은 `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`이다.
+bindings가 없으면 시작 시 명시적으로 거절하며 legacy Graph로 우회하지 않는다.
+
+### 공개 결과 저장과 조직별 승인 소유권
+
+- hosted factory는 `Dependencies.defer_publication=True`를 설정한다. 공개 Graph는
+  계산 완료를 체크포인트에 남기고 반환한다. 구형 `save_assessment` 저장기를 호출하지
+  않는다. 최종 공개 판정·상태 변경·processed_at 기록은 R4 worker의 lease 검증을 거쳐
+  `complete_analysis`가 수행한다. MANUAL_CHECK/FAILED도 R4가 작업 상태로 기록한다.
+- 이때 `analysis_complete=True`는 **계산 완료**이며 DB 공개 저장 성공을 뜻하지 않는다.
+- 새 조직별 경로는 전달받은 불변 공개 결과·설명·고객 목록으로 초안만 생성하는
+  별도 LangGraph다. R4 `run_review/save_drafts/decide`가 저장·승인·연락 업무의 정본이다.
+  구형 `start_review/resume` 경로와 동시에 승인·업무 생성을 실행하지 않는다.
+- `ReviewContext`에는 대표 접수번호·제목이 없다. R2는 이를 추정하거나 현재 DB에서
+  다시 읽지 않는다. 제공된 기업 코드·근거·설명을 사용한다. 추가 메타데이터가
+  필요하면 R4가 계약을 확장한다.
+- tenant/review/assessment/claim version 및 입력 전체의 해시로 private checkpoint를
+  분리한다. 같은 입력·같은 version의 완료 결과는 재사용하고 이미 결정한 문안은
+  보존한다. 다른 조직·새 version은 재사용하지 않는다.
+- 새 private 경로는 공시 원문을 검색하지 않는다. 안내문 가이드만 검색하며 모델에는
+  점수 없는 허용 필드를 전달한다. 검사 실패 후 3회가 소진되면 문안을 반환하지 않는다.
+- 개별 호출의 사용량은 checkpoint로 보존한다. 서로 다른 R4 claim version에 걸친
+  누적 사용량·재시도 장부는 R4와 별도로 연결해야 하며 이번 변경이 이를 대신하지 않는다.
+
+### 검색 사용권·완전성
+
+- `agent.retrieval.RAGScope`는 새 public Graph의 invocation마다 생성된다.
+  실행 ID·시도 번호를 포함한 해시와 invocation nonce로 128자 이하의 holder를 만든다.
+  같은 작업의 교체 worker가 이전 worker의 늦은 cleanup에 영향을 받지 않게 한다.
+- 공통 `invoke_tool`에서 모든 공시 검색·release에 같은 holder를 전달한다.
+  R4 `EvidenceTools`의 중첩 과거 검색도 이 경계를 사용한다. 가이드 검색에는 넣지 않는다.
+- 처음 조회한 공시와 과거 근거 공시를 모두 추적한다. 성공·실패·취소의 finally에서
+  동일 holder로 멱등 release를 수행한다(전체 최대 5초). 해제 실패는 원문이나 오류
+  내용을 기록하지 않고, R3의 유한 TTL을 최종 회수 수단으로 사용한다.
+- `truncated:true`, 잘못된 완전성 타입, 누락된 해시/정규화 버전, 재검색 중 버전 변경은
+  `RAGContractError`로 즉시 수동 확인한다. 추가 조회 루프가 이 오류를 무시할 수 없다.
+- 해시와 normalization_version은 응답과 기존 verified_sources를 비교한다.
+  R2가 정규화 버전 값을 만들어 채우거나 R3 정규화 로직을 복제하지 않는다.
+
+### 남은 외부 연결과 검증 범위
+
+1. R3: 실제 공시 검색 응답의 `normalization_version` 제공. 현재 코드에는 없으므로
+   이 필드 없이 새 텍스트 추출 경로를 정상 완료할 수 없다. row_key 채우기도 R3 영역이다.
+2. R4: 실제 UnifiedBindings·예산 장부·호스트 활성화 연결. 구형 저장 adapter가 런타임
+   밖에서 직접 release한다면 분석과 동일 holder를 전달해야 한다.
+3. 구조화 사실 UNAVAILABLE의 원문 fallback·백필 선별 정책은 이번 변경 범위가 아니다.
+   이를 위험 없음으로 바꾸지 않고 현재 수동 확인 동작을 유지한다.
+4. 테스트는 가짜 모델·도구, 실제 R4 SQLite 체크포인터 경계와 R3 메모리 사용권을 확인한다.
+   실제 DART·모델·PostgreSQL 전체 실행이나 위험 예측 정확도 검증을 의미하지 않는다.
+
 백필은 R3가 수집 완료를 인계하는 동작을 유지한다. 위험 대상/정정/후속의 선별·실행량 제한은
 R1 정책과 R4 dispatcher/enqueue_ready 책임이며 구조화 사실 유무만으로 제외하지 않는다.

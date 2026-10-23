@@ -67,3 +67,5 @@ class Dependencies:
     phase1: Phase1Bindings | None = None
     # New unified tool path; legacy Phase1Bindings remains opt-in compatible.
     unified: UnifiedBindings | None = None
+    # Hosted public execution returns a candidate; R4 publishes under its lease.
+    defer_publication: bool = False
