@@ -1,7 +1,7 @@
-"""DART 수집기 (담당: R3). 아직 구현 전이다 — 파일 구성 계획(docs/dartch_file_plan.md)의 뼈대만 있다.
+"""DART 수집기 (담당: R3). 구현 중이다 — 계약은 docs/contracts/collector.md, 구성은 docs/dartch_file_plan.md.
 
-예정된 모듈:
-    dart_client.py   DART API 호출 (httpx, 재시도, 호출 속도 제한)
+모듈 (구현됨 표시):
+    dart_client.py   DART API 호출 (httpx, 재시도, 호출 속도 제한)  [구현됨]
     watchlist.py     보유 종목 합집합(ETF 제외), 종목코드 → 회사 코드
     cursor.py        증분 수집 커서(마지막 성공 시각)
     jobs.py          종목별 수집 작업
