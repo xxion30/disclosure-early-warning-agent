@@ -210,6 +210,33 @@ def days_before(a: str, b: str) -> int:
     return (date.fromisoformat(b) - date.fromisoformat(a)).days
 
 
+def summarize(res: dict) -> dict:
+    """채점 결과 → 지표 숫자 (기준값 비교표용, scripts/demo/compare_thresholds.py)"""
+    sc, tl = res["scored"], res["timelines"]
+    alert_cases = [t for t in tl if t["exp_alert"] is True or t["exp_final"] in ALERT_STAGES]
+    normal_cases = [t for t in tl if t["exp_alert"] is False]
+    false_alarms = [t for t in normal_cases if t["final"] in ALERT_STAGES or t["alerts"]]
+    exp_cases = [t for t in tl if t["exp_ok"] is not None]
+    weekly = [t["alerts"] / max(1, days_before(t["case"]["window"]["from"], t["case"]["window"]["to"]) / 7) for t in tl if t["case"].get("window")]
+    by_id = {t["case"]["case_id"]: t for t in tl}
+
+    def lead(cid):
+        t = by_id.get(cid)
+        return days_before(t["first_alert"], t["case"]["as_of"]) if t and t["first_alert"] else None
+
+    return {
+        "single": (sum(r["ok"] for r in sc), len(sc)),
+        "expected": (sum(t["exp_ok"] for t in exp_cases), len(exp_cases)),
+        "hits": (sum(t["final"] in ALERT_STAGES for t in alert_cases), len(alert_cases)),
+        "false_alarms": (len(false_alarms), len(normal_cases)),
+        "false_alarm_ids": [t["case"]["case_id"] for t in false_alarms],
+        "weekly": sum(weekly) / len(weekly) if weekly else 0.0,
+        "lead_days": {cid: lead(cid) for cid in by_id},
+        "final": {cid: t["final"] for cid, t in by_id.items()},
+        "active": {cid: t["active"] for cid, t in by_id.items()},
+    }
+
+
 def render(res: dict) -> str:
     L = []
     sc = res["scored"]

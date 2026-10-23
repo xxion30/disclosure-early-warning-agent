@@ -87,3 +87,19 @@ def test_report_renders_from_real_case_files():
     assert "| 지표 | 결과 | 설명 |" in text and "r5-timeline-001" in text
     # 화면·문서용 결과표에도 점수 숫자는 넣지 않는다
     assert "pts=" not in text and "점수 " not in text
+
+
+def test_threshold_compare_baseline_matches_scorer_and_leaves_rules_untouched():
+    import compare_thresholds as ct
+    from risk_engine.loader import DEFAULT_PATH
+    before = DEFAULT_PATH.read_bytes()
+    rows = ct.compare()
+    assert DEFAULT_PATH.read_bytes() == before  # R4의 rules.yaml은 고치지 않는다
+    names = [name for name, _, _ in rows]
+    assert names[0] == "지금 기준" and "복합 규칙 끔" in names
+    base = ev.summarize(ev.evaluate(ev.load_cases()))
+    assert rows[0][2]["single"] == base["single"] and rows[0][2]["false_alarms"] == base["false_alarms"]
+    off = dict((name, m) for name, _, m in rows)["복합 규칙 끔"]
+    assert all("COMPOSITE" not in active for active in off["active"].values())
+    text = ct.render(rows)
+    assert "| 설정 |" in text and "pts=" not in text
