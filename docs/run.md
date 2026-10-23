@@ -1,5 +1,31 @@
 # DARTCH R4 실행 안내 (2026-10-22)
 
+## 2026-10-23 hosted 실행 연결
+
+R4 조립은 `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`을 설정할 때 실제
+UnifiedBindings와 DB 예산 장부를 주입한다. R4가 생성한 체크포인터를 R2에 전달하며
+공개 판정 발행·조직별 검토 저장·PB 승인·연락 업무는 R4 DB 트랜잭션이 맡는다.
+
+1. `uv run alembic upgrade head`로 `20261023_06`까지 적용한다. DB·체크포인트 경로는 서로 구분한다.
+2. business-mcp와 rag-mcp를 실행하고 실제 모델 키를 준비한다. 이 단계에 `--fake`를 사용하지 않는다.
+3. `.env`에 `QUEUE_ENABLED=false`, `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`을 설정하고 API를 재시작한다. API가 DB 작업 실행기와 review executor를 시작한다.
+4. 수동 수집이 필요하면 `COLLECT_DISPATCH_ENABLED=true`도 설정한다. 수집과 분석 활성화는 별도다.
+5. 새 실행은 `/analysis/jobs`로 등록하고 `/analysis/jobs/{id}`에서 상태를 확인한다. 공개 판정 이후 `/reviews/{id}/run`으로 초안을 생성한다. 이전 `/runs` 화면이 새 경로로 자동 전환되지는 않는다.
+
+현재 완료 범위는 로컬 가짜 모델·검색 응답과 실제 R2 Graph·R4 DB 도구·체크포인터를 통한 연결 검증이다.
+실제 DART·유료 모델·PostgreSQL 실행 완료를 뜻하지 않는다. 실제 `.env`와 운영 DB는 이번 변경에서 수정하지 않는다.
+
+**남은 연결:** R2 receive는 구조화 사실 UNAVAILABLE에서 중단한다. API에 필요한 수치가 없으면
+R4 mapper도 수동 확인한다. R3 financial_snapshots.sources의 계정별 출처는 R2 APIEvidence와
+모양이 달라 현재 검증 가능한 문서/API 근거가 없는 재무 행도 수동 확인이다. 과거 접수번호의
+API 근거를 R2가 해당 저장본으로 검증하는 경로도 협의가 필요하다. 임의 quote 생성으로 해결하지 않는다.
+`기간변경(상장폐지사유발생)`은 R1 판정 대기다. 이러한 한계가 있어 환경 변수의 기본값은 비워 둔다.
+
+최신 정책의 감사의견 거절·부적정은 YELLOW 항목이며 단독 기여는 +5다. 금양의 확정 발표 기준은
+2024-10-31 사건 경보(141일 전), 기준일 2025-03-21에는 ORANGE·YELLOW다.
+전체 최초 재무 경보 359일은 R3 과거 데이터 검증 대기다. 연락 대상은 보유 고객 전원이고 영향도는 사용하지 않는다.
+아래 Critical·P1/P2 시연 기록은 이전 프로젝트 이력이며 새 구현의 기대값이 아니다.
+
 이 절은 새 R4 구현 기준이다. 아래 이전 프로젝트 실행 기록은 참고용으로 유지한다.
 
 ## 준비와 검증

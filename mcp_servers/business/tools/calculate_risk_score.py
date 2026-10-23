@@ -85,6 +85,16 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
         history.extend(sig for sig in financial if sig['signal_type'] not in explicit)
         new_signals=[sig for sig in new_signals if sig['signal_type'] not in financial_types]
         result = calculate(history=history, new_signals=new_signals, as_of=as_of_d.isoformat(), rules=rules)
+        # Verify API references against their own receipt, including history.
+        from shared.facts import verify_api_reference
+        for row in result['breakdown']:
+            for evidence in row['evidence']:
+                if evidence.get('kind') == 'api':
+                    disc = s.get(Disclosure, evidence['rcept_no'])
+                    if (disc is None or disc.corp_code != corp_code
+                            or disc.filed_at[:10] > as_of_d.isoformat()):
+                        raise invalid('API 근거의 기업·공시일이 판정 입력과 다릅니다.')
+                    verify_api_reference(evidence, disc.structured_facts)
     result["expected_state_version"] = expected_version
     result["corp_code"] = corp_code
     result["as_of"] = as_of_d.isoformat()

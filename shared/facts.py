@@ -82,6 +82,25 @@ def facts_hash(payload):
                                     separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 
+API_REFERENCE_KEYS = ('api', 'field', 'rcept_no', 'row_key', 'value', 'unit', 'period', 'basis', 'data_version')
+
+
+def api_reference(fact, payload):
+    return {'kind': 'api', **{key: fact['source'].get(key, fact.get(key, payload.get(key)))
+                             for key in API_REFERENCE_KEYS}}
+
+
+def verify_api_reference(reference, payload):
+    if payload is None:
+        raise ValueError('API 근거를 대조할 저장된 사실이 없습니다.')
+    parsed = StructuredFacts.model_validate(payload).model_dump(mode='json')
+    if not any(fact['status'] == 'PRESENT' and type(fact['value']) is type(reference.get('value'))
+               and api_reference(fact, parsed) == reference
+               for fact in parsed['facts']):
+        raise ValueError('API 근거가 저장된 확정 사실과 일치하지 않습니다.')
+    return reference
+
+
 def store_facts(session, rcept_no, payload):
     """R3 writes through this validator inside its collection transaction."""
     from shared.models import Disclosure

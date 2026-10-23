@@ -116,3 +116,9 @@ R2가 제공하는 public executor와 review executor는 R4가 생성한 체크�
 - items[].missing은 그대로 보존하고 missing_labels:[{code,label}]를 추가한다.
 - 상세 링크는 assessment_id(기존 정수), public_assessment_id(새 공개 판정 문자열), review_id(내 조직), review_status, review_backend, my_approval_pending, can_review를 구분한다. 현재 상태 버전과 일치하는 판정만 연결한다. 구형 Graph 조회 실패·미지원은 pending/can_review를 null로 표시하고 해소·비경보·구판정은 검토 가능으로 표시하지 않는다.
 - version은 기존 알림 버전이다. 변경 이력 change_version 및 검토 version과 혼용하지 않는다. ack 계약은 바꾸지 않는다.
+# R4 hosted 연결과 근거 표시 (2026-10-23)
+
+- 기존 `/runs`와 새 `/analysis/jobs`, `/reviews`는 별도 실행 경계다. hosted 설정이 기존 화면을 자동 전환하지 않는다.
+- `/states/{stock_code}`의 `items[].title_disposition`은 candidate/watch/timeline/reference/needs_check다. `items[].reference_only`와 `timeline[].reference_only`는 자회사·종속회사 참고 공시 표시다. 점수는 추가하지 않는다.
+- `items[].evidence`는 문서 근거(source/quote/rcept_no/location) 또는 API 근거(kind/api/field/rcept_no/row_key/value/unit/period/basis/data_version)다. API 사실의 실제 금액·비율은 유지하고 내부 점수는 반환하지 않는다.
+- `AnalysisContext.lease_token`, `ReviewContext.lease_token`, 영속 execution_budget은 서버 내부 값이며 HTTP·모델·trace로 보내지 않는다.
