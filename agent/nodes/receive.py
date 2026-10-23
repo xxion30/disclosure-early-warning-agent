@@ -26,9 +26,14 @@ async def receive(state, deps):
         if date.fromisoformat(data['filed_at'][:10]) > date.fromisoformat(context['as_of']):
             raise AgentError('기준일 이후 공시를 분석할 수 없습니다')
         raw = await call_tool(deps, 'get_disclosure_facts', {'rcept_no': rcept_no})
+        if not isinstance(raw, dict) or 'availability' not in raw:
+            raise AgentError('get_disclosure_facts 중첩 응답 계약 불일치')
         facts = validate_facts(raw, data)
-        actual_version = facts.get('content_hash') or facts.get('data_version')
-        if actual_version is None or str(actual_version) != (context.get('facts_version') or context['input_version']):
+        actual_version = facts.get('facts_hash')
+        expected_version = context.get('facts_version')
+        if not expected_version:
+            raise AgentError('실행 context의 facts_version 누락: R4 조회 해시 주입 필요')
+        if actual_version is None or actual_version != expected_version:
             raise AgentError('구조화 자료 버전 불일치: 새 판정 필요')
         return {'disclosure': data, 'structured_facts': facts}
     return {"disclosure": data}

@@ -16,7 +16,7 @@ from agent.llm import StructuredLLM
 from agent.ports import AgentError
 from agent.runtime import AgentRuntime, open_runtime
 from agent.state import ApprovalBatch, PBContext, ToolSelection
-from agent.structured_facts import validate_facts
+from agent.structured_facts import canonical_facts_hash, validate_facts
 from shared.schemas import ToolResponse
 from test_phase1 import world, ORANGE, actual_disclosure
 
@@ -28,12 +28,13 @@ def setup(stage='ORANGE'):
     row, meta, body = actual_disclosure(ORANGE)
     calls = []
     facts = {'schema_version': '1', 'rcept_no': ORANGE, 'corp_code': row['corp_code'],
-             'collected_at': '2026-10-23T09:05:00+09:00', 'data_version': '1',
+             'collected_at': '2026-10-23T09:05:00+09:00',
              'facts': [{'name': 'issue_method', 'dtype': 'string', 'raw': '주주배정후 실권주 일반공모',
                         'value': '주주배정후 실권주 일반공모', 'unit': None, 'status': 'PRESENT', 'reason': None,
                         'source': {'api': 'piicDecsn', 'field': 'ic_mthn', 'rcept_no': ORANGE,
                                    'fetched_at': '2026-10-23T09:05:00+09:00'}}]}
-    facts['content_hash'] = sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
+    envelope = {'availability': 'AVAILABLE', 'rcept_no': ORANGE, 'corp_code': row['corp_code'],
+                'structured_facts': facts, 'facts_hash': canonical_facts_hash(facts)}
     response = {'stage': stage, 'active_stages': [stage], 'orange_score': 4., 'yellow_score': 0.,
                 'composite_ratio': 1., 'sort_value': 1., 'manual_check': False, 'manual_reasons': [],
                 'breakdown': [] if stage == 'NONE' else [{'item': '유상증자', 'evidence': [w.ev],
@@ -46,7 +47,7 @@ def setup(stage='ORANGE'):
         async def call(self, name, args):
             calls.append((name, copy.deepcopy(args)))
             if name == 'get_disclosure_facts':
-                return ToolResponse(ok=True, data=copy.deepcopy(facts))
+                return ToolResponse(ok=True, data=copy.deepcopy(envelope))
             if name == 'calculate_risk_score':
                 return ToolResponse(ok=True, data=copy.deepcopy(response))
             r = await inner.call(name, args)
@@ -64,8 +65,10 @@ def setup(stage='ORANGE'):
                                prepare_signals=prepare, ensure_current=current)
     deps = replace(w.deps, tools=Tools(), phase1=None, unified=bindings)
     ctx = ExecutionContext(assessment_key='assessment-control', as_of=response['as_of'],
-                           rules_version=RULES, input_version=facts['content_hash'], run_id='run-control')
+                           rules_version=RULES, input_version='whole-input-manifest-control',
+                           facts_version=envelope['facts_hash'], run_id='run-control')
     w.deps, w.ctx, w.facts, w.response, w.extra_calls, w.integration_options = deps, ctx, facts, response, calls, options
+    w.envelope = envelope
     return w
 
 
@@ -84,7 +87,7 @@ def test_unified_calculator_public_analysis_finishes_before_customer_work():
     assert s['score_result']['expected_state_version'] == 2
     assert s['score_result']['rules_digest'] == RULES
     assert 'source_chunks' not in json.dumps(s)
-    assert s['input_manifest']['structured_facts']['content_hash'] == w.facts['content_hash']
+    assert s['input_manifest']['structured_facts']['facts_hash'] == w.envelope['facts_hash']
 
 
 def test_no_route_still_calls_calculator_for_history_without_ai_flags():
@@ -125,7 +128,7 @@ def test_duplicate_rows_require_discriminator_and_version_changes_stop():
     w = setup(); w.facts['facts'].append(copy.deepcopy(w.facts['facts'][0]))
     with pytest.raises(AgentError, match='다중 행'):
         validate_facts(w.facts, actual_disclosure(ORANGE)[0])
-    w = setup(); w.facts['content_hash'] = 'changed'
+    w = setup(); w.envelope['facts_hash'] = '0' * 64
     assert public(w)['status'] == 'MANUAL_CHECK'
 
 

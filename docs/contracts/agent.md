@@ -203,3 +203,41 @@ runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
 6. R4 API·SSE가 공개 투영을 사용한다. 다른 담당 파일·규칙·의존성은 이번 R2 변경에서 수정하지 않는다.
 
 이 후속 연결이 없는 상태에서는 실제 전체 서비스 동작 완료를 주장하지 않는다.
+
+## 12. 구조화 사실 조회 연결 보정 — PR #50 대응
+
+### 합의된 원천 형식을 R2가 수용
+
+R3 저장/R4 조회 형식은 유지한다. R2 `validate_facts`는 `invoke_tool`이 반환한
+**ToolResponse.data**의 `availability/rcept_no/corp_code/structured_facts/facts_hash`를 받는다.
+`{ok,data}` 응답 전체를 한 번 더 풀거나 R4 응답을 최상위 facts로 바꾸지 않는다.
+
+- AVAILABLE: `structured_facts`의 공시·기업·스키마·출처를 검증하고 facts를 사용한다.
+- v1 자료형은 **string / number / integer / boolean**이다. number는 유한한 JSON 숫자만
+  허용하고 문자열·bool·NaN·Infinity는 거절한다. 결측·false·0을 서로 대체하지 않는다.
+- 다중 행 키는 R4와 동일하게 name/api/field/row_key/period/basis를 사용한다.
+- `facts_hash`를 구조화 값의 버전 키로 유지한다. R4의 canonical JSON 방식
+  (sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)의 SHA-256을
+  R2에서도 확인한다. JSON 변조·접수번호·기업 불일치는 중단한다.
+- R2 내부 검증 결과에는 facts 목록과 **facts_hash**를 보존한다. 이를 content_hash나
+  data_version으로 개명하지 않는다. 원문 해시 및 전체 입력 input_version과 혼용하지 않는다.
+- `receive`는 dispatcher가 제공한 `ExecutionContext.facts_version`과 facts_hash를 비교한다.
+  facts_version 누락 시 input_version으로 조용히 대체하지 않는다. R4가 이 값을 주입해야 한다.
+- UNAVAILABLE/NULL은 위험 없음이 아니다. 이번 보정에서는 기존 수동 확인 처리를 유지한다.
+  원문 분석 fallback·백필 대상 선별은 별도 실행 정책이며 이 PR에서 임의로 바꾸지 않는다.
+- 순수 payload 단위 검증(옛 decimal/date 포함)은 기존 직접 호출 호환용으로만 유지한다.
+  새 MCP 통합 경로에서는 중첩 응답과 위 v1 네 자료형을 요구한다.
+
+### 시험과 담당 경계
+
+R2 가짜 도구도 실제 R4 중첩 응답을 사용한다. R3의 실제 수집 함수 → R4 store_facts/
+get_disclosure_facts → R2 receive 연결은 임시 DB·가짜 DART로 확인하며 실제 외부 API
+성능 평가와 구분한다. 버전·값 변조·number 거절 오류도 검사한다.
+
+R4 담당 `mcp_business.md`에는 같은 응답·자료형·facts_hash 의미를 반영 요청한다.
+R3 담당 #50 시험은 xfail을 제거하되, 모양 시험에서 facts를 지우면 해시를 다시 계산해야
+한다(또는 실제 응답을 그대로 사용). 버전 기대값도 facts_hash로 변경한다. 변조를 통과시키기
+위해 R2 검증을 약화하지 않는다. 별도 리뷰 요청 패치로 제공하며 담당 파일을 대신 수정하지 않는다.
+
+백필은 R3가 수집 완료를 인계하는 동작을 유지한다. 위험 대상/정정/후속의 선별·실행량 제한은
+R1 정책과 R4 dispatcher/enqueue_ready 책임이며 구조화 사실 유무만으로 제외하지 않는다.
