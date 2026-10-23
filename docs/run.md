@@ -303,7 +303,7 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 
 ### 통합 전 R4 확인 (2026-10-23)
 
-- `get_disclosure_facts`는 R2 입력용 최상위 `facts`/`data_version`을 제공하고, 저장용 `number`를 응답에서만 `decimal`로 투영한다. 기존 R3 소비자의 중첩 필드는 전환용으로 유지한다. 저장 스키마·값은 바꾸지 않는다.
+- `get_disclosure_facts`의 R2 입력은 중첩 `structured_facts`와 정식 버전 키 `facts_hash`다. R2는 저장본의 `number`를 그대로 유지하고 해시를 검증한다. 최상위 facts/data_version 등은 호환용이며 R2는 사용하지 않는다. 호환 facts도 number를 유지하며 decimal 투영은 하지 않는다. 저장 스키마·값은 바꾸지 않는다.
 - 공개 worker의 `context.execution_context`는 R2 `runtime.start(context.rcept_no, context=context.execution_context)`에 전달할 매핑이다. `facts_version`은 작업 input_manifest의 해당 공시에서 계산하며 전체 input_version 또는 원문 해시와 다르다. 실제 운영 factory와 unified bindings 연결은 R2·R4 통합 검토 대상이다.
 - `COLLECT_DISPATCH_ENABLED=false` 기본값을 유지한다. 수동 수집을 운영에서 사용하려면 해당 실행 환경에 true를 설정하고 API를 재시작한다. 관리자로 `POST /collect/run`을 호출하면 R3 dispatch_collection으로 전달한다. 분석 실행 활성화는 PHASE1_RUNTIME_FACTORY 설정이 별도로 필요하다.
 - 활성화 경로는 R3의 실제 dispatcher와 가짜 수집 실행으로 검증한다. 테스트가 DART를 호출하거나 운영 수집 설정을 변경하지는 않는다.
