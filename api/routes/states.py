@@ -5,8 +5,11 @@ from sqlalchemy import select, case
 from sqlalchemy.orm import Session
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
+from api.graph_adapter import GraphAdapter, get_graph_adapter
+from api.review_links import review_links
+from shared.display import STAGE_LABELS, missing_labels
 from api.tenancy import visible_stock_codes
-from shared.models import Company, Disclosure, RiskState, StateRead, RiskAssessment, CollectCursor
+from shared.models import Company, Disclosure, RiskState, StateRead, RiskAssessment, CollectCursor, RiskStateChange
 from shared.models.risk import STAGES
 from risk_engine.stages import ALERT_STAGES
 from risk_engine.loader import load_rules
@@ -20,6 +23,7 @@ def public_item(item):
     return {key: item.get(key) for key in ('group', 'item', 'signal_type', 'event_id', 'rcept_no',
             'filed_at', 'active', 'resolved', 'missing')} | {
         'explanation': public_explanation(item.get('explanation')),
+        'missing_labels': missing_labels(item.get('missing')),
         'evidence': [{key: e.get(key) for key in ('source', 'quote', 'rcept_no', 'location')}
                      for e in item.get('evidence', []) if isinstance(e, dict)]}
 
@@ -36,7 +40,7 @@ def project(db, pb, row):
     read = db.get(StateRead, (pb.pb_id, row.corp_code))
     cursor = db.get(CollectCursor, row.stock_code)
     return {'stock_code': row.stock_code, 'corp_code': row.corp_code, 'corp_name': company.name,
-            'stage': row.stage, 'active_stages': row.active_stages, 'manual_check': row.manual_check,
+            'stage': row.stage, 'stage_label': STAGE_LABELS.get(row.stage), 'active_stages': row.active_stages, 'manual_check': row.manual_check,
             'resolved': row.resolved, 'version': row.alert_version,
             'new': row.stage in ALERT_STAGES and row.alert_version > (read.read_version if read else 0),
             'updated_at': row.updated_at, 'latest_filed_at': row.latest_filed_at,
@@ -69,12 +73,21 @@ def list_states(stage: list[str] | None = Query(None), alert: bool = False,
 
 
 @router.get('/{stock_code}')
-def state_detail(stock_code: str, pb: CurrentPB = Depends(get_current_pb), db: Session = Depends(get_db)):
+async def state_detail(stock_code: str, pb: CurrentPB = Depends(get_current_pb), db: Session = Depends(get_db),
+                       adapter: GraphAdapter = Depends(get_graph_adapter)):
     row = visible_state(db, pb, stock_code)
     timeline = db.scalars(select(Disclosure).where(Disclosure.corp_code == row.corp_code)
                          .order_by(Disclosure.filed_at.desc(), Disclosure.rcept_no.desc()))
     assessment = db.scalar(select(RiskAssessment).where(RiskAssessment.corp_code == row.corp_code, RiskAssessment.risk_state_version == row.state_version).order_by(RiskAssessment.created_at.desc(), RiskAssessment.assessment_id.desc()))
-    return {**project(db, pb, row), 'ai_explanation': public_explanation(assessment.ai_explanation) if assessment else None, 'items': [public_item(i) for i in row.items],
+    change=db.scalar(select(RiskStateChange).where(RiskStateChange.corp_code==row.corp_code,
+        RiskStateChange.state_version==row.state_version))
+    links=await review_links(db,pb,row,assessment,adapter)
+    return {**project(db, pb, row), **links,
+            'comparison_available': change is not None and change.from_stage is not None,
+            'changes': change.changes if change else [],
+            'change_version': change.state_version if change else None,
+            'changed_at': change.created_at if change else None,
+            'ai_explanation': public_explanation(assessment.ai_explanation) if assessment else None, 'items': [public_item(i) for i in row.items],
             'resolution_evidence': [{k: e.get(k) for k in ('source', 'quote', 'rcept_no', 'location')} for e in row.resolution_evidence],
             'timeline': [{k: getattr(d, k) for k in ('rcept_no', 'title', 'filed_at', 'url', 'event_id')} for d in timeline]}
 

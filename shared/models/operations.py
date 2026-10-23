@@ -88,3 +88,15 @@ class TenantRun(Base):
     assessment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thread_id: Mapped[str] = mapped_column(String, unique=True)
     status: Mapped[str] = mapped_column(String, default='PENDING')
+
+
+class RiskStateChange(Base):
+    __tablename__ = 'risk_state_changes'
+    __table_args__ = (UniqueConstraint('corp_code','state_version',name='uq_state_change_version'),)
+    change_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    corp_code: Mapped[str] = mapped_column(ForeignKey('companies.corp_code'), index=True)
+    state_version: Mapped[int] = mapped_column(Integer)
+    from_stage: Mapped[str | None] = mapped_column(String, nullable=True)
+    to_stage: Mapped[str] = mapped_column(String)
+    changes: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[str] = mapped_column(String)

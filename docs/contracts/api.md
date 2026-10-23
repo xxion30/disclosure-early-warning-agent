@@ -96,3 +96,13 @@ R2가 제공하는 public executor와 review executor는 R4가 생성한 체크�
 2. `draft_review(ReviewContext) -> {drafts:{customer_id:message}}`. 서버가 준 tenant/판정/thread/고객 ID 목록과 기존 결정·재작성 대상만 사용한다. 공개 분석을 재실행하거나 스스로 업무를 생성하지 않는다. R4는 반환 문안과 고객 범위를 검증·저장하고 PB 승인 기록 이후 업무를 생성한다.
 
 현재 R2 AgentRuntime.start(rcept_no)는 이 포트가 아니다. R2가 조직 문맥·판정 식별·근거 보존에 맞춘 진입점을 제공해야 하며, R4가 구형 start를 새 포트로 위장하지 않는다. 기존 /runs·SSE·구형 승인 경로의 전환도 R2/R5와 별도 확인한다. 새 경로를 기존 UI가 자동 사용한다는 의미가 아니다.
+
+## R5 화면 연결 보완 (2026-10-23, 후속 변경)
+
+- stage 코드는 유지하고 stage_label은 RED 즉시 경보 / ORANGE 사건 경보 / YELLOW 재무 경보 / COMPOSITE 복합 위험 / WATCH 관찰 중 / NONE 경보 없음으로 제공한다.
+- /alerts는 stage_available과 legacy를 함께 제공한다. 실제 새 NONE은 유효한 단계이며 구형 기본값 NONE과 구분한다. 새 단계 여부는 판정 버전/새 규칙 근거로 판별하며 level을 새 stage로 변환하지 않는다.
+- /customers exposure.top_stage는 현재 유효한 경보 노출의 대표 단계다. 경보 없음 또는 구형 노출이 섞여 새 단계끼리 비교할 수 없으면 null이다. top_level은 호환 유지한다. WATCH는 경보 노출에 포함하지 않는다. 같은 우선순위는 서버의 기존 단계/정렬값/최근 기준으로 선택한다.
+- /states/{code}는 changes 및 comparison_available/change_version/changed_at을 반환한다. 직전 종목 상태와 비교하며 최초 저장·변경 이력 미보유는 비교 불가다. 감쇠에 의한 하락을 해소로 표시하지 않는다. resolved에는 사건 식별자 또는 scope:stock을 제공한다.
+- items[].missing은 그대로 보존하고 missing_labels:[{code,label}]를 추가한다.
+- 상세 링크는 assessment_id(기존 정수), public_assessment_id(새 공개 판정 문자열), review_id(내 조직), review_status, review_backend, my_approval_pending, can_review를 구분한다. 현재 상태 버전과 일치하는 판정만 연결한다. 구형 Graph 조회 실패·미지원은 pending/can_review를 null로 표시하고 해소·비경보·구판정은 검토 가능으로 표시하지 않는다.
+- version은 기존 알림 버전이다. 변경 이력 change_version 및 검토 version과 혼용하지 않는다. ack 계약은 바꾸지 않는다.

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from shared.presentation import public_explanation
+from shared.display import STAGE_LABELS, stage_fields
 from risk_engine.loader import load_rules
 from risk_engine.stages import sort_value
 from api.tenancy import visible_stock_codes, require_assessment_access, require_legacy_runtime
@@ -125,10 +126,10 @@ def impact_summary(a: RiskAssessment, previous: RiskAssessment | None, customers
     if customers is not None:
         cust = {"total": len(customers),
                 "my_pending": sum(1 for c in customers if c.get("mine") and c.get("decision") == "승인대기")}
-    if a.stage and a.stage != 'NONE':
+    if stage_fields(a)['stage_available']:
         names = '·'.join(i['item'] for i in items)
         headline = f'이번 공시의 위험 항목: {names}.' if names else '이번 공시의 추가 위험 항목은 없습니다.'
-        headline += f' 현재 단계는 {a.stage}입니다.'
+        headline += f' 현재 단계는 {STAGE_LABELS[a.stage]}입니다.'
     return {
         "headline": headline,
         "previous": {"assessment_id": previous.assessment_id, "level": previous.level} if prev_ok else None,
@@ -194,6 +195,7 @@ async def list_alerts(
             "filed_at": filed_at,
             "level": a.level,
             "stage": a.stage,
+            **stage_fields(a),
             "combo_upgraded": a.combo_upgraded,
             "status": a.status,
             "created_at": a.created_at,
@@ -246,6 +248,7 @@ async def get_alert(
         "status": a.status,
         "level": a.level,
         "stage": a.stage,
+        **stage_fields(a),
         "combo_upgraded": a.combo_upgraded,
         "summary": impact_summary(a, previous, customers if view is not None else None),
         "reasons": strip_scores(a.reasons),  # 위험 항목·근거 (점수 숫자 없음, 점수 높은 순)

@@ -16,6 +16,8 @@ from api.auth import CurrentPB, get_current_pb
 from api.deps import get_db
 from api.routes.alerts import ALERT_LEVELS, LEVEL_ORDER, fill_name
 from shared.config import ROOT_DIR
+from shared.display import STAGE_LABELS
+from risk_engine.loader import load_rules
 from shared.models import AuditLog, Company, ContactTask, Customer, Holding, RiskAssessment, RiskState
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -127,12 +129,19 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
                 "ratio_pct": round(h.eval_amount / cust.total_assets * 100, 1) if cust.total_assets else None,
                 "on_credit": h.on_credit, "stage": state.stage if state else "NONE", "alert": alert,
             })
+        exposed_states=[current[i['stock_code']] for i in items if i['alert'] and i['stock_code'] in current]
+        order=load_rules()['stage_priority']
+        exposed_states.sort(key=lambda r:r.stock_code)
+        exposed_states.sort(key=lambda r:r.latest_filed_at,reverse=True)
+        exposed_states.sort(key=lambda r:(order[r.stage],-r.sort_value))
+        top_stage=exposed_states[0].stage if exposed_states and len(exposed_states)==len(exposure) else None
         top = max((e["level"] for e in exposure), key=LEVEL_ORDER.index, default=None)
         rows.append({
             "customer_id": cid, "name": cust.name, "risk_profile": cust.risk_profile, "total_assets": cust.total_assets,
             "holdings": items,
             "exposure": {
                 "alert_count": len(exposure), "top_level": top,
+                "top_stage": top_stage, "top_stage_label": STAGE_LABELS.get(top_stage),
                 "amount": sum(i["eval_amount"] for i in items if i["alert"]),
             },
             "history": history[cid],
