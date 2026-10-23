@@ -32,6 +32,9 @@ class Disclosure(Base):
     event_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     event_started_at: Mapped[str | None] = mapped_column(String, nullable=True)
     original_rcept_no: Mapped[str | None] = mapped_column(String, nullable=True)
+    structured_facts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    analysis_ready_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    input_version: Mapped[str | None] = mapped_column(String, nullable=True)
     processed: Mapped[bool] = mapped_column(Boolean, default=False)
     # 운영(RAG_INDEX_MODE=ephemeral): 처리가 끝나면 본문과 색인을 지우고 아래 기록만 남긴다.
     content_hash: Mapped[str | None] = mapped_column(String, nullable=True)  # 원문 sha256 (DART에서 다시 받았을 때 같은 문서인지 확인)

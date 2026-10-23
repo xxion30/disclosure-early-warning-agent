@@ -1,7 +1,7 @@
 # 위험도·영향도 규칙표 (CLAUDE.md 5장). 숫자는 전부 여기서만 바꾼다.
 # 회계 담당이 조정할 수 있게 코드에는 숫자를 쓰지 않는다.
 # 평가(eval)에서 다른 설정을 쓰려면 환경 변수 RULES_PATH에 복사본 경로를 지정한다.
-version: dartch-v1
+version: dartch-v2-premerge
 
 # ---------------------------------------------------------------- 5-4 경보 기준
 level_order: [Low, Medium, High, Critical]
@@ -261,7 +261,8 @@ yellow:
     label: 영업현금흐름
     tiers: {negative_years: [[1, 1], [2, 2]]}
   INTEREST_BURDEN:
-    label: 이자 부담
+    enabled: false  # 금융비용 기준 경계값 R1 확정 전 가점 보류
+    label: 금융비용 기준 보상배율
     less_than: {interest_coverage: {value: 1, add: 2}}
   SHORT_TERM_DEBT:
     label: 단기채무

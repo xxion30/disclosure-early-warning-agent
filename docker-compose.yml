@@ -6,6 +6,8 @@ x-backend: &backend
     DB_URL: postgresql+psycopg://dartch:dartch@postgres:5432/dartch
     CHECKPOINT_DB: postgresql://dartch:dartch@postgres:5432/dartch
     QUEUE_ENABLED: "false"
+    COLLECT_DISPATCH_ENABLED: ${COLLECT_DISPATCH_ENABLED:-false}
+    PHASE1_RUNTIME_FACTORY: ${PHASE1_RUNTIME_FACTORY:-}
     BUSINESS_MCP_URL: http://business:8001/mcp
     RAG_MCP_URL: http://rag:8002/mcp
     GRAPH_ADAPTER: ${GRAPH_ADAPTER:-fake}
@@ -54,8 +56,11 @@ services:
   collector:
     <<: *backend
     profiles: ["integration"]
-    command: ["python", "-m", "collector"]
-    # R3 supplies collector.__main__ and daily scheduler.
+    command: ["python", "-m", "collector", "--schedule"]
+    depends_on:
+      api:
+        condition: service_healthy
+    # R3 collector entrypoint; explicit daily schedule, no queue.
   web:
     image: node:22-alpine
     working_dir: /app

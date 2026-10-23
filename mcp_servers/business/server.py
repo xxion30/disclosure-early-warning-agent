@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 from mcp_servers.business.tools.calculate_risk_score import calculate_risk_score
 from mcp_servers.business.tools.create_contact_task import create_contact_task
 from mcp_servers.business.tools.get_company_profile import get_company_profile
+from mcp_servers.business.tools.get_disclosure_facts import get_disclosure_facts
 from mcp_servers.business.tools.get_disclosure import get_disclosure
 from mcp_servers.business.tools.get_holders import get_holders
 from mcp_servers.business.tools.get_signal_history import get_signal_history
@@ -29,6 +30,7 @@ MUTATING = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": Tr
 for _tool, _hints in (
     (list_new_disclosures, READ_ONLY),
     (get_disclosure, READ_ONLY),
+    (get_disclosure_facts, READ_ONLY),
     (get_company_profile, READ_ONLY),
     (get_signal_history, READ_ONLY),
     (calculate_risk_score, READ_ONLY),  # 규칙 계산이지만 DB를 바꾸지 않는다

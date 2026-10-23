@@ -58,7 +58,8 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
             sig.pop('event_started_at', None)
             sig['detail'].pop('event_id', None)
             sig['detail'].pop('event_started_at', None)
-            root = s.get(Disclosure, disc.original_rcept_no) if disc.original_rcept_no else None
+            # R3 original_rcept_no is a candidate; only an R4-confirmed event_id authorizes merging.
+            root = s.get(Disclosure, disc.original_rcept_no) if disc.original_rcept_no and disc.event_id else None
             if root and root.corp_code != corp_code:
                 raise invalid('원공시의 회사가 일치하지 않습니다.')
             if disc.event_id or root:
@@ -68,13 +69,21 @@ def calculate_risk_score(corp_code: str, new_signals: list[dict], as_of: str) ->
         snapshots = s.scalars(select(FinancialSnapshot).join(Disclosure, Disclosure.rcept_no == FinancialSnapshot.rcept_no)
                               .where(FinancialSnapshot.corp_code == corp_code, Disclosure.corp_code == corp_code,
                                      Disclosure.filed_at <= as_of_d.isoformat() + '~')).all()
-        if snapshots:
-            from risk_engine.financials import select_snapshot_signals
-            financial = select_snapshot_signals(snapshots, {d.rcept_no: d.filed_at for d in s.scalars(select(Disclosure).where(Disclosure.corp_code == corp_code))})
-            explicit = {sig['signal_type'] for sig in new_signals}
-            selected_types = {sig['signal_type'] for sig in financial} - explicit
-            history = [sig for sig in history if sig['signal_type'] not in selected_types]
-            history.extend(sig for sig in financial if sig['signal_type'] not in explicit)
+        from risk_engine.financials import select_snapshot_signals
+        financial_types={'CAPITAL_IMPAIRMENT','OPERATING_CASH_FLOW','INTEREST_BURDEN','SHORT_TERM_DEBT'}
+        # Numerical indicators come from R3 snapshots, never from model/caller overrides.
+        requested={sig['signal_type']:sig for sig in [*history,*new_signals] if sig['signal_type'] in financial_types}
+        financial=select_snapshot_signals(snapshots,{d.rcept_no:d.filed_at for d in s.scalars(select(Disclosure).where(Disclosure.corp_code==corp_code))}) if snapshots else []
+        selected={sig['signal_type'] for sig in financial}
+        for st,previous in requested.items():
+            if st not in selected:
+                financial.append({'signal_type':st,'event_id':f'financial:{corp_code}:{st}',
+                    'rcept_no':previous.get('rcept_no'),'filed_at':previous.get('filed_at') or as_of_d.isoformat(),
+                    'detail':{},'evidence':[]})
+        explicit={sig['signal_type'] for sig in new_signals if sig['signal_type'] not in financial_types}
+        history=[sig for sig in history if sig['signal_type'] not in financial_types and sig['signal_type'] not in (selected-explicit)]
+        history.extend(sig for sig in financial if sig['signal_type'] not in explicit)
+        new_signals=[sig for sig in new_signals if sig['signal_type'] not in financial_types]
         result = calculate(history=history, new_signals=new_signals, as_of=as_of_d.isoformat(), rules=rules)
     result["expected_state_version"] = expected_version
     result["corp_code"] = corp_code

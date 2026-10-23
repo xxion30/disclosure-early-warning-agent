@@ -17,6 +17,7 @@ class ErrorCode(str, Enum):
     INVALID_INPUT = "INVALID_INPUT"
     DB_ERROR = "DB_ERROR"
     TIMEOUT = "TIMEOUT"
+    UPSTREAM_ERROR = "UPSTREAM_ERROR"
 
 
 # ---- 공통 응답 형식: {"ok": true, "data": ...} / {"ok": false, "error": {...}} ----

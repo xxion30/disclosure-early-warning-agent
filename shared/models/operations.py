@@ -29,6 +29,7 @@ class RiskState(Base):
     latest_filed_at: Mapped[str] = mapped_column(String)
     as_of: Mapped[str | None] = mapped_column(String, nullable=True)
     rules_digest: Mapped[str | None] = mapped_column(String, nullable=True)
+    public_assessment_id: Mapped[str | None] = mapped_column(String, nullable=True)
     state_version: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
 

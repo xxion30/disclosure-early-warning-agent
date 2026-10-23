@@ -33,6 +33,7 @@ class ContactTask(Base):
 
     __table_args__ = (UniqueConstraint('assessment_id', 'customer_id', name='uq_contact_assessment_customer'),)
     tenant_id: Mapped[str] = mapped_column(String, default='default', server_default='default', index=True)
+    review_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     task_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     assessment_id: Mapped[int] = mapped_column(ForeignKey("risk_assessments.assessment_id"), index=True)
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.customer_id"), index=True)

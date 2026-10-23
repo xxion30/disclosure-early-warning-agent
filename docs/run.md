@@ -286,3 +286,17 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 수집 실행자는 `shared.collection.heartbeat_run(session, run_id)`가 false이면 만료된 작업이므로 중단한다. 정상 실행 중 COLLECTION_LEASE_SECONDS보다 짧은 주기로 heartbeat하고, 각 종목을 finish_stock으로 마친 후 finish_run으로 실행을 종료한다. `uv run python -m scripts.ops.recover_collections`는 만료 작업을 실패 처리하고 예약을 해제한다. 수동 수집 요청도 만료 복구를 수행한다. 스케줄러에서의 호출 연결은 R3 담당이다.
 
 새 공시 분류와 모델 결과 필터는 R4의 Phase1 adapter에 연결했다. 과거 근거는 실제 RAG 조각을 다시 조회·검증하고 검증된 인용 부분만 반환한다. RAG 재조회가 불가능하면 수동 확인으로 남긴다. R2의 프롬프트 품질 검증 및 회사별 Graph 실행은 여전히 별도 연동이 필요하다.
+
+## Pre-merge R4 실행 지원 (2026-10-23)
+
+- `uv run alembic upgrade head`: 기존 01/02는 유지하고 03(구조화 사실/준비 표시), 04(분석 작업/불변 판정/조직 검토)를 추가한다. 사용자 데이터 자동 삭제·원문 자동 이관은 하지 않는다.
+- 구조화 사실은 `schema_version: "1"`, 상태는 PRESENT/MISSING/NOT_APPLICABLE/NEEDS_CHECK다. 재무 indicators의 OK/MISSING과 혼용하지 않는다.
+- R3는 `store_facts`와 `mark_ready`를 수집 완료 트랜잭션에 연결해야 한다. 현재 collector/jobs.py를 R4가 대신 수정하지 않았다.
+- 수동 수집은 `COLLECT_DISPATCH_ENABLED=true`일 때 R3 dispatcher를 연결한다. 기본 false이며 DART 실호출 없이 오프라인 검증한다. Compose integration의 collector는 `python -m collector --schedule`로 실행한다.
+- R3 현 구현에는 httpx만 필요하다. 이를 운영 의존성으로 옮겼으며 미사용 tenacity/APScheduler는 추가하지 않았다. COLLECT_TIME(09:05 KST), COLLECT_BACKFILL_MONTHS, DART_TIMEOUT_SECONDS, DART_RETRY_MAX, DART_MAX_RPS, DART_MAX_CONCURRENCY를 설정한다. DART_RETRY_MAX는 R3 구현상 **재시도 횟수**(최초 별도)이며 R4 작업 전체 최대 3회와 다르다. MAX_RPS 기본 4는 공식 한도 보장이 아니다.
+- 체크포인터는 R4 `open_checkpointer`가 생성·종료하며 R2에는 객체를 주입한다. 구형 R2 open_runtime 편의 함수는 호환용으로 보존했다.
+- `PHASE1_RUNTIME_FACTORY`가 비어 있으면 새 공개/조직 Graph는 실행하지 않는다. R2가 계약에 맞는 factory를 제공한 뒤 설정하면 API가 DB 분석 worker와 private executor를 연결한다. 같은 factory를 `python -m scripts.ops.run_analysis_worker --factory module:factory [--once]`로 별도 호스트에 주입할 수도 있다. 실제 존재하지 않는 factory 예시를 실행하면 안 된다.
+- ANALYSIS_LEASE_SECONDS와 ANALYSIS_RETRY_DELAY_SECONDS는 수집 lease와 별도다. 큐는 false를 유지한다. ANALYSIS 작업은 PENDING/RUNNING/RETRY_WAIT/DONE/MANUAL_CHECK/FAILED로 관리한다.
+- `processed_at`은 새 공개 판정 저장 성공 시각이다. 승인 완료·색인 해제 시각이 아니다. MANUAL_CHECK는 성공 시각을 기록하지 않으며 명시적 재분석 요청으로만 재실행한다.
+- 기존 purge_disclosure_text와 release_disclosure_index는 구형 호출자 때문에 보존했다. 새 공개 저장은 purge를 호출하지 않는다. R2 원문 수명 전환·R3 메모리 동시 사용 정책 확인 후 기존 호출 제거/도구 정리를 진행한다.
+- 기존 refresh_states는 구형 상태 재계산 경로다. 새 불변 공개 판정의 일일 재계산은 새 기준일로 분석 작업을 등록하는 경로에 연결해야 한다. 스케줄러에서 이 인계를 연결하기 전 자동 갱신 완료로 판단하지 않는다.

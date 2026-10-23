@@ -1,5 +1,7 @@
 # business-mcp 도구 계약
 
+> 2026-10-23 전환 상태: `purge_disclosure_text`는 기존 Graph 호출자를 위한 호환 도구로만 남는다. 새 공개 분석 경로는 본문을 저장하지 않고 해시·성공 완료 시각을 별도 기록한다. 최종 명세는 purge 불필요이며, 기존 호출자 전환 전 즉시 삭제하지 않는다.
+
 > 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `create_contact_task`·`update_task_status`는 오후 회의로 되살아나고, `compute_customer_impact`와 `purge_disclosure_text`는 삭제 대상이다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
@@ -126,3 +128,11 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 - 재무 스냅샷은 지표별 유효 기간·최신 revision·연결 우선으로 선택한다. 연간 전용 지표를 최신 분기 자료로 지우지 않는다. R3의 지표 계산식·출처 실제 확인은 계속 필요하다.
 
 과거 근거 source_chunks는 실제 RAG 반환값에 대한 재검증 뒤 추출한 인용 부분과 조각 해시만 포함한다. 전체 검색 조각을 새 체크포인트·DB에 영속 저장하지 않는다.
+
+## Pre-merge R4 도구 계약 (2026-10-23)
+
+get_disclosure_facts(rcept_no)는 {ok,data:{availability:AVAILABLE|UNAVAILABLE,rcept_no,corp_code,structured_facts,facts_hash}}를 반환한다. 공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 실패 여부는 추측하지 않는다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
+
+UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한다. get_disclosure_facts는 네트워크를 호출하지 않는다.
+
+본문 삭제와 공개 분석 완료 기록은 분리한다. 새 작업 완료는 공개 판정 저장과 processed_at 갱신을 같은 트랜잭션에서 수행한다. MANUAL_CHECK는 성공 processed_at을 쓰지 않는다. 구형 purge는 모든 legacy 호출자 전환 전까지 호환용으로만 유지하며 새 실행 경로는 사용하지 않는다.
