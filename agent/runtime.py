@@ -15,6 +15,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 
 from agent.execution import Execution, current_execution
+from agent.retrieval import RAGScope, current_rag_scope, finish_scope
 from agent.graph import build_graph
 from agent.nodes.pb_approval import validate_batch
 from agent.state import ApprovalBatch, PBContext, initial_state
@@ -99,6 +100,10 @@ class AgentRuntime:
                           repeated_calls=dict(budget.get('repeated_calls', {})),
                           record_budget=(self.deps.unified.record_budget if self.deps.unified else None),
                           budget_context=context.model_dump() if context else {})
+        rag_scope = (RAGScope.create(self.deps.tools, context.model_dump(),
+                                    previous.get('verified_sources', []))
+                     if self.deps.unified is not None and context else None)
+        rag_token = current_rag_scope.set(rag_scope)
         token = current_execution.set(scope)
         config = self.config(rcept_no, context)
         config["metadata"] = {"rcept_no": rcept_no, "trace_id": trace_id}
@@ -122,7 +127,12 @@ class AgentRuntime:
                 run.end(outputs={"status": state["status"], "task_ids": state["task_ids"]})
                 return state
         finally:
-            current_execution.reset(token)
+            try:
+                if rag_scope is not None:
+                    await finish_scope(rag_scope)
+            finally:
+                current_rag_scope.reset(rag_token)
+                current_execution.reset(token)
 
     async def start(self, rcept_no: str, *, context=None):
         if not isinstance(rcept_no, str) or not rcept_no.strip():

@@ -21,16 +21,13 @@ def get_disclosure_facts(rcept_no: str) -> dict:
                 raise invalid('구조화 사실의 공시 식별자가 일치하지 않습니다.')
             data = parsed.model_dump(mode='json')
         version = facts_hash(data) if data is not None else None
-        # Hash the stored schema, then project a fresh R2 DTO. Never mutate storage
-        # or change numeric values while translating the dtype vocabulary.
-        facts = None if data is None else [
-            {**fact, 'dtype': 'decimal' if fact['dtype'] == 'number' else fact['dtype']}
-            for fact in data['facts']
-        ]
+        # R2 consumes the nested stored payload and verifies facts_hash.
+        # Flat fields are compatibility aliases; keep the same v1 dtypes.
+        facts = data['facts'] if data is not None else None
         return ok({'availability': 'AVAILABLE' if data is not None else 'UNAVAILABLE',
                    'rcept_no': row.rcept_no, 'corp_code': row.corp_code,
                    'schema_version': data['schema_version'] if data is not None else None,
                    'collected_at': data['collected_at'] if data is not None else None,
                    'facts': facts, 'data_version': version,
-                   # Transitional R3 compatibility; new consumers use the flat DTO.
+                   # Canonical R2 input. data_version above is a legacy hash alias.
                    'structured_facts': data, 'facts_hash': version})

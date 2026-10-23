@@ -1,5 +1,15 @@
 # API·화면 계약
 
+## 승인 재개 트랜잭션 보완 (2026-10-23)
+
+구형 `POST /alerts/{id}/decision`은 권한·승인 대기·판정·문안 검증 후 RunManager에서 해당 공시의 재개 자리를 선점한다. 감사 기록을 요청 DB 세션에서 명시적으로 커밋한 뒤에만 Graph의 DB 접근을 시작한다. 선점과 task 생성은 커밋 전에 하되 시작 gate는 커밋 성공 후 연다. 커밋 실패는 rollback·선점 취소 및 503이며 Graph를 실행하지 않는다. 중복 실행은 409다. 202는 결정 요청 저장·실행 인계 수락이며 Graph 처리 완료를 뜻하지 않는다. 커밋 이후 실행 실패 시 수락된 요청의 감사 기록은 보존한다.
+
+FakeGraphAdapter의 초기 DB 상태 갱신이 실패하면 메모리는 WAITING_APPROVAL을 유지하여 다시 제출할 수 있다. 결정/업무 반영이 시작된 뒤 실패하면 MANUAL_CHECK로 표시하고 이미 반영한 결과를 보존하며 자동 재실행하지 않는다. 이 선점은 구형 단일 API 프로세스의 메모리 경계이며, 새 조직별 DB 실행기·다중 프로세스의 영속 선점을 대체하지 않는다. 요청·응답 DTO와 승인 권한은 변경하지 않는다.
+
+## 재무 판정 근거 보완 (2026-10-23)
+
+자본잠식 항목은 선택한 fs_div(OFS/CFS)와 basis_checks를 포함한다. basis_checks에는 각 기준의 fs_div/period/rcept_no/revision/status/impairment_pct만 공개한다. 실제 재무 비율은 보존하고 점수·가중치·정렬값은 공개하지 않는다. OFS/CFS 점수 합산이나 전체 단계 임계값 변경은 없다.
+
 > 담당: **R4 (화면은 R5)** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인·업무·안내문 API와 화면은 오후 회의로 되살아나고(점수는 응답에서 뺀다), `/states`·`/collect`가 추가된다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
@@ -106,3 +116,9 @@ R2가 제공하는 public executor와 review executor는 R4가 생성한 체크�
 - items[].missing은 그대로 보존하고 missing_labels:[{code,label}]를 추가한다.
 - 상세 링크는 assessment_id(기존 정수), public_assessment_id(새 공개 판정 문자열), review_id(내 조직), review_status, review_backend, my_approval_pending, can_review를 구분한다. 현재 상태 버전과 일치하는 판정만 연결한다. 구형 Graph 조회 실패·미지원은 pending/can_review를 null로 표시하고 해소·비경보·구판정은 검토 가능으로 표시하지 않는다.
 - version은 기존 알림 버전이다. 변경 이력 change_version 및 검토 version과 혼용하지 않는다. ack 계약은 바꾸지 않는다.
+# R4 hosted 연결과 근거 표시 (2026-10-23)
+
+- 기존 `/runs`와 새 `/analysis/jobs`, `/reviews`는 별도 실행 경계다. hosted 설정이 기존 화면을 자동 전환하지 않는다.
+- `/states/{stock_code}`의 `items[].title_disposition`은 candidate/watch/timeline/reference/needs_check다. `items[].reference_only`와 `timeline[].reference_only`는 자회사·종속회사 참고 공시 표시다. 점수는 추가하지 않는다.
+- `items[].evidence`는 문서 근거(source/quote/rcept_no/location) 또는 API 근거(kind/api/field/rcept_no/row_key/value/unit/period/basis/data_version)다. API 사실의 실제 금액·비율은 유지하고 내부 점수는 반환하지 않는다.
+- `AnalysisContext.lease_token`, `ReviewContext.lease_token`, 영속 execution_budget은 서버 내부 값이며 HTTP·모델·trace로 보내지 않는다.

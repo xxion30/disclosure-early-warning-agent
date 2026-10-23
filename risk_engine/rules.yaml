@@ -261,7 +261,7 @@ yellow:
     label: 영업현금흐름
     tiers: {negative_years: [[1, 1], [2, 2]]}
   INTEREST_BURDEN:
-    enabled: false  # 금융비용 기준 경계값 R1 확정 전 가점 보류
+    enabled: true  # R1 확정: 영업이익/금융비용이 1 미만이면 +2
     label: 금융비용 기준 보상배율
     less_than: {interest_coverage: {value: 1, add: 2}}
   SHORT_TERM_DEBT:
@@ -282,7 +282,7 @@ yellow:
 
 # Current Agent uses this Phase 1 catalog through the R4 adapter. Legacy metadata above is evaluation-only.
 phase1_classification:
-  - {type: PAYMENT_DEFAULT, keywords: [원리금미지급]}
+  - {type: PAYMENT_DEFAULT, keywords: [원리금미지급, 대출원리금연체사실발생]}
   - {type: DEFAULT, keywords: [부도발생]}
   - {type: REHABILITATION, keywords: [회생절차개시신청]}
   - {type: BANK_MANAGEMENT_END, keywords: [관리절차중단]}
@@ -290,10 +290,10 @@ phase1_classification:
   - {type: DISSOLUTION, keywords: [해산사유발생]}
   - {type: BUSINESS_SUSPENSION, keywords: [영업정지]}
   - {type: EMBEZZLEMENT, keywords: [횡령ㆍ배임, 횡령·배임, 횡령배임]}
+  - {type: ADMIN_ISSUE, keywords: [관리종목]}
   - {type: TRADING_HALT, keywords: [매매거래정지, 거래정지]}
   - {type: OVERSEAS_DELISTING, keywords: [해외상장폐지, 해외증권시장상장폐지], all_keywords: [해외, 상장폐지]}
   - {type: DELISTING, keywords: [상장폐지]}
-  - {type: ADMIN_ISSUE, keywords: [관리종목]}
   - {type: AUDIT_REPORT, keywords: [감사보고서]}
   - {type: LAWSUIT, keywords: [소송등의제기, 소송제기]}
   - {type: CAPITAL_REDUCTION, keywords: [감자결정]}

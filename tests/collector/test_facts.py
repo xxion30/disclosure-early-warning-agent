@@ -3,6 +3,7 @@ import pytest
 
 from collector.facts import (
     SPECS,
+    build_ambiguous_payload,
     build_payload,
     item_for,
     parse_date,
@@ -170,3 +171,16 @@ def test_every_fact_name_is_unique_and_stable_snake_case():
     for api, specs in SPECS.items():
         names = [s.name for s in specs]
         assert len(names) == len(set(names)) and all(re.fullmatch(r"[a-z][a-z0-9_]*", n) for n in names), api
+
+
+# ---- 같은 접수번호에 행이 여러 개 ----
+@pytest.mark.parametrize("api", sorted(SPECS))
+def test_ambiguous_rows_make_every_fact_needs_check_and_pass_the_r4_validator(api):
+    payload = build_ambiguous_payload(api, 2, rcept_no="20241031000530", corp_code=CORP, fetched_at=AT)
+    StructuredFacts.model_validate(payload)
+    assert [f["name"] for f in payload["facts"]] == [spec.name for spec in SPECS[api]]
+    for f in payload["facts"]:
+        # 0·false로 채우지 않고, 값을 하나도 고르지 않는다
+        assert f["status"] == "NEEDS_CHECK" and f["value"] is None and f["raw"] is None
+        assert "2개" in f["reason"] and f["source"]["api"] == api
+        assert f["source"].get("row_key") is None  # 안정된 구분 값을 확인하기 전에는 row_key를 만들지 않는다

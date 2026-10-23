@@ -12,6 +12,7 @@
 """
 from agent.execution import call_tool, generate
 from agent.ports import AgentError
+from agent.retrieval import RAGContractError
 from agent.state import ToolSelection
 from harness import context as ctx
 
@@ -67,6 +68,8 @@ async def select_and_run(deps, purpose: str, rcept_no: str, context: dict) -> di
             try:
                 data = await call_tool(deps, req.tool, args)
             except AgentError as exc:
+                if isinstance(exc, RAGContractError):
+                    raise
                 if exc.status == "FAILED":
                     raise
                 # 도구 실패는 모델에게 돌려줄 관찰로만 남긴다 (기본 조회 결과로 계속 진행)

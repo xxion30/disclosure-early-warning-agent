@@ -1,5 +1,31 @@
 # DARTCH R4 실행 안내 (2026-10-22)
 
+## 2026-10-23 hosted 실행 연결
+
+R4 조립은 `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`을 설정할 때 실제
+UnifiedBindings와 DB 예산 장부를 주입한다. R4가 생성한 체크포인터를 R2에 전달하며
+공개 판정 발행·조직별 검토 저장·PB 승인·연락 업무는 R4 DB 트랜잭션이 맡는다.
+
+1. `uv run alembic upgrade head`로 `20261023_06`까지 적용한다. DB·체크포인트 경로는 서로 구분한다.
+2. business-mcp와 rag-mcp를 실행하고 실제 모델 키를 준비한다. 이 단계에 `--fake`를 사용하지 않는다.
+3. `.env`에 `QUEUE_ENABLED=false`, `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`을 설정하고 API를 재시작한다. API가 DB 작업 실행기와 review executor를 시작한다.
+4. 수동 수집이 필요하면 `COLLECT_DISPATCH_ENABLED=true`도 설정한다. 수집과 분석 활성화는 별도다.
+5. 새 실행은 `/analysis/jobs`로 등록하고 `/analysis/jobs/{id}`에서 상태를 확인한다. 공개 판정 이후 `/reviews/{id}/run`으로 초안을 생성한다. 이전 `/runs` 화면이 새 경로로 자동 전환되지는 않는다.
+
+현재 완료 범위는 로컬 가짜 모델·검색 응답과 실제 R2 Graph·R4 DB 도구·체크포인터를 통한 연결 검증이다.
+실제 DART·유료 모델·PostgreSQL 실행 완료를 뜻하지 않는다. 실제 `.env`와 운영 DB는 이번 변경에서 수정하지 않는다.
+
+**남은 연결:** R2 receive는 구조화 사실 UNAVAILABLE에서 중단한다. API에 필요한 수치가 없으면
+R4 mapper도 수동 확인한다. R3 financial_snapshots.sources의 계정별 출처는 R2 APIEvidence와
+모양이 달라 현재 검증 가능한 문서/API 근거가 없는 재무 행도 수동 확인이다. 과거 접수번호의
+API 근거를 R2가 해당 저장본으로 검증하는 경로도 협의가 필요하다. 임의 quote 생성으로 해결하지 않는다.
+`기간변경(상장폐지사유발생)`은 R1 판정 대기다. 이러한 한계가 있어 환경 변수의 기본값은 비워 둔다.
+
+최신 정책의 감사의견 거절·부적정은 YELLOW 항목이며 단독 기여는 +5다. 금양의 확정 발표 기준은
+2024-10-31 사건 경보(141일 전), 기준일 2025-03-21에는 ORANGE·YELLOW다.
+전체 최초 재무 경보 359일은 R3 과거 데이터 검증 대기다. 연락 대상은 보유 고객 전원이고 영향도는 사용하지 않는다.
+아래 Critical·P1/P2 시연 기록은 이전 프로젝트 이력이며 새 구현의 기대값이 아니다.
+
 이 절은 새 R4 구현 기준이다. 아래 이전 프로젝트 실행 기록은 참고용으로 유지한다.
 
 ## 준비와 검증
@@ -303,12 +329,12 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 
 ### 통합 전 R4 확인 (2026-10-23)
 
-- `get_disclosure_facts`는 R2 입력용 최상위 `facts`/`data_version`을 제공하고, 저장용 `number`를 응답에서만 `decimal`로 투영한다. 기존 R3 소비자의 중첩 필드는 전환용으로 유지한다. 저장 스키마·값은 바꾸지 않는다.
+- `get_disclosure_facts`의 R2 입력은 중첩 `structured_facts`와 정식 버전 키 `facts_hash`다. R2는 저장본의 `number`를 그대로 유지하고 해시를 검증한다. 최상위 facts/data_version 등은 호환용이며 R2는 사용하지 않는다. 호환 facts도 number를 유지하며 decimal 투영은 하지 않는다. 저장 스키마·값은 바꾸지 않는다.
 - 공개 worker의 `context.execution_context`는 R2 `runtime.start(context.rcept_no, context=context.execution_context)`에 전달할 매핑이다. `facts_version`은 작업 input_manifest의 해당 공시에서 계산하며 전체 input_version 또는 원문 해시와 다르다. 실제 운영 factory와 unified bindings 연결은 R2·R4 통합 검토 대상이다.
 - `COLLECT_DISPATCH_ENABLED=false` 기본값을 유지한다. 수동 수집을 운영에서 사용하려면 해당 실행 환경에 true를 설정하고 API를 재시작한다. 관리자로 `POST /collect/run`을 호출하면 R3 dispatch_collection으로 전달한다. 분석 실행 활성화는 PHASE1_RUNTIME_FACTORY 설정이 별도로 필요하다.
 - 활성화 경로는 R3의 실제 dispatcher와 가짜 수집 실행으로 검증한다. 테스트가 DART를 호출하거나 운영 수집 설정을 변경하지는 않는다.
 - 모든 신규 공시의 mark_ready 인계를 유지한다. enqueue_ready 선별 기준은 R1과 합의 전이며, structured_facts가 NULL이라는 이유만으로 제외하지 않는다.
-- 자본잠식은 최신 기간 OFS만 사용한다. 같은 기간 OFS가 없으면 CFS/이전 OFS로 대체하지 않고 수동 확인한다. INTEREST_BURDEN은 R1 경계값 확정 전까지 enabled=false다.
+- 자본잠식은 최신 기간 OFS·CFS를 각각 확인하고 높은 구간 하나만 적용한다. fs_div와 양쪽 basis_checks를 보존하며 과거 기간·0으로 결측을 대체하지 않는다. INTEREST_BURDEN은 활성화되어 영업이익÷금융비용이 1 미만일 때 +2를 적용한다. 금융비용<=0·누락은 산정 불가다.
 - 체크포인터는 open_executors가 생성·초기화한 객체를 factory(deps, saver)에 주입하고 종료한다. SQLite에서 실제 AgentRuntime.graph에 동일 객체가 전달되고 종료 뒤 연결이 닫히는 것을 테스트한다. PostgreSQL 검증은 별도 테스트 DB 설정이 필요하다.
 
 ## R5 상태 요약 필드 (2026-10-23)

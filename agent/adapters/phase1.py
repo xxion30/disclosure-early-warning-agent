@@ -6,15 +6,17 @@ from agent.model_adapter import best_chunk
 from shared.presentation import public_explanation
 from shared.rule_catalog import load_catalog
 from shared.schemas import ToolResponse
+from shared.title_policy import normalized_title, title_disposition
 
 
 def make_phase1_classifier():
     entries = load_catalog()['classification']
     def classify(title):
-        title = ''.join(title.split())
+        title = normalized_title(title)
         if title.startswith('[첨부추가]'):
             return None
-        return next((entry['type'] for entry in entries if any(word in title for word in entry['keywords']) or (entry.get('all_keywords') and all(word in title for word in entry['all_keywords']))), None)
+        matched = next((entry['type'] for entry in entries if any(normalized_title(word) in title for word in entry['keywords']) or (entry.get('all_keywords') and all(word in title for word in entry['all_keywords']))), None)
+        return None if title_disposition(title, matched) in ('timeline', 'reference') else matched
     return classify
 
 

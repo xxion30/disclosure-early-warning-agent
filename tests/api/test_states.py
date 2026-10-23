@@ -59,6 +59,22 @@ def test_collect_permissions_and_unwired_status(client,auth_headers,session_fact
     assert response.status_code==503 and response.json()['ok'] is False
 
 
+def test_capital_basis_checks_are_public_without_scores(client,auth_headers,session_factory):
+    from tests.business.test_financial_selection import snapshot
+    from risk_engine.financials import select_snapshot_signals
+    rows = [snapshot('SEPARATE','ANNUAL','2024',{'CAPITAL_IMPAIRMENT':{'status':'OK','detail':{'impairment_pct':0}}}),
+            snapshot('CONSOLIDATED','ANNUAL','2024',{'CAPITAL_IMPAIRMENT':{'status':'OK','detail':{'impairment_pct':100}}})]
+    result = calculate(new_signals=select_snapshot_signals(rows,{'internal-report':'2025-03-21'}),as_of='2025-03-21')
+    with session_factory() as db:
+        update_state(db,'TEST-CORP',result,'2025-03-21')
+    response = client.get('/states/001570',headers=auth_headers)
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['fs_div'] == 'CFS'
+    assert {r['fs_div']:r['impairment_pct'] for r in item['basis_checks']} == {'OFS':0,'CFS':100}
+    assert 'points' not in response.text and 'sort_value' not in response.text
+
+
 def test_pagination_and_invalid_filter(client,auth_headers,states_world):
     assert client.get('/states?limit=1',headers=auth_headers).json()['limit']==1
     assert client.get('/states?stage=Critical',headers=auth_headers).status_code==422

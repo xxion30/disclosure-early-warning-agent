@@ -3,24 +3,24 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
+import { mockMode } from '../api/mock'
 import RunProgress from '../components/RunProgress.vue'
+import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { ASSESSMENT_STATUS, formatTime, isUnscored } from '../labels'
+import { ALERT_STAGES, ASSESSMENT_STATUS, COLLECT_STATUS, formatTime, hasStage, isAlertRow, isUnscored, signalLabel, STAGES, stagesOf } from '../labels'
 
 const router = useRouter()
 
-// 탭: 경보(High·Critical) / 일일 요약(Medium) / 전체
+// 탭: 경보 / 관찰 중 / 전체. stages는 새 단계, levels는 단계 값이 없는 예전 행에 쓰는 등급
 const TABS = {
-  alerts: { label: '경보', levels: ['Critical', 'High'] },
-  summary: { label: '일일 요약', levels: ['Medium'] },
-  all: { label: '전체', levels: [] },
+  alerts: { label: '경보', stages: ALERT_STAGES, levels: ['Critical', 'High'], chips: ALERT_STAGES },
+  watch: { label: '관찰 중', stages: ['WATCH'], levels: ['Medium'], chips: [] },
+  all: { label: '전체', stages: [], levels: [], chips: [...ALERT_STAGES, 'WATCH', 'NONE'] },
 }
 const tab = ref('alerts')
 const statusFilter = ref('')
-const levelFilter = ref('')
-const summaryDate = ref(new Date().toLocaleDateString('sv-SE')) // 로컬 날짜 YYYY-MM-DD
+const stageChips = ref([]) // 고른 단계 (여러 개). 비어 있으면 탭 전체
 
 const pendingOnly = ref(false) // 한 줄 바로 가기: 내 승인 대기가 있는 경보만
 
@@ -32,6 +32,7 @@ const error = ref('')
 async function load() {
   loading.value = true
   error.value = ''
+  loadDashboard()
   try {
     allRows.value = await api.listAlerts({})
   } catch (err) {
@@ -41,22 +42,59 @@ async function load() {
   }
 }
 
-// 일일 요약 날짜: 서버와 같은 기준(공시일 또는 생성일)
-const onDate = (r, d) => String(r.filed_at || '').startsWith(d) || String(r.created_at || '').startsWith(d)
-function inTab(r, key) {
-  if (key === 'summary') return r.level === 'Medium' && onDate(r, summaryDate.value)
-  const levels = TABS[key].levels
-  return !levels.length || levels.includes(r.level)
+// ---- 메인 대시보드: 종목 경보 (GET /states?alert=true, 서버가 우선순위로 정렬) + 수집 상태 ----
+// 서버가 아직 /states를 모르면(예전 서버) 카드를 숨기고, 수집 상태를 못 읽으면 그 줄만 숨긴다
+const states = ref([])
+const statesReady = ref(false)
+const runs = ref(null)
+const showAllStates = ref(false)
+async function loadDashboard() {
+  const [st, col] = await Promise.allSettled([api.listStates({ alert: true, limit: 100 }), api.collectStatus()])
+  statesReady.value = st.status === 'fulfilled'
+  states.value = st.status === 'fulfilled' ? st.value.items || [] : []
+  runs.value = col.status === 'fulfilled' ? col.value.runs || [] : null
 }
+const shownStates = computed(() => (showAllStates.value ? states.value : states.value.slice(0, 6)))
+const newStates = computed(() => states.value.filter((st) => st.new).length)
+// 수집 한 줄: 가장 최근 실행의 상태, 실패면 이유와 마지막 성공 시각을 함께
+const collect = computed(() => {
+  if (runs.value === null) return null
+  const last = runs.value[0]
+  if (!last) return { text: '수집 기록 없음', tone: 'muted' }
+  const s = COLLECT_STATUS[last.status] || { text: last.status, tone: 'muted' }
+  const okRun = runs.value.find((r) => ['DONE', 'PARTIAL'].includes(r.status) && r.finished_at)
+  if (last.status === 'DONE') return { text: `마지막 수집 ${formatTime(last.finished_at)}`, tone: 'ok' }
+  if (['RUNNING', 'PENDING'].includes(last.status)) return { text: `${s.text} · ${formatTime(last.started_at)} 시작`, tone: s.tone }
+  return {
+    text: `${s.text} · ${formatTime(last.finished_at || last.started_at)}`,
+    tone: s.tone,
+    detail: [last.error ? `이유: ${last.error}.` : null, okRun ? `마지막으로 성공한 수집은 ${formatTime(okRun.finished_at)}이에요.` : '아직 성공한 수집이 없어요.'].filter(Boolean).join(' '),
+  }
+})
+
+// 단계 값이 있으면 단계로, 없으면(예전 평가) 등급으로 탭을 나눈다
+function inTab(r, key) {
+  const t = TABS[key]
+  const stages = stagesOf(r)
+  if (stages.length) return !t.stages.length || stages.some((s) => t.stages.includes(s))
+  return !t.levels.length || t.levels.includes(r.level)
+}
+// 단계 칩: 고른 단계 중 하나라도 있으면 보인다. 단계 값이 없는 행은 칩으로 거르지 않는다
+const chipPass = (r) => !stageChips.value.length || !hasStage(r) || stagesOf(r).some((s) => stageChips.value.includes(s))
+function toggleChip(stage) {
+  stageChips.value = stageChips.value.includes(stage) ? stageChips.value.filter((s) => s !== stage) : [...stageChips.value, stage]
+}
+// 단계 값이 실제로 들어왔는지 (예전 평가만 있으면 칩을 누를 수 없다)
+const stageReady = computed(() => allRows.value.some(hasStage))
 function passes(r) {
   if (statusFilter.value && r.status !== statusFilter.value) return false
   if (pendingOnly.value && (r.status === 'DONE' || !(r.my_pending_count > 0))) return false
   return true
 }
-const rows = computed(() => allRows.value.filter((r) => inTab(r, tab.value) && passes(r) && (tab.value !== 'all' || !levelFilter.value || r.level === levelFilter.value)))
+const rows = computed(() => allRows.value.filter((r) => inTab(r, tab.value) && passes(r) && chipPass(r)))
 const tabCounts = computed(() => Object.fromEntries(Object.keys(TABS).map((key) => [key, allRows.value.filter((r) => inTab(r, key) && passes(r)).length])))
 
-// 사람이 봐야 하는 공시: 점수 계산 전에 멈추면 Low로 저장돼 경보 탭(High·Critical)에 안 보이므로 따로 센다
+// 사람이 봐야 하는 공시: 위험 평가 전에 멈추면 경보 탭에 안 보이므로 따로 센다
 const attention = computed(() => ({
   MANUAL_CHECK: allRows.value.filter((r) => r.status === 'MANUAL_CHECK').length,
   FAILED: allRows.value.filter((r) => r.status === 'FAILED').length,
@@ -67,7 +105,7 @@ function showStatus(status) {
   statusFilter.value = status
 }
 
-watch(tab, () => { levelFilter.value = '' })
+watch(tab, () => { stageChips.value = [] })
 onMounted(load)
 
 // 진짜 모드에서 MCP 서버가 꺼져 있으면 영향 고객 수를 못 센다. 목록은 DB 내용으로 계속 보여준다
@@ -79,8 +117,9 @@ const today = computed(() => new Date().toLocaleDateString('ko-KR', {
 const stats = computed(() => ({
   pending: allRows.value.reduce((sum, r) => sum + (r.status === 'DONE' ? 0 : Number(r.my_pending_count || 0)), 0),
   pendingAlerts: allRows.value.filter((r) => r.status !== 'DONE' && r.my_pending_count > 0).length,
-  critical: allRows.value.filter((r) => r.level === 'Critical').length,
-  high: allRows.value.filter((r) => r.level === 'High').length,
+  // 즉시 경보 / 그 밖의 경보(사건·재무·복합). 단계 값이 없는 예전 평가는 Critical / High로 센다
+  critical: allRows.value.filter((r) => (hasStage(r) ? stagesOf(r)[0] === 'RED' : r.level === 'Critical')).length,
+  high: allRows.value.filter((r) => isAlertRow(r) && (hasStage(r) ? stagesOf(r)[0] !== 'RED' : r.level === 'High')).length,
 }))
 function togglePending() {
   pendingOnly.value = !pendingOnly.value
@@ -130,7 +169,7 @@ async function startRun() {
     </span>
     <span>
       <strong>{{ stats.pending ? `내 승인 대기 ${stats.pending}명` : '지금은 결정할 고객이 없어요' }}</strong>
-      <span class="shortcut-sub"><template v-if="stats.pending"> · 경보 {{ stats.pendingAlerts }}건</template> · Critical {{ stats.critical }} · High {{ stats.high }}</span>
+      <span class="shortcut-sub"><template v-if="stats.pending"> · 경보 {{ stats.pendingAlerts }}건</template> · {{ STAGES.RED.label }} {{ stats.critical }} · 그 밖의 경보 {{ stats.high }}</span>
     </span>
     <span v-if="stats.pending || pendingOnly" class="shortcut-go">
       {{ pendingOnly ? '모든 경보 보기' : '승인 대기만 보기' }}
@@ -173,6 +212,35 @@ async function startRun() {
     </span>
   </div>
 
+  <!-- 메인 대시보드 알림: 종목 단위 경보(관찰 중 제외)를 서버가 정한 우선순위로. 점수 숫자는 보여 주지 않는다 -->
+  <section v-if="statesReady" class="card flush stock-alerts" aria-label="종목 경보">
+    <div class="card-head">
+      <h2>종목 경보 <small>{{ states.length }}건<template v-if="newStates"> · 새 경보 {{ newStates }}</template> · 우선순위순</small></h2>
+      <span v-if="collect" class="collect-line" :class="`collect-${collect.tone}`" role="status"><span class="collect-dot" aria-hidden="true"></span>{{ collect.text }}</span>
+    </div>
+    <p v-if="collect?.detail" class="notice" :class="collect.tone === 'bad' ? 'error-note' : 'warn'">{{ collect.detail }}</p>
+    <ol v-if="states.length" class="stock-alert-list">
+      <li v-for="st in shownStates" :key="st.stock_code">
+        <RouterLink :to="{ name: 'risk-detail', params: { stockCode: st.stock_code } }" class="stock-alert">
+          <span class="stock-alert-badges">
+            <StageBadge :stage="st.stage" :stages="st.active_stages" />
+            <span v-if="st.new" class="new-pill">새 경보</span>
+          </span>
+          <span class="stock-alert-text">
+            <strong>{{ st.corp_name || st.stock_code }}</strong>
+            <span class="sub">{{ (st.risk_types || []).map(signalLabel).join(' · ') || '위험 종류 확인 중' }}<template v-if="st.latest_filed_at"> · 최근 공시 {{ st.latest_filed_at }}</template></span>
+          </span>
+          <span v-if="st.manual_check" class="badge tone-warn">확인 필요</span>
+          <svg class="stock-alert-go" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        </RouterLink>
+      </li>
+    </ol>
+    <p v-else class="muted empty-note">지금은 종목 경보가 없어요.</p>
+    <button v-if="states.length > 6" type="button" class="ghost small more-states" @click="showAllStates = !showAllStates">
+      {{ showAllStates ? '접기' : `나머지 ${states.length - 6}건 더 보기` }}
+    </button>
+  </section>
+
   <section class="card flush alert-list" aria-label="경보 목록">
     <div class="card-head">
       <div class="tabs" role="group" aria-label="보기">
@@ -182,18 +250,7 @@ async function startRun() {
       </div>
 
       <div class="row list-filters">
-        <template v-if="tab === 'summary'">
-          <label for="d" class="date-label">날짜</label>
-          <input id="d" v-model="summaryDate" type="date" />
-        </template>
-        <template v-if="tab === 'all'">
-          <label for="level-filter" class="sr-only">등급</label>
-          <select id="level-filter" v-model="levelFilter">
-            <option value="">등급 전체</option>
-            <option v-for="l in ['Critical', 'High', 'Medium', 'Low']" :key="l" :value="l">{{ l }}</option>
-          </select>
-        </template>
-        <label for="status-filter" class="sr-only">상태</label>
+        <label for="status-filter" class="sr-only">처리 상태</label>
         <select id="status-filter" v-model="statusFilter">
           <option value="">상태 전체</option>
           <option v-for="(label, key) in ASSESSMENT_STATUS" :key="key" :value="key">{{ label }}</option>
@@ -207,6 +264,17 @@ async function startRun() {
       </div>
     </div>
 
+    <!-- 단계 칩: 여러 개 골라 거른다. 단계 값이 아직 없으면(예전 평가만 있으면) 누를 수 없다 -->
+    <div v-if="TABS[tab].chips.length" class="stage-filter">
+      <div class="stage-chips" role="group" aria-label="단계로 거르기">
+        <button v-for="s in TABS[tab].chips" :key="s" type="button" :aria-pressed="stageChips.includes(s)" :disabled="!stageReady" :title="STAGES[s].hint || undefined" @click="toggleChip(s)">
+          <span class="chip-dot" :class="s.toLowerCase()" aria-hidden="true"></span>{{ STAGES[s].label }}
+        </button>
+        <button v-if="stageChips.length" type="button" class="chip-clear" @click="stageChips = []">전체 보기</button>
+      </div>
+      <span v-if="!stageReady" class="stage-filter-note">단계 정보가 있는 경보가 생기면 단계로 걸러 볼 수 있어요</span>
+    </div>
+
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="graphError" class="notice">{{ graphError }} 영향 고객 수는 연결되면 다시 보입니다.</p>
     <div class="table-wrap">
@@ -214,7 +282,7 @@ async function startRun() {
         <thead>
           <tr>
             <th scope="col">경보</th>
-            <th scope="col">등급·상태</th>
+            <th scope="col">{{ stageReady ? '단계·상태' : '등급·상태' }}</th>
             <th scope="col" class="num">고객</th>
           </tr>
         </thead>
@@ -225,6 +293,7 @@ async function startRun() {
                 <span class="corp-mark" aria-hidden="true">{{ (r.corp_name || '-').slice(0, 1) }}</span>
                 <div class="corp-text">
                   <strong><RouterLink :to="{ name: 'alert-detail', params: { assessmentId: r.assessment_id } }" @click.stop>{{ r.corp_name || '-' }}</RouterLink> <small v-if="r.stock_code" class="code">{{ r.stock_code }}</small></strong>
+                  <RouterLink v-if="r.stock_code && (hasStage(r) || mockMode())" :to="{ name: 'risk-detail', params: { stockCode: r.stock_code } }" class="stock-link" @click.stop>종목 위험 상태 보기</RouterLink>
                   <span class="disclosure-title">{{ r.title || r.rcept_no }}</span>
                   <span class="sub">공시 {{ r.filed_at || '-' }} · 처리 {{ formatTime(r.created_at) }}</span>
                 </div>
@@ -233,7 +302,8 @@ async function startRun() {
             <td>
               <div class="level-cell">
                 <span v-if="isUnscored(r)" class="unscored" title="점수 계산 전에 멈췄어요">미계산</span>
-                <LevelBadge v-else :level="r.level" />
+                <StageBadge v-else :stage="r.stage" :stages="r.stages" :level="r.level" :legacy="r.legacy" :available="r.stage_available" />
+                <span v-if="r.new" class="new-pill">새 경보</span>
                 <StatusBadge :status="r.status" />
                 <span v-if="r.status === 'DONE'" class="sub">처리 완료 기록</span>
                 <span v-if="r.combo_upgraded" class="sub">조합 상향</span>
@@ -247,7 +317,7 @@ async function startRun() {
             </td>
           </tr>
           <tr v-if="!rows.length">
-            <td colspan="3" class="empty">{{ loading ? '불러오는 중…' : '표시할 경보가 없습니다.' }}</td>
+            <td colspan="3" class="empty">{{ loading ? '불러오는 중…' : stageChips.length ? '고른 단계에 해당하는 경보가 없어요.' : '표시할 경보가 없습니다.' }}</td>
           </tr>
         </tbody>
       </table>
@@ -271,7 +341,11 @@ async function startRun() {
 .run-detail-link { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: 8px; font-weight: 600; }
 .alert-list .tabs { margin-bottom: 0; }
 .alert-list .tabs button, .list-filters button { min-height: 44px; }
-.date-label { margin: 0; }
+.stage-filter { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 0 24px 16px; }
+.stage-filter-note { font-size: 13px; color: var(--muted); }
+.chip-clear { min-height: 36px; padding: 0 12px; background: transparent; color: var(--blue-strong); border: none; font-size: 13px; font-weight: 600; }
+.chip-clear:hover:not(:disabled) { background: var(--blue-soft); }
+@media (max-width: 640px) { .stage-filter { padding: 0 16px 16px; } }
 .list-filters input, .list-filters select { font-size: 14px; }
 .list-filters input { border-radius: var(--pill); }
 .alert-list > .error, .alert-list > .notice { margin: 0 24px 16px; }
@@ -287,6 +361,33 @@ async function startRun() {
 @media (max-width: 640px) {
   .level-cell, .customer-cell { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .alert-list td { padding-top: 4px; padding-bottom: 4px; }
+}
+.stock-link { align-self: flex-start; font-size: 13px; font-weight: 600; }
+.stock-alerts .card-head h2 small { margin-left: 6px; font-size: 14px; font-weight: 500; }
+.collect-line { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.collect-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--border-strong); flex: none; }
+.collect-ok .collect-dot { background: var(--ok-dot); }
+.collect-info .collect-dot { background: var(--blue); }
+.collect-warn { color: var(--warn); }
+.collect-warn .collect-dot { background: var(--warn-dot); }
+.collect-bad { color: var(--bad); }
+.collect-bad .collect-dot { background: var(--critical); }
+.stock-alerts > .notice { margin: 0 24px 16px; }
+.stock-alerts > .notice.error-note { color: var(--bad); background: var(--bad-soft); }
+.stock-alert-list { list-style: none; margin: 0; padding: 0; }
+.stock-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 56px; padding: 12px 24px; border-top: 1px solid #edf1f7; color: var(--text); }
+.stock-alert:hover { background: #f8faff; text-decoration: none; }
+.stock-alert-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stock-alert-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.stock-alert-text strong { font-size: 15px; }
+.stock-alert-go { color: var(--muted); flex: none; }
+.stock-alerts .empty-note { margin: 0; padding: 0 24px 16px; }
+.more-states { margin: 8px 24px 8px; }
+@media (max-width: 640px) {
+  .stock-alert { padding: 12px 16px; }
+  .stock-alerts > .notice { margin: 0 16px 16px; }
+  .stock-alerts .empty-note { padding: 0 16px 16px; }
+  .more-states { margin: 8px 16px; }
 }
 @media (max-width: 540px) {
   .run-start { width: 100%; border-radius: var(--radius); }

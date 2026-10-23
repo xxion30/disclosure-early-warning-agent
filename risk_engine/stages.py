@@ -8,6 +8,7 @@ from math import isfinite
 
 from risk_engine.loader import load_rules
 from risk_engine.risk_rules import RuleInputError, clean_evidence, parse_date, time_weight, minus_months
+from shared.title_policy import title_disposition
 
 ALERT_STAGES = frozenset({'RED', 'ORANGE', 'YELLOW', 'COMPOSITE'})
 # Only for the not-yet-migrated R2 runtime; stage remains authoritative.
@@ -114,7 +115,7 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
         if d.get('is_correction') and not (raw.get('event_id') or d.get('event_id')):
             manual.append({'signal_type': st, 'reason': '정정 연결 확인 필요'})
             continue
-        evidence = clean_evidence(raw.get('evidence') or d.get('evidence'))
+        evidence = clean_evidence(raw.get('evidence') or d.get('evidence'), allow_api=True)
         sig = {**raw, 'event_id': str(event), 'filed_at': filed.isoformat(), 'detail': d, 'evidence': evidence}
         key = (str(event), st)
         old = versions.get(key)
@@ -138,13 +139,19 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
     rows = []
     orange = yellow = 0.0
     red = False
+    watch = False
     for sig in versions.values():
         st, detail = sig['signal_type'], sig['detail']
         group, spec = categories[st]
         if group == 'yellow' and latest_yellow[st] is not sig:
             continue
         title = ''.join(str(detail.get('title', '')).split())
+        disposition = title_disposition(title, st)
+        if disposition == 'needs_check':
+            manual.append({'signal_type': st, 'reason': '제목의 신규·후속 구분 확인 필요'})
+        watch |= disposition in ('watch', 'needs_check')
         excluded = any(marker in title for marker in ('(종속회사의주요경영사항)', '(자회사의주요경영사항)'))
+        excluded |= disposition != 'candidate'
         policy_pending = spec.get('enabled') is False
         excluded |= policy_pending
         excluded |= any(word in f"{detail.get('title', '')} {detail.get('reason', '')}" for word in spec.get('exclude_words', []))
@@ -174,13 +181,17 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
             yellow += points
         sig['points'] = raw_points
         sig['detail'] = {**detail, 'event_id': sig['event_id'], 'event_started_at': sig['event_started_at'], 'evidence': sig['evidence']}
-        rows.append({'group': group.upper(), 'item': spec['label'], 'signal_type': st, 'event_id': sig['event_id'],
+        rows.append({'group': group.upper(), 'item': spec['label'], 'signal_type': st, 'event_id': sig['event_id'], 'title_disposition': disposition,
                      'rcept_no': sig.get('rcept_no'), 'filed_at': sig['filed_at'], 'points': points,
                      'raw_points': raw_points, 'weight': weight, 'active': not excluded and not resolved and bool(weight) and (group == 'red' or points > 0),
                      'excluded': excluded, 'policy_pending': policy_pending, 'resolved': resolved, 'quote': detail.get('quote'), 'evidence': sig['evidence'], 'missing': missing})
+        if st == 'CAPITAL_IMPAIRMENT' and 'basis_checks' in detail:
+            rows[-1].update(fs_div=detail.get('fs_div'), basis_checks=detail['basis_checks'])
     incoming_ids = {id(item) for item in incoming}
     incoming = [sig for sig in versions.values() if id(sig) in incoming_ids]
     stage, active, ratio = judge(orange, yellow, red, rules)
+    if watch and stage == 'NONE':
+        stage, active = 'WATCH', ['WATCH']
     digest = hashlib.sha256(json.dumps(rules, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return {'as_of': today.isoformat(), 'rules_digest': digest, 'stage': stage, 'active_stages': active, 'orange_score': orange, 'yellow_score': yellow,
             'composite_ratio': ratio, 'sort_value': sort_value(stage, orange, yellow, ratio, rules),

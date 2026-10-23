@@ -14,6 +14,7 @@ from shared.models.risk import STAGES
 from risk_engine.stages import ALERT_STAGES
 from risk_engine.loader import load_rules
 from shared.presentation import public_explanation
+from shared.title_policy import title_disposition
 
 router = APIRouter(prefix='/states', tags=['states'])
 
@@ -24,7 +25,15 @@ def public_item(item):
             'filed_at', 'active', 'resolved', 'missing')} | {
         'explanation': public_explanation(item.get('explanation')),
         'missing_labels': missing_labels(item.get('missing')),
-        'evidence': [{key: e.get(key) for key in ('source', 'quote', 'rcept_no', 'location')}
+        'fs_div': item.get('fs_div'),
+        'title_disposition': item.get('title_disposition'),
+        'reference_only': item.get('title_disposition') == 'reference',
+        'basis_checks': [{key: basis.get(key) for key in
+                          ('fs_div', 'period', 'rcept_no', 'revision', 'status', 'impairment_pct')}
+                         for basis in item.get('basis_checks', []) if isinstance(basis, dict)],
+        'evidence': [{key: e.get(key) for key in (
+            ('kind', 'api', 'field', 'rcept_no', 'row_key', 'value', 'unit', 'period', 'basis', 'data_version')
+            if e.get('kind') == 'api' else ('source', 'quote', 'rcept_no', 'location'))}
                      for e in item.get('evidence', []) if isinstance(e, dict)]}
 
 
@@ -89,7 +98,8 @@ async def state_detail(stock_code: str, pb: CurrentPB = Depends(get_current_pb),
             'changed_at': change.created_at if change else None,
             'ai_explanation': public_explanation(assessment.ai_explanation) if assessment else None, 'items': [public_item(i) for i in row.items],
             'resolution_evidence': [{k: e.get(k) for k in ('source', 'quote', 'rcept_no', 'location')} for e in row.resolution_evidence],
-            'timeline': [{k: getattr(d, k) for k in ('rcept_no', 'title', 'filed_at', 'url', 'event_id')} for d in timeline]}
+            'timeline': [{k: getattr(d, k) for k in ('rcept_no', 'title', 'filed_at', 'url', 'event_id')} | {
+                'reference_only': title_disposition(d.title, None) == 'reference'} for d in timeline]}
 
 
 class Acknowledge(BaseModel):

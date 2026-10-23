@@ -131,11 +131,13 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 
 ## Pre-merge R4 도구 계약 (2026-10-23)
 
-get_disclosure_facts(rcept_no)는 `{ok,data:{availability,rcept_no,corp_code,schema_version,collected_at,facts,data_version}}`를 반환한다. R2는 ToolResponse.data를 그대로 validate_facts에 전달한다. AVAILABLE일 때 facts는 최상위 목록이고, 저장용 dtype `number`는 응답에서만 `decimal`로 투영한다. integer/string/boolean 및 raw/value/unit/status/reason/source 값은 바꾸지 않는다. 저장 스키마와 R3 store_facts 입력은 유지한다.
+get_disclosure_facts(rcept_no)의 정식 응답은 `{ok,data:{availability,rcept_no,corp_code,structured_facts,facts_hash}}`다. R2는 ToolResponse.data를 그대로 validate_facts에 전달한다. AVAILABLE일 때 R2가 읽는 목록은 `structured_facts.facts`이며 v1 dtype은 `string / number / integer / boolean`이다. number를 decimal로 변환하지 않는다. raw/value/unit/status/reason/source와 R3 저장 스키마·store_facts 입력을 유지한다.
 
-`data_version`은 dtype 변환 **전** StructuredFacts 검증·정규화된 저장 payload 전체의 facts_hash이며 store_facts 반환값과 같다. 수집·조회 시각도 해시 대상이다. 응답 DTO를 다시 해시하거나 원문 content_hash로 대체하지 않는다. 기존 R3 호출자 전환을 위해 `structured_facts`(저장 형식)와 `facts_hash`(data_version 별칭)를 당분간 함께 반환한다. 신규 호출자는 최상위 facts/data_version만 사용한다.
+`facts_hash`는 StructuredFacts 검증·정규화된 저장 payload 전체의 SHA-256이며 store_facts 반환값과 같다. canonical JSON은 sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False다. 수집·조회 시각도 해시 대상이다. R2가 structured_facts의 해시를 검증하고 같은 이름을 내부 결과에 보존한다. 전체 응답을 해시하거나 원문 content_hash·전체 분석 input_version으로 대체하지 않는다.
 
-공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 schema_version/collected_at/facts/data_version은 null이다. 실패 여부를 추측하거나 facts=[]로 바꾸지 않는다. 저장된 정상 빈 목록은 AVAILABLE + facts=[]로 구분한다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
+최상위 schema_version/collected_at/facts/data_version은 기존 호출자의 전환을 위한 **호환용 필드이며 R2는 사용하지 않는다.** facts도 저장본과 동일한 number를 사용하며 decimal 투영은 제거한다. data_version은 facts_hash와 값이 같은 호환 별칭일 뿐 정식 버전 이름은 facts_hash다. R3 테스트 등 기존 참조를 제거한 뒤 별도 변경으로 호환 필드를 제거한다.
+
+공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 structured_facts/facts_hash 및 호환 필드는 null이다. 실패 여부를 추측하거나 facts=[]로 바꾸지 않는다. 저장된 정상 빈 목록은 AVAILABLE + structured_facts.facts=[]로 구분한다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
 
 R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번 접수번호의 저장 payload를 같은 규칙으로 해시한 값이다. input_hash(전체 분석 입력) 및 원문 content_hash와 구분한다. R2 factory는 `context.execution_context`를 runtime.start(rcept_no, context=...)에 전달한다. 이 매핑은 R4 adapter가 만든 공개 ExecutionContext이며 facts_version을 명시한다. 최신 DB 값으로 스냅샷 버전을 덮어쓰지 않는다. UNAVAILABLE은 facts_version=null이며 R2에서 수동 확인/원문 분석 경로를 별도로 결정해야 한다.
 
@@ -144,3 +146,11 @@ R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번
 UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한다. get_disclosure_facts는 네트워크를 호출하지 않는다.
 
 본문 삭제와 공개 분석 완료 기록은 분리한다. 새 작업 완료는 공개 판정 저장과 processed_at 갱신을 같은 트랜잭션에서 수행한다. MANUAL_CHECK는 성공 processed_at을 쓰지 않는다. 구형 purge는 모든 legacy 호출자 전환 전까지 호환용으로만 유지하며 새 실행 경로는 사용하지 않는다.
+# R4 hosted 런타임 연결 (2026-10-23)
+
+- `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`일 때 R4 조립이 실제 `UnifiedBindings`를 주입한다. 구형 `Phase1Model/EvidenceTools`는 이 경로에서 사용하지 않는다. R2 Graph와 수집기는 수정하지 않는다.
+- 텍스트 조건은 YAML의 flags/values/zero_if에서 지정하고 수치값은 `structured_facts`의 확정된 필드만 매핑한다. 비율 단위는 `%`를 검증하며 다중 행·상충 값·필수 수치 누락은 수동 확인한다. 수치 추측과 결측의 0/false 대체는 하지 않는다.
+- 현재 승인된 수치 매핑은 유상증자 `issue_ratio_common_pct→ratio_pct`, `third_party_allocation→third_party`, 감자 `reduction_ratio_common_pct→reduction_ratio_pct`다. 소송·양수도·풋백옵션의 자기자본 대비 비율은 R3 확정 사실이 없으면 수동 확인한다. 재무 지표는 기존 DB 스냅샷으로만 계산한다.
+- API 근거는 API/field/receipt/row/value/unit/period/basis/data_version을 보존하고 계산 도구가 저장된 PRESENT 사실과 대조한다. 과거 API 근거도 해당 접수번호의 저장본으로 검증한다. 문서 인용문을 만들어 대신하지 않는다.
+- 공개 분석·조직별 초안은 각각 작업/검토 ID에 누적 예산을 저장한다. 호출 전에 소비량을 기록하고 재선점·재작성 버전 변경에도 초기화하지 않는다. 임대가 바뀐 실행자의 기록은 거절한다. PB 승인 대기 시간은 실행 시간에서 제외한다.
+- 구조화 사실 UNAVAILABLE의 원문 fallback은 R2 후속 연결 사항이다. 현재 수동 확인을 유지하며 운영 설정만으로 해당 경로가 완성됐다고 보지 않는다.

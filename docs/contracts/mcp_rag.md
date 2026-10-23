@@ -43,6 +43,29 @@ FastMCP는 **동기 도구를 이벤트 루프 스레드에서 그대로 실행�
 | **R4** | ① `agent/adapters/phase1.py`가 과거 인용을 재검증하려고 `search_disclosure_text`를 다시 부른다. 색인이 해제된 뒤면 **DART에서 원문을 다시 받고 다시 임베딩한다**(성공하면 같은 `location`). DART가 막히면 재검증이 `TIMEOUT`이 된다. ② `store.py`의 `release_disclosure_index` 호출은 holder 없이도 동작한다. R2가 `holder`를 넘기면 사용 중인 실행을 지켜 준다. ③ `scripts/ops/run_stack.py`·`doctor.py`는 `data/chroma` 색인을 확인한다. **운영 모드에서는 이 색인이 필요 없다**(없어도 정상). ④ `docs/run.md`의 `ingest`·`RAG_INDEX_MODE` 설명 갱신. |
 | **R2** | 분석 실행 ID를 `holder`로 `search_disclosure_text`·`release_disclosure_index`에 넘기면 같은 공시를 동시에 분석하는 다른 실행이 색인을 지우지 못한다. 도구 응답의 `content_sha256`로 원문이 바뀌었는지 비교할 수 있다. |
 
+### R2 반영안 (2026-10-23) — 수명·해시·마지막 검색 시점
+기존 `search_disclosure_text(rcept_no, query, k=5)`, `search_reference`, `release_disclosure_index` 계약은 유지한다. 구조화 사실 조회 `get_disclosure_facts`는 business MCP(R4) 책임이다. `normalization_version`은 `collector/dart_client.py`의 `NORMALIZATION_VERSION`(현재 `"1"`)이고 `search_disclosure_text` 응답 `data`에 추가 필드로 나온다(**구현됨**). 나머지 수명 규칙은 위 "구현됨"과 같다.
+
+**정규화·해시**
+- 정규화·해시의 정본은 `collector.dart_client.normalize_document`(+`content_sha256`) 한 곳이다. ZIP 파일 순서, 태그 제거, 공백 정리, 문자 디코딩을 거기서만 하고 **`normalization_version`을 기록**한다. 정규화 방식을 바꾸면 버전을 올리고 과거 인용과 섞지 않는다.
+- 문서 검색 응답은 기존 `source/text/rcept_no/location`과 `content_sha256`을 주고, 정규화 버전은 **호환 가능한 추가 메타데이터**로 준다. `location`은 같은 정규화 텍스트를 기준으로 한다.
+- `k` 상한(도구, 최대 10)과 모델 입력 상한은 다르다. 후보는 도구가 허용하는 범위에서 넉넉히 검색하고, **R2가 모델 입력 전체를 최대 5개 조각으로 선정**한다.
+
+**R2의 마지막 원문 검색 시점**
+- 공개 판정의 사실 추출, 인용 검증, 필요한 과거 근거 검증까지가 마지막 원문 검색 구간이다. 설명 재작성과 PB 승인 재개는 **저장된 근거**를 쓴다. 안내문 작성의 `search_reference`(가이드 검색)는 공시 원문 검색과 별개다.
+- 보존된 근거로 부족하면 명시적 재분석을 요청한다.
+
+**색인 해제와 수명**
+- 판정·설명·근거를 저장한 뒤 R4가 `release_disclosure_index`를 호출한다. 원문 해시·`processed_at` 기록은 본문 삭제와 분리한다.
+- 성공·실패·취소 어느 경우에도 release와 TTL/LRU 정리를 적용한다. `MANUAL_CHECK`도 무기한 보존하지 않는다.
+- 같은 공시를 쓰는 다른 작업이 있으면 사용권(`holder`, 진행 중 검색 lease)으로 보호하고, TTL/LRU도 활성 사용권을 무시하지 않는다. 죽은 작업의 사용권은 유한한 시간(`HOLDER_TTL`) 뒤 회수한다. **(구현됨)**
+- release는 멱등이다. 활성 사용자가 있으면 실제 제거를 늦추고(`deferred: true`) `released_chunks`는 **실제 제거 수**를 돌려준다. **R4는 호출자가 제거 수에 의존하지 않는지 확인한다.**
+- 서버 재시작 뒤 메모리 색인은 다시 만든다. 이전에 기록한 `content_sha256`과 새로 받은 해시가 다르면 **과거 실행에 새 문서를 조용히 섞지 않고 재분석이 필요하다고 알린다.** 지금 도구는 해시만 돌려주므로 비교와 판단은 호출자(R2·R4)가 한다.
+- 조각 상한(`MAX_CHUNKS` 300)을 넘으면 앞부분만 색인하고 `truncated: true`를 돌려준다. **호출자는 이를 전체를 분석한 것처럼 처리하지 않고** 명시적 제한 오류·수동 확인(`MANUAL_CHECK`) 또는 구간 선택 정책으로 다룬다(R2 확인 필요).
+- 수명 상한 수치(TTL·최대 개수·조각 수)는 R3의 메모리 용량 측정으로 정한다. 값이 정해지지 않았다는 이유로 무기한 캐시하지 않는다.
+
+**전환 순서의 보충:** 아래 "DARTCH 변경안" 5항의 순서에서 `release_disclosure_index`는 Phase 1에서 명시적 해제 수단으로 유지하고, 삭제는 별도 구조 PR에서만 검토한다(`CLAUDE.md` 4절 9번). 동시 사용·취소·실패·재시작·해시 변경은 6항에서 검증한다.
+
 ---
 
 ## DARTCH 변경안 (R3 제안, 2026-10-23, 합의 과정의 기록) — 구현과 다른 부분은 위 "구현됨"이 우선한다

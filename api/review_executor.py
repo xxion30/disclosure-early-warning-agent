@@ -1,5 +1,5 @@
 """Run R2 draft generation with an immutable tenant/assessment context."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from shared.db import get_session
 from shared.models import PublicAssessment, RiskState, Customer, Holding
 from mcp_servers.business.reviews import claim_review, save_drafts, scoped_review
@@ -21,6 +21,7 @@ class ReviewContext:
     existing_drafts: dict
     decisions: dict
     rewrite_customers: tuple
+    lease_token: str | None = field(default=None, repr=False)
 
 
 async def run_review(executor, review_id, tenant_id, *, session_factory=get_session):
@@ -35,7 +36,7 @@ async def run_review(executor, review_id, tenant_id, *, session_factory=get_sess
             .order_by(Holding.eval_amount.desc(),Customer.customer_id)).all()
         context=ReviewContext(row.review_id,tenant_id,row.assessment_id,row.thread_id,row.version,
             assessment.result,assessment.explanation,tuple({'customer_id':cid,'eval_amount':amount} for cid,amount in customers),
-            dict(row.drafts or {}),dict(row.decisions or {}),tuple(row.rewrite_customers or []))
+            dict(row.drafts or {}),dict(row.decisions or {}),tuple(row.rewrite_customers or []),lease_token=token)
     try:
         # Bound private generation: approval waiting is outside this operation.
         from shared.config import get_settings

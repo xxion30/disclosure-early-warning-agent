@@ -3,11 +3,21 @@
 // 여기서는 "직전 평가 대비 무엇이 바뀌었나"와 이번 공시 항목만 보여준다.
 import { computed } from 'vue'
 
-import LevelBadge from './LevelBadge.vue'
+import { stagesOf, stageText } from '../labels'
+import StageBadge from './StageBadge.vue'
 
-const props = defineProps({ summary: { type: Object, required: true }, level: { type: String, default: '' } })
+const props = defineProps({
+  summary: { type: Object, required: true },
+  level: { type: String, default: '' },
+  stage: { type: String, default: null },
+  stages: { type: Array, default: null },
+})
 
 const prev = computed(() => props.summary.previous)
+// 비교는 새 단계가 있으면 가장 심한 단계로, 없으면 예전 등급으로
+const nowKey = computed(() => stagesOf({ stage: props.stage, stages: props.stages, level: props.level })[0] || props.level)
+const prevKey = computed(() => (prev.value ? stagesOf(prev.value)[0] || prev.value.level : null))
+const changed = computed(() => prev.value && prevKey.value !== nowKey.value)
 const filing = computed(() => props.summary.this_filing)
 
 // 확정 악재: 빨강 / 이번 공시로 점수가 올라감: 주황 / 그 밖: 파랑
@@ -24,18 +34,18 @@ const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.ite
       </span>
       <div class="summary-copy">
         <h2>이번 공시의 영향</h2>
-        <p class="headline">{{ summary.headline }}</p>
+        <p class="headline">{{ stageText(summary.headline) }}</p>
       </div>
     </div>
 
     <div class="changes">
       <div class="change">
-        <span class="change-label">등급</span>
+        <span class="change-label">{{ stagesOf({ stage, stages, level }).length ? '단계' : '등급' }}</span>
         <div class="change-value">
-          <template v-if="prev && prev.level !== level"><LevelBadge :level="prev.level" /><span class="arrow" aria-hidden="true">→</span></template>
-          <LevelBadge :level="level" />
+          <template v-if="changed"><StageBadge :stage="prev.stage" :stages="prev.stages" :level="prev.level" /><span class="arrow" aria-hidden="true">→</span></template>
+          <StageBadge :stage="stage" :stages="stages" :level="level" />
         </div>
-        <span class="change-note">{{ !prev ? '직전 평가 없음' : prev.level !== level ? '직전보다 등급이 바뀌었어요' : '직전과 같음' }}</span>
+        <span class="change-note">{{ !prev ? '직전 평가 없음' : changed ? '직전보다 바뀌었어요' : '직전과 같음' }}</span>
       </div>
       <div class="change">
         <span class="change-label">이번 공시의 위험 항목</span>

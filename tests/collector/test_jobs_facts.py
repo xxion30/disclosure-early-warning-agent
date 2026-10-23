@@ -212,3 +212,18 @@ def test_partial_write_before_an_error_is_rolled_back_for_that_disclosure_only(d
     assert out.ok and out.facts == 1 and out.handed_off == 4 and any("20250117000380" in p for p in out.problems)
     assert disclosure("20250117000380")["facts"] is None  # {"half": "written"}가 남지 않는다
     assert disclosure("20241031000530")["facts"]
+
+
+def test_several_item_api_rows_for_one_receipt_are_not_resolved_by_picking_the_first(db, fake):
+    """같은 접수번호에 항목 API 행이 둘이면 첫 행(또는 마지막 행)을 고르지 않고 모든 사실을 NEEDS_CHECK로 둔다 (collector.md 4-5)."""
+    setup_chain(fake)
+    fake.items[("piicDecsn", CORP, "20241031")] = [dict(RIGHTS_1031), {**RIGHTS_1031, "nstk_ostk_cnt": "1,000"}]
+    out = run(collect_stock(fake.client(), TARGET, today=TODAY))
+    assert out.ok and out.handed_off == 4
+    assert any("20241031000530" in p and "행 2개" in p for p in out.problems), out.problems
+    facts = disclosure("20241031000530")["facts"]["facts"]
+    assert facts and all(f["status"] == "NEEDS_CHECK" and f["value"] is None and f["raw"] is None for f in facts)
+    assert "행이 2개" in facts[0]["reason"]
+    assert StructuredFacts.model_validate(disclosure("20241031000530")["facts"]).rcept_no == "20241031000530"
+    # 다른 접수번호의 정상 사실은 영향이 없다
+    assert {f["name"]: f for f in disclosure("20250117000380")["facts"]["facts"]}["new_common_shares"]["status"] == "MISSING"

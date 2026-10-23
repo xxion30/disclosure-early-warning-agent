@@ -25,6 +25,8 @@ def public_execution_context(context):
         run_id=context.job_id,
         attempt=context.attempt,
         kind='public',
+        model_requests_used=getattr(context, 'execution_budget', {}).get('model_turns', 0),
+        active_seconds_used=getattr(context, 'execution_budget', {}).get('consumed_seconds', 0),
     )
 
 
@@ -37,4 +39,14 @@ async def open_executors(factory, deps, location):
         if inspect.isawaitable(runtime):runtime=await runtime
         if not callable(getattr(runtime,'analyze_public',None)) or not callable(getattr(runtime,'draft_review',None)):
             raise RuntimeError('R2 공개 분석/조직별 검토 진입점 연결이 필요합니다. legacy fallback은 하지 않습니다.')
-        yield RuntimeExecutors(runtime.analyze_public,runtime.draft_review)
+        from agent.adapters.budgets import ledger_for, record_budget
+        if getattr(getattr(deps, 'unified', None), 'record_budget', None) is record_budget:
+            async def public(context):
+                with ledger_for(context, 'public'):
+                    return await runtime.analyze_public(context)
+            async def review(context):
+                with ledger_for(context, 'review'):
+                    return await runtime.draft_review(context)
+            yield RuntimeExecutors(public, review)
+        else:
+            yield RuntimeExecutors(runtime.analyze_public,runtime.draft_review)

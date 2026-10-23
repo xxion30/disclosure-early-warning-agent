@@ -26,11 +26,12 @@ async def record_failure(state, deps, scope):
         }), timeout=5)
     except Exception as exc:
         errors.append(f"audit:{type(exc).__name__}")
-    try:
-        update["assessment_id"] = await asyncio.wait_for(
-            deps.persistence.save(state, state["status"]), timeout=5)
-    except Exception as exc:
-        errors.append(f"save:{type(exc).__name__}")
+    if not (deps.unified is not None and getattr(deps, 'defer_publication', False)):
+        try:
+            update["assessment_id"] = await asyncio.wait_for(
+                deps.persistence.save(state, state["status"]), timeout=5)
+        except Exception as exc:
+            errors.append(f"save:{type(exc).__name__}")
     try:
         await asyncio.wait_for(deps.harness.event("failed", {
             "trace_id": state["trace_id"], "status": state["status"], "error": state["error"],

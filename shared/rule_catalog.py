@@ -16,4 +16,10 @@ def load_catalog():
                                | {'resolved', 'lifted', 'reason'} | ({spec['zero_if']} if spec.get('zero_if') else set()))
                     for group in ('red','orange','yellow') for st, spec in rules[group].items()},
         'quiet_types': rules.get('phase1_quiet_types', ['OWNERSHIP']),
+        'buckets': {st: group.upper() for group in ('red', 'orange', 'yellow') for st in rules[group]},
+        'text_flags': {st: sorted(set(spec.get('flags', {})) | set(spec.get('values', {}))
+                                 | ({spec['zero_if']} if spec.get('zero_if') else set()))
+                       for group in ('red', 'orange', 'yellow') for st, spec in rules[group].items()},
+        'numeric_fields': {st: sorted(set(spec.get('tiers', {})) | set(spec.get('less_than', {})))
+                           for group in ('red', 'orange', 'yellow') for st, spec in rules[group].items()},
     }

@@ -96,28 +96,34 @@ def test_actual_tool_response_passes_r2_without_storage_changes(seeded_db, dtype
     raw = asyncio.run(scoped(lambda: invoke_tool(deps.tools, deps.harness, 'get_disclosure_facts', {'rcept_no': RCEPT})))
     facts = validate_facts(raw, original)
     item = facts['facts'][0]
-    assert item['dtype'] == ('decimal' if dtype == 'number' else dtype)
+    assert item['dtype'] == dtype
     assert item['value'] == value and type(item['value']) is type(value)
     assert item['raw'] == stored['facts'][0]['raw']
     assert item['source'] == stored['facts'][0]['source']
     assert item['status'] == status and item['unit'] == '%'
-    assert facts['data_version'] == raw['facts_hash'] == version
-    assert raw['structured_facts'] == stored  # temporary R3 compatibility
+    assert facts['facts_hash'] == raw['facts_hash'] == version
+    assert raw['structured_facts'] == stored
+    assert raw['facts'] == stored['facts']  # compatibility alias also keeps number
+    assert raw['data_version'] == version  # legacy alias, not the R2 version key
+    assert 'data_version' not in facts
     with db_module.get_session() as db:
         assert db.get(Disclosure, RCEPT).structured_facts == stored
     if status == 'PRESENT':
         source = item['source']
         evidence = {'kind': 'api', 'api': source['api'], 'field': source['field'],
                     'rcept_no': RCEPT, 'row_key': None, 'value': value, 'unit': '%',
-                    'period': None, 'basis': None, 'data_version': version}
+                    # API-reference data_version is a distinct optional field;
+                    # the stored source has none. Wire integrity is facts_hash.
+                    'period': None, 'basis': None, 'data_version': None}
         assert api_evidence(evidence, facts) == evidence
 
 
 def test_null_is_not_a_successful_empty_list(seeded_db):
     raw = get_disclosure_facts(RCEPT)['data']
     assert raw['availability'] == 'UNAVAILABLE'
-    assert raw['facts'] is raw['data_version'] is None
-    with pytest.raises(AgentError, match='미수집'):
+    assert raw['structured_facts'] is raw['facts_hash'] is None
+    assert raw['facts'] is raw['data_version'] is None  # compatibility aliases
+    with pytest.raises(AgentError, match='이용 불가'):
         validate_facts(raw, {'rcept_no': RCEPT, 'corp_code': raw['corp_code']})
     value = payload()
     value['facts'] = []
@@ -126,7 +132,7 @@ def test_null_is_not_a_successful_empty_list(seeded_db):
     raw = get_disclosure_facts(RCEPT)['data']
     assert raw['availability'] == 'AVAILABLE'
     assert validate_facts(raw, value)['facts'] == []
-    assert raw['data_version'] == version
+    assert validate_facts(raw, value)['facts_hash'] == version
 
 
 @pytest.mark.parametrize('changed', [False, True])
@@ -139,7 +145,7 @@ def test_worker_context_uses_pinned_facts_and_real_r2_receive(seeded_db, changed
         updated['facts'][0]['value'] = 25
         with db_module.get_session() as db:
             assert store_facts(db, RCEPT, updated) != version
-    contexts = []
+    contexts, verified = [], []
 
     async def execute(context):
         contexts.append(context)
@@ -155,16 +161,34 @@ def test_worker_context_uses_pinned_facts_and_real_r2_receive(seeded_db, changed
                 await scoped(operation)
         else:
             result = await scoped(operation)
-            assert result['structured_facts']['data_version'] == version
+            assert result['structured_facts']['facts_hash'] == version
+        verified.append(context.job_id)
         # This test stops at the facts boundary; no fabricated assessment is published.
         return {'status': 'MANUAL_CHECK'}
 
     asyncio.run(AnalysisWorker(execute).run_once())
     assert len(contexts) == 1
+    assert verified == [job_id]  # worker also catches KeyError as MANUAL_CHECK
     # The worker catches executor exceptions: assert persisted status so an
     # assertion inside execute cannot accidentally produce a passing test.
     with db_module.get_session() as db:
         assert db.get(AnalysisJob, job_id).status == 'MANUAL_CHECK'
+
+
+def test_r2_uses_canonical_payload_hash_and_ignores_flat_aliases(seeded_db):
+    value = payload()
+    with db_module.get_session() as db:
+        version = store_facts(db, RCEPT, value)
+    raw = get_disclosure_facts(RCEPT)['data']
+    # Legacy flat fields must not replace the authoritative nested payload/hash.
+    raw['facts'] = []
+    raw['data_version'] = 'legacy-alias-is-not-the-r2-version'
+    facts = validate_facts(raw, value)
+    assert facts['facts'][0]['dtype'] == 'number'
+    assert facts['facts_hash'] == version
+    raw['structured_facts']['facts'][0]['value'] = 99
+    with pytest.raises(AgentError, match='facts_hash 불일치'):
+        validate_facts(raw, value)
 
 
 def test_worker_preserves_unavailable_facts_version(seeded_db):
