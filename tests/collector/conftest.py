@@ -12,6 +12,7 @@ import shared.db as db_module
 from collector.dart_client import DartClient
 from shared.config import get_settings
 
+ITEM_APIS = {"piicDecsn", "ctrcvsBgrq", "dfOcr", "cvbdIsDecsn", "crDecsn", "bsnSp", "dsRsOcr", "bnkMngtPcbg", "lwstLg", "cmpMgDecsn"}
 KY = {"corp_code": "00106119", "stock_code": "001570", "name": "금양"}
 
 # 실제 금양 목록에서 본 행 (list.json)
@@ -56,6 +57,9 @@ class FakeDart:
         self.fs: dict[tuple[str, str], list[dict]] = {}
         self.audit: dict[str, list[dict]] = {}
         self.fail_corps: set[str] = set()  # 이 회사의 list.json은 서버 오류(503)
+        self.items: dict[tuple[str, str, str], list[dict]] = {}  # (항목 API, corp_code, bgn_de) → 행들 (정정 체인은 최초 접수일로 묶여 최신본만 돌려준다)
+        self.docs: dict[str, str] = {}  # 접수번호 → 정정 본문(평문)
+        self.fail_docs: set[str] = set()  # 이 접수번호의 본문 요청은 서버 오류(503)
         self.corp_zip = corp_zip(KY)
 
     def paths(self, name: str) -> list[dict]:
@@ -65,6 +69,19 @@ class FakeDart:
         path = request.url.path.rsplit("/", 1)[-1]
         p = dict(request.url.params)
         self.calls.append((path, p))
+        if path == "document.xml":
+            rcept = p.get("rcept_no", "")
+            if rcept in self.fail_docs:
+                return httpx.Response(503)
+            if rcept in self.docs:
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w") as z:
+                    z.writestr("main.xml", f"<html><body><p>{self.docs[rcept]}</p></body></html>")
+                return httpx.Response(200, content=buf.getvalue())
+            return httpx.Response(200, json={"status": "013", "message": "접수번호 오류"})
+        if path.endswith(".json") and path[:-5] in ITEM_APIS:
+            rows = self.items.get((path[:-5], p.get("corp_code", ""), p.get("bgn_de", "")), [])
+            return httpx.Response(200, json={"status": "000" if rows else "013", "message": "m", "list": rows})
         if path == "corpCode.xml":
             return httpx.Response(200, content=self.corp_zip)
         corp = p.get("corp_code", "")
