@@ -24,7 +24,7 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString('s
 const hoursAgo = (n) => new Date(Date.now() - n * 3600000).toISOString().slice(0, 16)
 // 서버가 정렬해 주는 순서(단계 → 점수 → 최근)를 흉내 내어 이미 정렬된 순서로 둔다
 const ROWS = [
-  { corp: '예시바이오', title: '[예시] 감사보고서 제출', stages: ['RED'], status: 'WAITING_APPROVAL', affected: 5, pending: 2, isNew: true },
+  { corp: '예시바이오', title: '[예시] 횡령·배임 혐의 발생', stages: ['RED'], status: 'WAITING_APPROVAL', affected: 5, pending: 2, isNew: true },
   { corp: '예시전자', title: '[예시] 전환사채권 발행결정', stages: ['ORANGE', 'YELLOW'], status: 'WAITING_APPROVAL', affected: 3, pending: 1, isNew: true },
   { corp: '예시화학', title: '[예시] 유상증자 결정', stages: ['COMPOSITE'], status: 'DONE', affected: 2, pending: 0, isNew: false },
   // 해소된 종목: 지금 단계는 경보 없음, 이력(위험 항목)에는 사건 경보가 남는다
@@ -100,6 +100,16 @@ export const mockApi = {
     })
   },
 
+  async listStates(params = {}) {
+    // 실제 API처럼 경보 단계만, 서버 순서(ROWS 순서) 그대로. 상세에서 쓰는 필드만 뺀다
+    const items = ROWS.map(buildState)
+      .filter((st) => !params.alert || (ALERT.includes(st.stage) && !st.resolved))
+      .map(({ items: _i, timeline: _t, resolution_evidence: _r, ai_explanation: _a, ...rest }) => rest)
+    return clone({ items, total: items.length, limit: 50, offset: 0 })
+  },
+  async collectStatus() {
+    return { runs: [{ run_id: 'mock-run', status: 'DONE', started_at: hoursAgo(3), finished_at: hoursAgo(2), fetched_count: 8, failed_count: 0, error: null }] }
+  },
   isMockStock: (code) => ROWS.some((r) => r.stock_code === code),
   async getState(code) {
     return clone(buildState(ROWS.find((r) => r.stock_code === code)))
@@ -133,18 +143,18 @@ const QUOTE = '[예시] 이 자리에 공시 원문에서 인용한 문장이 �
 
 // 단계별 위험 항목 예시. group은 즉시(RED)·사건(ORANGE)·재무(YELLOW) 분류, active=false는 기간이 지나 반영하지 않는 항목
 const ITEMS = {
-  RED: [{ group: 'RED', item: '감사의견 거절', signal_type: 'AUDIT_OPINION', explanation: '[예시] 감사인이 의견을 내지 않았다는 공시가 있어요. 이 항목 하나만으로 즉시 경보예요.', ago: 2 }],
+  RED: [{ group: 'RED', item: '횡령·배임', signal_type: 'EMBEZZLEMENT', explanation: '[예시] 임원의 횡령 혐의가 발생했다는 공시가 있어요. 이 항목 하나만으로 즉시 경보예요.', ago: 2 }],
   ORANGE: [
     { group: 'ORANGE', item: '전환사채(CB) 발행', signal_type: 'CB_BW', explanation: '[예시] 전환가액을 다시 낮출 수 있는 조항(리픽싱)이 붙은 전환사채를 발행했어요.', ago: 3 },
     { group: 'ORANGE', item: '소송 제기', signal_type: 'LAWSUIT', explanation: '[예시] 회사를 상대로 한 손해배상 소송이 제기됐어요.', ago: 220 },
-    { group: 'ORANGE', item: '최대주주 주식 담보', signal_type: 'PLEDGE', explanation: '[예시] 1년도 더 지난 담보 계약이라 지금 판정에는 반영하지 않아요.', ago: 400, inactive: true },
+    { group: 'ORANGE', item: '자기주식 처분', signal_type: 'TREASURY_DISPOSAL', explanation: '[예시] 1년도 더 지난 공시라 지금 판정에는 반영하지 않아요.', ago: 400, inactive: true },
   ],
-  YELLOW: [{ group: 'YELLOW', item: '영업현금흐름 적자', signal_type: 'OCF_NEGATIVE', explanation: '[예시] 최근 정기보고서에서 영업활동 현금흐름이 2년 연속 적자예요.', ago: 60 }],
+  YELLOW: [{ group: 'YELLOW', item: '영업현금흐름 적자', signal_type: 'OPERATING_CASH_FLOW', explanation: '[예시] 최근 정기보고서에서 영업활동 현금흐름이 2년 연속 적자예요.', ago: 60 }],
   COMPOSITE: [
     { group: 'ORANGE', item: '유상증자', signal_type: 'RIGHTS_OFFERING', explanation: '[예시] 제3자배정 유상증자를 결정했어요.', ago: 200 },
-    { group: 'YELLOW', item: '이자 부담', signal_type: 'INTEREST_COVERAGE', explanation: '[예시] 영업이익이 이자비용보다 적어요. 사건·재무 신호를 합치면 기준을 넘어 복합 위험이에요.', ago: 40, noEvidence: true, missing: ['이자비용'] },
+    { group: 'YELLOW', item: '이자 부담', signal_type: 'INTEREST_BURDEN', explanation: '[예시] 영업이익이 이자비용보다 적어요. 사건·재무 신호를 합치면 기준을 넘어 복합 위험이에요.', ago: 40, noEvidence: true, missing: ['interest_coverage'] },
   ],
-  WATCH: [{ group: 'ORANGE', item: '타법인 주식 양수', signal_type: 'ACQUISITION', explanation: '[예시] 다른 회사 지분을 사들이기로 했어요. 아직 경보 기준 아래라 지켜보는 중이에요.', ago: 10 }],
+  WATCH: [{ group: 'ORANGE', item: '타법인 주식 양수', signal_type: 'ASSET_TRANSFER', explanation: '[예시] 다른 회사 지분을 사들이기로 했어요. 아직 경보 기준 아래라 지켜보는 중이에요.', ago: 10 }],
   NONE: [],
 }
 

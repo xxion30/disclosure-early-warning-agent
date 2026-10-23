@@ -87,6 +87,28 @@ export const MISSING_LABELS = {
 }
 export const missingLabel = (key) => MISSING_LABELS[key] || key
 
+// 위험 종류 이름 (API risk_types의 signal_type). risk_engine/rules.yaml의 label과 같게 둔다
+export const SIGNAL_LABELS = {
+  DEFAULT: '부도발생', REHABILITATION: '회생절차 개시신청', BANK_MANAGEMENT: '채권은행 관리절차 개시', DISSOLUTION: '해산사유 발생',
+  BUSINESS_SUSPENSION: '영업정지', TRADING_HALT: '거래정지', ADMIN_ISSUE: '관리종목 지정', DELISTING: '상장폐지 사유',
+  EMBEZZLEMENT: '횡령·배임', PAYMENT_DEFAULT: '원리금 미지급', LAWSUIT: '소송 제기', CAPITAL_REDUCTION: '감자 결정',
+  RIGHTS_OFFERING: '유상증자', CB_BW: 'CB·BW·EB 발행', ASSET_TRANSFER: '영업·자산·타법인 양수도', PUTBACK_OPTION: '자산양수도·풋백옵션',
+  MERGER: '합병·분할·주식교환', TREASURY_DISPOSAL: '자기주식 처분·신탁해지', BANK_MANAGEMENT_END: '채권은행 관리절차 중단',
+  OVERSEAS_DELISTING: '해외 상장폐지', AUDIT_OPINION: '감사의견', CAPITAL_IMPAIRMENT: '자본잠식', OPERATING_CASH_FLOW: '영업현금흐름',
+  INTEREST_BURDEN: '이자 부담', SHORT_TERM_DEBT: '단기채무', DEBT_ISSUANCE: '채무증권 발행', FUND_USAGE: '자금 사용내역',
+  LARGEST_SHAREHOLDER_CHANGE: '최대주주 변경', EQUITY_INVESTMENT: '타법인 출자',
+}
+export const signalLabel = (code) => SIGNAL_LABELS[code] || code
+
+// 수집 실행 상태 (GET /collect/status runs[].status)
+export const COLLECT_STATUS = {
+  PENDING: { text: '수집 대기', tone: 'muted' },
+  RUNNING: { text: '수집 중', tone: 'info' },
+  DONE: { text: '수집 완료', tone: 'ok' },
+  PARTIAL: { text: '일부 종목 수집 실패', tone: 'warn' },
+  FAILED: { text: '수집 실패', tone: 'bad' },
+}
+
 /** 위험 항목의 지금 상태 (API items[].active·resolved). 숫자 대신 말로 */
 export function itemStatus(it) {
   if (it.resolved) return { text: '해소됨', tone: 'ok' }
