@@ -31,7 +31,6 @@ def _task_dict(t: ContactTask, customer: Customer, corp_name: str | None, a: Ris
         "rcept_no": a.rcept_no if a else None,
         "corp_name": corp_name,
         "level": a.level if a else None,
-        "stage": a.stage if a else None,
         "customer_id": t.customer_id,
         "customer_name": customer.name,
         "draft_message": t.draft_message,
@@ -59,7 +58,7 @@ def list_tasks(
     pb: CurrentPB = Depends(get_current_pb),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    q = _query().where(ContactTask.pb_id == pb.pb_id, ContactTask.tenant_id == pb.tenant_id)
+    q = _query().where(ContactTask.pb_id == pb.pb_id)
     if status_:
         q = q.where(ContactTask.status == status_)
     q = q.order_by(ContactTask.created_at.desc(), ContactTask.task_id.desc())
@@ -82,7 +81,7 @@ def update_task(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "업무를 찾을 수 없습니다.")
     task = row[0]
-    if task.pb_id != pb.pb_id or task.tenant_id != pb.tenant_id:
+    if task.pb_id != pb.pb_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "담당 업무가 아닙니다.")
     if task.status not in CHANGEABLE_FROM:
         raise HTTPException(status.HTTP_409_CONFLICT, f"'{task.status}' 상태에서는 바꿀 수 없습니다.")

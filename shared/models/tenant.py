@@ -8,18 +8,15 @@ from shared.models.base import Base
 class PB(Base):
     __tablename__ = "pbs"
 
-    tenant_id: Mapped[str] = mapped_column(String, default='default', server_default='default', index=True)
     pb_id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String)
     email: Mapped[str] = mapped_column(String, unique=True)
-    role: Mapped[str] = mapped_column(String, default='PB', server_default='PB')
     password_hash: Mapped[str] = mapped_column(String)
 
 
 class Customer(Base):
     __tablename__ = "customers"
 
-    tenant_id: Mapped[str] = mapped_column(String, default='default', server_default='default', index=True)
     customer_id: Mapped[str] = mapped_column(String, primary_key=True)
     pb_id: Mapped[str] = mapped_column(ForeignKey("pbs.pb_id"), index=True)
     name: Mapped[str] = mapped_column(String)
@@ -30,7 +27,6 @@ class Customer(Base):
 class Holding(Base):
     __tablename__ = "holdings"
 
-    tenant_id: Mapped[str] = mapped_column(String, default='default', server_default='default', index=True)
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.customer_id"), primary_key=True)
     stock_code: Mapped[str] = mapped_column(String, primary_key=True)
     eval_amount: Mapped[int] = mapped_column(Integer)

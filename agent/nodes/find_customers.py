@@ -5,12 +5,7 @@ from shared.schemas import AffectedCustomer
 
 async def find_customers(state, deps):
     """해당 종목을 보유한 고객 전원을 고른다. 영향도·우선순위는 쓰지 않는다 (순서: 보유 평가금액 큰 순)."""
-    arguments = {"stock_code": state["disclosure"]["stock_code"]}
-    if deps.unified is not None:
-        from agent.integration import ensure_current
-        await ensure_current(state, deps)
-        arguments['tenant_id'] = state['execution_context']['tenant_id']
-    data = await call_tool(deps, "get_holders", arguments)
+    data = await call_tool(deps, "get_holders", {"stock_code": state["disclosure"]["stock_code"]})
     items = data.get("holders") if isinstance(data, dict) else data
     if not isinstance(items, list):
         raise AgentError("보유 고객 응답 형식 불일치")

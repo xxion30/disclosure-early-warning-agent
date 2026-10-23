@@ -41,7 +41,7 @@ def guarded(fn):
             return fn(*args, **kwargs)
         except ToolFail as e:
             return fail(e.code, e.message)
-        except (RuleInputError, ValueError) as e:
+        except RuleInputError as e:
             return fail(ErrorCode.INVALID_INPUT, str(e))
         except TimeoutError as e:
             return fail(ErrorCode.TIMEOUT, str(e) or "시간 초과")

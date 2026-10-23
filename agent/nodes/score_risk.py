@@ -1,4 +1,4 @@
-from agent.evidence import retained_data, validate_evidence, validate_known_evidence
+from agent.evidence import validate_evidence, validate_known_evidence
 from agent.execution import call_tool
 from agent.ports import AgentError
 from shared.schemas import ScoreResult, Signal
@@ -30,6 +30,6 @@ async def score_risk(state, deps):
             else:
                 validate_known_evidence(evidence, known)
             known.extend(evidence)
-    return {"score_result": retained_data(score.model_dump()), "signals": retained_data(signals),
+    return {"score_result": score.model_dump(), "signals": signals,
             "total_score": score.total_score, "risk_level": score.level,
             "combo_upgraded": score.combo_upgraded, "evidence": known}

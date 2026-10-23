@@ -1,243 +1,203 @@
-# Agent 계약 — R2 구현·통합 기준
+# Agent 계약 (State·Graph·API 연결)
 
-작성일: 2026-10-23 · 담당: R2 윤찬웅 · 검토: R3·R4
+> 담당: **R2** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 승인(interrupt)·안내문·연락 업무 관련 State와 노드는 오후 회의로 되살아난다(영향도 제외). 그래프는 아래 "오후 회의 반영"을 따른다.
+> DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
-> R2 측에서 채택한 구현 기준이다. 타 역할에 해당하는 변경은 담당자가 검토·반영한다. 문서 작성은 코드 구현·통합 검증 완료를 뜻하지 않는다. 기존 CLAUDE.md·업무 카드·R1 정책을 유지한다.
+## 오후 회의(10/22) 반영 — 이 절이 아래 본문보다 우선한다
 
-## 1. 목적과 범위
+- State 되살림(영향도 필드는 제외): `affected_customers: list[{customer_id, eval_amount}]` (영향도·priority 없음, **보유 고객 전원**), `drafts`, `guardrail_flags`, `approval`, `task_ids`, `decisions`. `retry_count`는 `draft_messages`에서도 쓴다.
+- 그래프: `... → judge_stage → explain_risk → save_state` 뒤에서 **경보 단계(RED/ORANGE/YELLOW/COMPOSITE)만** `find_customers → draft_messages → guardrail_check ⟲(실패, 최대 2회) → pb_approval [interrupt] → (승인) create_tasks / (반려) save_rejection → END`. WATCH·NONE은 `save_state`에서 끝난다.
+- `find_customers`는 `get_holders`로 해당 종목 보유 고객 전원을 고른다 (`compute_customer_impact` 없음, P1~P3 없음).
+- `thread_id = rcept_no`, 승인 대기 후 같은 thread_id로 재개, 서버 재시작 후에도 이어짐(이전 계약과 같음). `status = WAITING_APPROVAL`이 돌아온다.
+- 안내문은 매수·매도 권유 금지, 고객 이름은 `{고객명}` 자리표시. 설명문(`explain_risk`)에도 같은 금지 표현 검사를 건다.
+- 되살릴 때는 새로 짜지 않고 구조 정리 PR 이전 커밋(`feat/...` 기준 main 6266619)의 코드를 가져와, 영향도 부분만 뺀다.
 
-공시에서 위험 조건을 추출하고, 코드가 계산한 위험 단계와 검증된 근거를 설명해 PB의 판단을 지원한다. 내부 점수는 계산·정렬에 사용하지만 PB용 응답과 설명·안내문 모델에는 전달하지 않는다.
+## 4-5. Agent State (`agent/state.py`)
 
-- RED / ORANGE / YELLOW / COMPOSITE: 설명·저장 후 담당 고객 전원에 대한 초안·검사·PB 승인·연락 업무로 연결한다.
-- WATCH / NONE: 설명·저장 후 종료한다. WATCH는 새 위험 경보로 발송하지 않는다.
-- MANUAL_CHECK: 위험 단계가 아니라 분석 처리 상태다. 정보 부족을 NONE이나 0점으로 바꾸지 않는다.
-- 직접 발송, 매수·매도 권유, 고객 영향도 P1~P3, 뉴스·SNS 수집은 이번 범위에 포함하지 않는다.
-
-## 2. 책임과 의존 방향
-
-| 담당 | 책임 |
-| --- | --- |
-| R3 | DART 원천 사실, 재무 지표 계산, 출처·버전, 원문 검색·메모리 색인 |
-| R2 | Graph, 텍스트 조건 추출, AI 출력·인용 검증, 설명·안내문, 승인 중단·재개 |
-| R4 adapter | MCP 연결, 합의된 사실·조건의 계산 입력 변환, 저장, 실행 context·체크포인터 주입 |
-| R4 규칙 엔진 | 점수·임계값·최종 단계·사건 상태 계산 |
-
-agent는 risk_engine·collector·api를 직접 import하지 않는다. R4가 카탈로그·읽기 도구·계산·저장 인터페이스를 주입한다. 체크포인터 생성과 종료는 R4가 담당하고 R2 런타임은 주입받은 객체를 사용한다. R2는 agent/adapters/·shared/·api/·의존성 파일을 수정하지 않는다.
-
-## 3. 처리 흐름과 계산 도구
-
-1. 접수번호와 신뢰된 실행 context를 받는다.
-2. 공시 메타데이터·구조화 사실·유효 재무 지표를 조회한다.
-3. 카탈로그에 따라 관련 항목을 분류하고 필요한 원문만 검색한다.
-4. AI가 허용된 텍스트 조건을 추출하고 R2가 근거를 검증한다.
-5. R4 adapter가 입력을 변환해 calculate_risk_score를 호출한다.
-6. 검증된 계산 결과로 설명을 생성·검사하고 공개 분석 결과를 저장한다.
-7. 경보이면 조직별 고객 조회·초안·검사·PB 승인·연락 업무를 진행한다.
-
-**외부 계산 도구는 calculate_risk_score를 유지한다.** 기존 R2의 mark_red / score_orange / score_yellow / judge_stage 이름은 내부 노드·레거시 연결 이름일 수 있으며, 각각 새 MCP 도구를 만들라는 요구가 아니다. R2 Phase1Bindings와 결과 DTO는 실제 R4 도구 계약에 맞게 수정한다.
-
-- AI 출력에는 점수·최종 단계·임의 event_id를 받지 않는다.
-- R3가 계산한 재무 지표를 AI가 재계산하거나 누락을 추정하지 않는다.
-- R4의 expected_state_version·corp_code·as_of 등 신뢰된 제어 메타데이터를 DTO 변환 중 버리지 않는다. 모델이 생성한 값으로 대체하지 않는다.
-- 도구의 공통 ok/data/error 형식을 유지한다. 상세 입력·응답의 정본은 mcp_business.md다.
-- 주입 미완료로 기존 Graph가 선택된 경우 새 Graph 검증 완료로 기록하지 않는다.
-
-## 4. 구조화 사실과 충돌
-
-별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 도구·컬럼은 구현되어 있다. 조회의 ToolResponse.data에는 schema_version/rcept_no/corp_code/collected_at/facts/data_version이 평탄화되어 제공된다. 저장용 number는 응답에서만 decimal로 변환하며 값·단위·상태·출처는 보존한다. data_version은 변환 전 정규화된 저장 payload 전체(시각 포함)의 facts_hash이다. 원문 content_hash와 혼용하거나 응답 DTO를 다시 해시하지 않는다. 기존 structured_facts/facts_hash 필드는 호환용이며 신규 R2 입력에서는 사용하지 않는다. UNAVAILABLE은 facts=null이며 정상 빈 목록과 구분한다.
-
-| 상태 | 의미 | 처리 |
+| 항목 | 형식 | 채우는 노드 |
 | --- | --- | --- |
-| PRESENT | 정제·검증된 값 존재 | 근거·단위·기간 확인 후 사용 |
-| MISSING | 조회 성공, 필요한 행·값 없음 | 필요한 경우 원문 검색으로 보완 |
-| NOT_APPLICABLE | 해당 항목이 적용되지 않음 | 제외 사유 보존, 0으로 변환 금지 |
-| NEEDS_CHECK | 정제 실패·모순·식별 불확실 | 해당 조건을 확정 계산에 사용하지 않음 |
+| disclosure | {rcept_no, corp_code, stock_code, title, filed_at} | receive |
+| disclosure_type | str | classify |
+| extracted_facts | dict | extract_facts |
+| evidence | list[{source, quote, rcept_no}] | extract_facts |
+| retry_count | int | extract_facts, draft_messages |
+| tool_call_counts | dict[str, int] | 모든 노드 (Harness 5) |
+| signals | list[{signal_type, points, detail}] | score_risk |
+| total_score / risk_level / combo_upgraded | int / str / bool | score_risk |
+| ai_explanation | str | explain_risk |
+| affected_customers | list[{customer_id, impact_score, impact_level, priority, reasons}] | find_customers |
+| drafts | dict[customer_id, str] | draft_messages |
+| guardrail_flags | list[str] | guardrail_check |
+| approval | {status, pb_id, edited_drafts, reject_reason, decided_at} | pb_approval |
+| task_ids | list[int] | create_tasks |
+| error | str 또는 None | 모든 노드 |
 
-수집 실패는 structured_facts=NULL과 collect_runs.error로 구분한다. NULL만 보고 정상 빈 결과·위험 없음으로 판단하지 않는다. 재무 지표의 기존 OK/MISSING 어휘는 별도 계약이며 이 상태와 혼용하지 않는다.
+- 공시 1건 = 스레드 1개, `thread_id = rcept_no`. 승인 대기 후 같은 thread_id로 재개한다.
 
-구조화 값에는 스키마 버전, 고정 항목 코드, 원천 API·필드·행 식별자, 값·단위·기간·재무 기준, 수집 시각·자료 버전을 포함한다. 세부 JSON 키는 collector.md와 R4 공통 스키마를 따른다.
+## 4-6. Graph 노드 (`agent/graph.py`)
 
-API 값과 AI 추출값이 다르면 동일 사건·기간·단위·정정 버전인지 먼저 확인한다. 실제 충돌은 양쪽 값·출처를 기록하고 NEEDS_CHECK로 둔다. 다른 독립 항목은 계속 처리하되, 누락·충돌이 결론을 바꿀 수 있거나 필수 근거이면 판정을 수동 확인으로 남긴다.
-
-## 5. 검색과 근거 검증
-
-- 검색 후보 수와 모델 입력 수를 구분한다. 모델 입력 한 번에 전달하는 공시 조각은 모든 검색 호출을 합쳐 최대 5개다. 참고 문서도 전체 토큰 예산 안에서 전달한다.
-- 같은 공시·자료 버전·위치의 중복 조각은 제거한다. 부족하면 무관한 문서로 수량을 채우지 않는다.
-- 문서 근거: source, rcept_no, location, quote와 원문 content_sha256·정규화 버전을 연결한다. 인용문은 해당 정규화 원문의 검색 조각과 일치해야 한다.
-- API 근거: API·필드·행 식별자·실제 값·단위·기간·OFS/CFS·데이터 버전으로 검증한다. API 값을 가짜 문서 인용으로 만들지 않는다.
-- R2가 검증된 근거 묶음을 만들고 R4는 계산·저장 경계에서 필수 정보와 버전 일치를 확인한다. 단순히 AI가 verified=true라고 낸 값은 신뢰하지 않는다.
-- 과거 근거 재검색은 R2/R4 중 한 경로에서만 수행한다. R4 EvidenceTools를 걷어낼 때 검증 없이 우회하지 말고 동등한 검사와 테스트를 먼저 연결한다.
-- 과거 평가는 기준 시점까지 공개된 자료·정정본만 사용한다. 공개 시점을 확인할 수 없는 이후 조회 값은 과거 평가 근거로 사용하지 않는다.
-- 해시·문자열 일치는 문서 식별·인용 일치 검사이며 재무적 해석의 타당성까지 보장하지 않는다.
-
-## 6. 사건·정정·후속과 초안
-
-R3가 원본 후보와 연결 근거를 제공하고 R4가 event_id를 확정한다. 기업이 같거나 제목·날짜가 비슷하다는 이유만으로 자동 연결하지 않는다. 후보가 없거나 여러 개이면 원본 관계를 확정하지 않는다.
-
-R1 정책에 따라 신규 위험 사건만 새 RED로 취급한다. 후속은 기존 사건 타임라인을 갱신하며 금액·상태·해소 변화는 반영한다. 정정은 자동 해소가 아니다. 확인된 철회 등 해소 근거를 규칙에 반영한다.
-
-판정·근거가 바뀌면 이전 승인 대기 초안을 차단한다. 위험이 유지되면 새 판정 기준으로 재작성·재승인하고, 해소되면 해당 승인 대기를 종료한다. 과거 승인·반려·연락 업무 이력은 삭제하지 않는다. 이미 생성된 미완료 업무의 변경은 R4 업무 정책으로 명시적으로 처리하고 조용히 삭제하지 않는다.
-
-## 7. 공개 분석·조직별 실행·버전
-
-tenant는 공시 발행 기업이 아닌 서비스 이용 증권사 등 조직이다.
-
-| 식별자 | 의미 |
-| --- | --- |
-| assessment_id / 판정 버전 | 종목, 입력 공시·정정본·재무 버전, 규칙 버전, 평가 기준 시점으로 식별되는 판정 |
-| 실행 ID / 시도 횟수 | 동일 판정 작업의 실행과 실패 재시도 |
-| 조직별 검토 ID | tenant_id와 판정 ID에 연결된 고객·초안·승인 흐름 |
-| 알림 버전 | 실제 위험 변화로 PB에게 새로 알릴 때의 버전 |
-
-이 이름은 논리적 의미다. 실제 DB/API 필드는 R4 계약으로 매핑한다. 판정 버전과 알림 버전을 같은 것으로 가정하지 않는다.
-
-- 공시·구조화 사실과 공개 위험 분석은 조직 간 공유한다. 고객·보유 정보·초안·결정·연락 업무는 조직별 접근을 적용한다.
-- 공개 분석이 완료돼도 다른 조직의 고객 업무까지 완료된 것으로 보지 않는다.
-- 동일 판정의 일시 실패는 같은 작업에 재연결한다. 새 입력·규칙·시간 감쇠 평가이면 새 판정으로 구분한다.
-- 공개 분석 thread와 조직별 검토 thread를 분리하고, 후자는 신뢰된 tenant와 판정 ID를 포함한다. 접수번호 단독 thread_id를 운영 기준으로 쓰지 않는다.
-- tenant·PB·판정 ID·허용 고객은 인증·DB·dispatcher에서 받는다. 사용자 입력이나 모델 출력으로 정하지 않는다.
-- 승인 시 tenant·담당 고객·현재 판정 버전을 R4에서 재검사한다.
-
-## 8. 실행·완료·재시도 연결
-
-Phase 1은 DB 미처리 작업을 R4 실행 관리가 원자적으로 선점하고 R2 Graph를 실행한다. R3 수집기가 agent를 직접 호출하지 않는다. 수집 커서·수집 lease는 분석 잠금과 다르다.
-
-논리적 상태는 PENDING → RUNNING → DONE / RETRY_WAIT / MANUAL_CHECK / FAILED다. 실제 열거형은 R4 DB 계약에 매핑하며 승인 대기 상태와 구분한다.
-
-- 공개 분석 DONE은 판정·설명·재현 입력·필수 근거가 저장된 시점이다. 고객 초안 실패가 이미 성공한 공개 분석을 실패로 되돌리지 않는다.
-- processed_at은 공개 분석 성공 완료 시각이다. MANUAL_CHECK에는 성공 시각을 새로 찍지 않고 별도 종료 상태·시각을 남긴다.
-- 수동 확인은 자동 미처리 조회에서 제외한다. 명시적 재분석 요청으로만 다시 처리한다.
-- 작업 전체 최대 3회(최초 포함), 일시 오류만 재시도한다. 세부 예산·복구는 harness.md를 따른다.
-- 원자적 선점·잠금·만료·갱신·늦은 결과 차단·중복 저장은 R4 책임이다.
-
-## 9. 근거·원문 수명과 공개 출력
-
-정규화·해시는 collector.dart_client.normalize_document 한 곳을 사용하고 R2는 직접 다른 해시를 만들지 않는다. 원문 해시와 구조화 입력 해시는 서로 다른 대상이다.
-
-검색 원문은 모델 호출 구간의 일시 데이터로 처리한다. Graph 영속 State에는 원문 전문·불필요한 조각·전체 도구 응답을 넣지 않는다. 검증에 필요한 최소 인용·출처·해시·구조화 사실·판정 참조만 보존한다. 점수는 내부 보존하되 불필요한 원문이 score_result의 source_chunks에 포함되지 않게 투영한다.
-
-마지막 원문 검증과 결과 저장 뒤 색인을 해제한다. 설명 재작성·승인 재개는 저장된 근거를 사용한다. 부족하면 원문을 재확보하는 명시적 재분석으로 전환한다. 해시가 달라지면 과거 체크포인트에 새 원문을 조용히 혼합하지 않는다.
-
-설명·안내문 모델에는 public_risk_context의 허용 필드만 전달한다. get_state/start/resume과 원시 interrupt는 서버 내부용이며, PB용 get_review/API/SSE는 점수 없는 투영과 tenant·PB 필터를 적용한다.
-
-## 10. 구현 상태와 통합 완료 조건
-
-이 문서는 목표 규약이다. 기존 R2 코드의 Phase1Bindings 분리 계산 인터페이스, 접수번호 단독 thread, 최대 8개 검색 조각, 원문 조각이 포함된 State는 변경·검증 대상이다. R4의 새 Graph 주입·실제 도구·조직 context 연결도 완료 여부를 확인해야 한다.
-
-- [ ] 실제 calculate_risk_score를 사용하는 새 Graph가 선택된다.
-- [ ] 정상·RED·조건부·정정·결측 사례에서 계산 입력과 결과가 검증된다.
-- [ ] 실패 재시도·재시작·승인 재개가 중복 결과나 업무를 만들지 않는다.
-- [ ] 조직 간 조회·승인·체크포인트가 섞이지 않는다.
-- [ ] 모델 입력·PB API·SSE·체크포인트·trace에서 비공개 경계를 검사한다.
-- [ ] 같은 실제 사례로 개선 전후를 측정한다. 오프라인 테스트와 실제 모델 평가를 구분한다.
-
-상세: [Harness](harness.md), [수집기](collector.md), [RAG](mcp_rag.md), [업무 도구](mcp_business.md), [DB](db.md), [API](api.md), [위험 규칙](risk_rules.md).
-
-## 11. R2 코드 반영 상태 (2026-10-23)
-
-이 절은 이번 R2 변경의 실제 연결 API를 설명한다. 앞 절의 팀 목표와 R4 미구현 연결을 구분한다.
-
-### 새 경로 활성화
-
-- `Dependencies.unified: UnifiedBindings | None`를 추가했다. `unified`가 있으면 단일 계산 도구 Graph를 선택한다.
-- 기존 `phase1: Phase1Bindings`와 legacy Graph는 호환용이다. 이를 새 단일 도구 통합 완료로 보지 않는다.
-- `UnifiedBindings`는 `classify(title) -> list[RiskRoute]`, `prepare_signals(payload) -> list[dict]`, `await ensure_current(payload) -> bool`을 R4에서 주입받는다.
-- `classify`의 route는 `{bucket, item, text_flags}`다. `text_flags`는 승인된 비수치 조건만 지정한다. RED·YELLOW에서도 명시된 텍스트 조건을 추출할 수 있다. R2가 분류 정책이나 점수를 새로 계산하지 않는다.
-- `prepare_signals` 입력은 `disclosure/structured_facts/flags/evidence/routes/as_of`다. R4가 API 필드 매핑·단위·정정 관계·API/AI 충돌 처리를 수행한다. 미해결 필수 충돌은 `AgentError`로 중단하거나 규칙의 수동 확인으로 전달한다. 확인 필요 값을 버린 뒤 NONE으로 반환하지 않는다.
-- `ensure_current`는 `context/assessment_id/rcept_no/customer_ids`를 받는다. DB의 최신 판정·tenant·고객 소유권을 확인하고 명시적인 bool을 반환한다. 승인·업무 생성의 원자적 최종 검사는 R4 저장 도구에서도 필요하다.
-
-R4 조립에서 기존 `Phase1Model`·`EvidenceTools` 중복 검증을 연결 정리한 뒤 다음 방식으로 주입한다. 아래 `approved_routes`, `convert_signals`, `check_current`, `record_budget`은 R4가 실제 함수로 연결해야 하는 자리이며 이 이름의 구현을 R2가 만들었다는 뜻이 아니다.
-
-```python
-from dataclasses import replace
-from agent.integration import UnifiedBindings
-from agent.runtime import AgentRuntime
-
-bindings = UnifiedBindings(
-    classify=approved_routes,
-    prepare_signals=convert_signals,
-    ensure_current=check_current,
-    record_budget=record_budget,
-)
-deps = replace(deps, phase1=None, unified=bindings)
-runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
+```
+receive → classify ─(해당없음)→ END
+            └→ extract_facts ⟲(근거 부족, 최대 2회) → score_risk → explain_risk
+               → route_by_level ─(Low·Medium)→ save_and_summarize → END
+                                └(High·Critical)→ find_customers → draft_messages
+               → guardrail_check ─(실패, 최대 2회)→ draft_messages
+                                └(통과)→ pb_approval [interrupt]
+               → (반려) save_rejection → END
+               → (승인) create_tasks → END
 ```
 
-### 실행 API
+| 노드 | 담당 | 하는 일 |
+| --- | --- | --- |
+| receive | 코드 | get_disclosure로 공시 가져오기 |
+| classify | 규칙 | rules.yaml의 제목 키워드 표로 disclosure_type 결정 |
+| extract_facts | AI | search_disclosure_text로 원문을 읽고 조건 값 + 인용 문장 반환 (프롬프트 `extract_facts.md`) |
+| score_risk | 규칙 | get_signal_history + calculate_risk_score |
+| explain_risk | AI | 점수 내역 항목마다 원문 인용을 붙여 설명 (`explain_risk.md`) |
+| route_by_level | 코드 | 등급으로 분기 |
+| save_and_summarize | 코드 | save_assessment, 일일 요약 대상으로 표시 |
+| find_customers | 규칙 | compute_customer_impact, P1·P2만 다음 단계로 |
+| draft_messages | AI | 고객별 안내문 초안 (`draft_message.md`), 고객 이름 대신 `{고객명}` 자리표시 |
+| guardrail_check | 규칙 | harness/guardrails.py로 금지 표현 검사 |
+| pb_approval | 사람 | `interrupt()`로 멈춤 → PB 결정 받아 재개 |
+| create_tasks | 코드 | 승인된 고객마다 create_contact_task |
 
-`ExecutionContext`는 R4 인증·dispatcher 내부에서 생성한다. 공개 HTTP 요청 DTO로 그대로 노출하지 않는다.
+## 4-7. API ↔ Graph 연결 약속 (A 구현 기준으로 C가 맞춤)
 
-| 필드 | 의미 |
+API(`api/graph_adapter.py`의 `RealGraphAdapter`)는 A의 **`agent.AgentRuntime`**으로 Graph를 부른다. 자세한 경계는 `docs/contracts/agent.md`.
+LLM에게: 이 절과 `docs/contracts/agent.md`가 다르면 docs/contracts/agent.md(A)가 맞다. 체크되지 않은 항목은 담당자 확인이 필요하다고 사용자에게 알려라.
+검증: `tests/api/test_runtime_adapter.py` (A의 가짜 deps로 API → AgentRuntime → 승인·재개·재시작을 확인).
+
+**API가 Graph를 부르는 방법 (C 구현 완료)**
+- `open_runtime(deps, data/checkpoints.db)`를 한 번 열고 서버 종료 시 닫는다. `thread_id = rcept_no`.
+- 시작 `runtime.start(rcept_no)`, 재개 `runtime.resume(rcept_no, ApprovalBatch, PBContext)`.
+  - C 형식 `{action: approve|reject|rewrite, edited_draft}` → A 형식 `{status: approved|rejected|rewrite, edited_message}`로 바꾼다.
+  - `PBContext.allowed_customer_ids`는 토큰의 PB가 DB에서 담당하는 고객으로 C가 만든다.
+  - 결정 API는 202 전에 `validate_batch`로 먼저 검사한다: PermissionError → 403, ValueError(가드레일 실패한 수정안 등) → 422.
+- 진행 이벤트: `deps.harness.event`의 `node_started`·`node_finished`를 SSE로 보낸다. `waiting_approval`·`done`·`failed`는 실행이 끝난 뒤 State(`status`)로 C가 만든다.
+- 화면 데이터: `runtime.get_state` → `assessment_id, status, disclosure, risk_level, score_result, ai_explanation, evidence, affected_customers, drafts, guardrail_flags, manual_drafts, decisions, task_ids, error`. PB별 필터는 API 라우트가 한다.
+
+**A (Agent) — 구현으로 확인됨**
+- [x] PB 1명씩 결정 묶음, `create_tasks` 후 남은 고객이 있으면 다시 승인 대기 (`finalize` → `prepare_approval`)
+- [x] interrupt 전에 `persistence.save(state, "WAITING_APPROVAL")` → `State.assessment_id`, 끝나면 `DONE`
+- [x] 결정 누적은 `State.decisions = {customer_id: {status, edited_message, reject_reason, pb_id, decided_at}}`
+- [x] 반려 고객은 업무 없음(`save_rejection`이 감사 기록), interrupt 노드 앞 DB 쓰기 없음
+- [x] **`agent.Dependencies` 조립**은 B가 `agent/assembly.py`의 `build_dependencies()`로 만들었다 (tools=`MCPTools`, model=`StructuredLLM`, harness=D 모듈을 async로 연결, persistence=`AssessmentStore`, create_task=`ToolTaskCreator`). `api/graph_adapter.default_dependencies()`가 이를 부른다. 실제 실행에는 business-mcp(8001)·rag-mcp(8002)와 `.env`의 `ANTHROPIC_API_KEY`·`OPENAI_API_KEY`가 필요하다. 모델만 가짜로 바꾼 시나리오 A 통합 테스트: `tests/mcp_servers/test_assembly.py`.
+- [x] `langchain-mcp-adapters 0.3.1` + `mcp 2.3.0` import 오류 → B가 `mcp>=1.12,<2`, `fastmcp>=2.12,<3`로 고정하고 `uv.lock`을 갱신했다 (feat/b-risk-score). 실제 서버 두 개에 `MCPTools.connect`가 붙는 것을 확인했다.
+
+**B (MCP·shared) 확인 항목**
+- [x] `shared/config.py` Settings에 `GRAPH_ADAPTER: str = "fake"`(fake | real), `FAKE_GRAPH_DELAY: float = 0.4`를 추가한다. 지금은 API가 `os.environ`에서 임시로 읽는다.
+- [x] `save_assessment`는 **rcept_no 기준 upsert**다. 같은 공시를 다시 저장하거나 `signals`·`score_result`를 비우고 status만 보내도(WAITING_APPROVAL → DONE) `assessment_id`가 유지된다. 점수 계산 전 실패(RUNNING·FAILED·MANUAL_CHECK)도 점수 없이 저장된다.
+- [ ] (C 결정 필요) `PATCH /tasks`는 지금 API가 DB를 직접 고친다. `update_task_status` 도구는 같은 규칙(`rules.yaml`의 `task_transitions`: 승인·보류 → 연락완료·보류)으로 준비돼 있다. 규칙은 "승인·보류 상태에서만 → 연락완료·보류"다. `update_task_status` 도구를 쓰도록 바꿀지 정한다.
+- [x] `calculate_risk_score`의 `breakdown[i]`에 `quote`와 `evidence`(`{source, quote, rcept_no, location}` 목록)가 실린다. 입력 `new_signals[i].evidence`를 그대로 돌려주고, 과거 신호는 `source_chunks`도 붙는다 (`docs/contracts/mcp_business.md`).
+
+**D (데이터·Harness·문서) 확인 항목**
+- [ ] `seed_db.py`의 비밀번호는 bcrypt 해시로 저장한다. `from api.auth import hash_password`를 쓰거나 `bcrypt.hashpw(pw.encode(), bcrypt.gensalt())`를 쓴다. 이메일은 소문자로 저장한다.
+- [ ] `.env.example`에 `GRAPH_ADAPTER=fake`, `FAKE_GRAPH_DELAY=0.4`를 추가하고, `JWT_SECRET`은 32자 이상을 권장한다고 적는다.
+- [ ] README 실행 방법: API `uv run uvicorn api.main:app --reload --port 8000`, 화면 `cd web && npm install && npm run dev`, 점검 `uv run python scripts/demo/smoke.py --rcept-no <접수번호>`
+- [ ] (선택) `harness/guardrails.py`에 `check_message(text) -> list[str]`를 열어 주면, PB가 직접 고친 안내문도 API에서 금지 표현을 검사한다.
+
+---
+
+---
+
+## 경계 상세 (docs/contracts/agent.md에서 옮김)
+
+# Agent 실행·연동 안내
+
+A 구현 범위는 `agent/`, `tests/agent/`다. 공통 스키마·타 담당 폴더·의존성 잠금 파일은 변경하지 않았다.
+
+## 테스트 실행
+
+```bash
+uv sync --frozen
+uv run pytest tests/agent -q
+```
+
+테스트는 네트워크·실제 키·다른 담당 서버 없이 실행된다. 합성 공시를 사용하며 실제 공시의 정확성이나 조기경보 성능을 검증하지 않는다. 고객 기대 우선순위는 기존 `data/seed/customers.json`을 참조한다. `FakeHarness`는 D의 운영 구현이 아니다.
+
+## C: Python 호출 경계
+
+```python
+from agent import open_runtime, PBContext, ApprovalBatch
+
+# deps는 아래 B·D 계약을 실제 구현에 연결한 Dependencies 객체다.
+# API lifespan에서 한 번 열고 종료할 때 닫는다.
+async with open_runtime(deps, "data/checkpoints.db") as runtime:
+    state = await runtime.start(rcept_no)
+
+    # C가 JWT 검증과 DB 소유권 조회를 완료한 뒤 내부에서 만든다.
+    pb = PBContext(pb_id=authenticated_pb_id,
+                   allowed_customer_ids=owned_customer_ids)
+    review = await runtime.get_review(rcept_no, pb)
+    state = await runtime.resume(rcept_no, ApprovalBatch(decisions=[
+        {"customer_id": "C001", "status": "approved",
+         "edited_message": "{고객명}님, 공시 내용을 확인하시고 상담 부탁드립니다."},
+    ]), pb)
+```
+
+- pb_id·allowed_customer_ids를 클라이언트 요청에서 그대로 복사하면 안 된다.
+- 고객별 status는 `approved`, `rejected`, `rewrite`. 반려 시 reject_reason이 필수다.
+- `start`는 같은 스레드를 다시 실행하지 않고 기존 상태를 반환한다.
+- 잘못된 결정·타 고객 결정·금지 문구가 있는 수정안은 interrupt를 소비하기 전에 거부한다.
+- `resume`은 PB별 고객 결정을 누적한다. 승인 업무 생성 후 미결정 고객이 남으면 다시 대기한다.
+- 같은 승인·반려 요청 재전송은 기존 결과를 반환한다. 기존 결정을 다른 내용으로 바꾸는 요청은 거부한다. 다시 작성은 새로 요청한 동작으로 취급한다.
+- 생성 실패 시 `retry_tasks(rcept_no, pb)`로 이미 승인된 미완료 업무만 명시적으로 재시도할 수 있다. 실패 노드가 create_tasks인 경우만 허용한다. 새 승인·재분석은 하지 않는다.
+- `get_state`, `start`, `resume` 반환은 서버 내부용 전체 State다. HTTP에 그대로 반환하지 않는다. PB 화면에는 `get_review`를 사용한다. 원시 interrupt·Graph 이벤트에도 타 PB 고객이 포함될 수 있어 그대로 브라우저에 전달하지 않는다.
+- C에서 PermissionError→403, 입력 오류→적절한 4xx로 변환한다. assessment_id→rcept_no 조회는 C/B가 제공한다.
+- 단일 runtime 내 동일 스레드 요청은 잠금으로 직렬화한다. 여러 process를 사용하면 C에서 동일 thread_id의 분산 직렬화를 보장해야 한다. 초기 데모는 단일 worker를 권장한다.
+- PB 대기 시간은 실행 예산에서 제외한다. 시작·재개·업무 재시도 구간마다 120초·AI 생성 최대 8회를 적용한다. 그래프 recursion_limit은 별도로 256이다.
+
+## B: MCP 연결
+
+`MCPTools.connect(settings)`로 두 서버의 도구를 읽는다. LLM에 도구 선택권을 주지 않고 코드가 호출한다. update_task_status는 허용하지 않는다. 아래 상세 형식은 A 내부 adapter 계약이며, B 출력이 다르면 경계에서 변환한다.
+
+| 응답 | A가 받는 상세 형식 |
 | --- | --- |
-| `assessment_key` | R4가 확정한 공개 판정 ID/버전 |
-| `as_of` | 평가 기준일 YYYY-MM-DD |
-| `rules_version` | 계산 응답의 rules_digest와 일치하는 규칙 해시 |
-| `input_version` | 공시·정정·재무·이력까지 포함하는 분석 입력 manifest의 R4 버전 |
-| `facts_version` | 작업 input_manifest에 고정된 이번 공시 structured_facts의 해시. 조회 data_version과 비교한다. R4 신규 실행은 명시적으로 전달하며 전체 input_version·원문 content_hash로 대체하지 않는다. NULL은 사실 미수집이다. 기존 R2 생략 호환 경로는 신규 실행에서 사용하지 않는다. |
-| `run_id`, `attempt` | R4 선점된 작업과 최초 포함 1~3 시도 |
-| `kind`, `tenant_id` | public 또는 review. review는 이용 조직 필수 |
-| `model_requests_used`, `active_seconds_used` | R4가 영속 예산 장부에서 복원한 누적 사용량 |
+| 공시 조회 | rcept_no, corp_code, title, filed_at; 본문은 State·모델 입력에서 제외 |
+| 회사 조회 | stock_code, name |
+| 공시 RAG | 조각 배열 또는 `{chunks: [...]}`. 각 조각의 source, text, rcept_no, location은 문자열 |
+| 고객 영향도 | 고객 배열 또는 `{customers: [...]}`. 각 항목은 shared.CustomerImpact |
+| 점수 계산 | shared.ScoreResult 필드 + 규칙이 계산한 신규 signals 배열 |
+| 점수 내역 | breakdown 원소마다 evidence 배열. 과거 근거는 검증 가능한 source_chunks도 제공 |
+| 평가 저장 | `{assessment_id: int}`. rcept_no 기준 upsert, 상태 갱신 시 ID 유지 |
+| 업무 생성 | `{task_id: int}`. 평가·고객 기준 멱등성 보장 |
 
-- `await runtime.start(rcept_no, context=public_context)`는 공개 분석만 수행해 DONE으로 저장한다.
-- R4 worker가 주는 AnalysisContext의 `execution_context`가 위 public_context 매핑이다. R2 factory는 `runtime.start(context.rcept_no, context=context.execution_context)`로 연결한다. 이미 고정된 facts_version을 최신 DB 버전으로 바꾸면 안 된다. 전체 입력·사실 버전 차이를 검증하는 경로는 R4 wiring 테스트로 확인한다. 실제 factory의 운영 연결은 별도 통합 사항이다.
-- `await runtime.start_review(rcept_no, completed_public_state, context=review_context)`는 같은 판정·자료 버전의 경보에 대해 조직별 고객 검토를 시작한다. 공개 분석 State는 R4 내부 저장소에서 읽은 값이어야 한다.
-- `get_state/get_review/resume/retry_tasks`에도 같은 `context=`를 전달한다. 공개 분석과 조직별 검토의 thread는 분리된다.
-- 같은 판정의 일시 실패는 `error_retryable=True, status=FAILED`로 반환한다. 다음 `attempt`로 다시 `start`하면 소비 예산을 유지하고 재실행한다. MANUAL_CHECK는 자동 재시작하지 않는다.
-- `open_runtime(deps, checkpointer=saver)`는 주입된 saver를 사용하고 닫지 않는다. 새 unified 경로는 R2가 DB를 선택·생성하지 않는다. 기존 경로의 로컬 SQLite/Postgres 팩토리만 호환용으로 남아 있다.
-- `analyze_receipts(..., contexts={rcept_no: context})`도 지원한다. 이 함수가 DB 선점을 대신하지 않는다.
+근거는 `{source, quote, rcept_no, location}`이다. source_chunks 필드는 RAG 조각과 같다. 실제 원문에 인용이 포함되어야 한다. 각 점수 항목의 근거가 없으면 설명을 지어내지 않고 MANUAL_CHECK로 종료한다.
 
-### 내부 보존과 출처
+`Dependencies.signal_input`은 검증된 사실을 B의 new_signals로 변환하는 함수다. LLM에서 점수를 받지 않는다. 현재 shared.Signal.points는 필수이므로 B의 신호 계산·반환 계약 확인이 필요하다. 임의 0점을 채우는 우회는 없다. B adapter는 계산 결과의 signals를 shared.Signal 배열로 제공해야 한다.
 
-- 새 계산 응답은 R4의 `composite_ratio/manual_check/expected_state_version/corp_code/as_of/rules_digest`를 검증·보존한다. 옛 R2 DTO의 `combined_ratio/needs_manual_check`와 억지로 혼합하지 않는다.
-- `input_manifest`는 실제 전달한 신규 신호·이번 구조화 사실·원문 출처 버전을 보존한다. **계산 도구가 DB에서 읽은 재무 스냅샷·과거 신호의 실제 입력 기록은 R4 저장 경계에서 추가 보존해야 한다.** R2만으로 전체 재무 판정 재현이 완성된 것은 아니다.
-- API 근거는 `{kind:api, api, field, rcept_no, row_key, value, unit, period, basis, data_version}`를 사용하고 문서 quote/location을 만들지 않는다. 현재 R4 엔진의 API 근거 전달·저장은 별도 연결이 필요하다.
-- `source_chunks/chunks/text/body_text/raw_response/messages` 등 일시 본문은 영속 State에 넣기 전에 제거한다. 원문 해시와 정규화 버전이 없는 새 검색 결과는 확인 필요로 남긴다.
+과거 신호는 조회하되 new_signals에 다시 합치지 않는다. B 계산 도구가 공시일 as_of 기준으로 합산한다. 분류는 주입된 classifier로 실행한다. rules.load_classifier의 YAML 구조는 제안이며 B와 다르면 loader를 조정하거나 B의 함수를 바인딩한다.
 
-### R4·R3 후속 연결 (R2 외부 담당)
+### 저장 연결
 
-1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마는 구현됐다. 조회는 최상위 facts/data_version 및 number→decimal 투영으로 R2 validator와 연결한다. 실제 운영 factory 연결과 UNAVAILABLE의 원문 분석 분기는 별도 통합 확인이 필요하다.
-2. R4 조립에서 새 bindings·카탈로그·모델·체크포인터를 주입한다. 현재 adapter가 자동으로 바뀐 것은 아니다.
-3. R4 dispatcher가 공개 분석 후 각 이용 조직의 review를 실행하고, 선점·lease·재시도·예산 장부를 관리한다.
-4. R4가 판정 최신성·업무 생성의 tenant·멱등성을 DB 트랜잭션으로 보장한다.
-5. R3가 검색 응답에 content_sha256·normalization_version을 제공한다. R4가 최종 검색 후 release와 실패 정리를 연결한다.
-6. R4 API·SSE가 공개 투영을 사용한다. 다른 담당 파일·규칙·의존성은 이번 R2 변경에서 수정하지 않는다.
+- `PersistenceBindings(save=..., audit=...)`로 실제 저장 함수를 연결한다. save는 전체 State와 상태를 받아 upsert한다. 계산 전에 실패한 평가의 저장도 처리해야 한다.
+- 기존 도구의 upsert가 확인되면 `ToolAssessmentStore(tools, audit, harness, upsert_confirmed=True)`를 사용한다. shared 입력 필드만 전달한다. 이 adapter만으로는 미계산 평가 저장·초안/결정 별도 DB 조회를 지원하지 않는다. 전체 상태·초안은 체크포인트에 저장되어 runtime에서 조회할 수 있다.
+- audit 함수는 trace_id, actor, action, target, payload를 실제 로그에 저장한다. 고객별 결정의 idempotency_key로 재실행 중복을 막는다. 반려는 감사 기록에 남기고 contact_tasks 행은 만들지 않는다.
+- `ToolTaskCreator(tools, harness, authorize, idempotency_confirmed=True)`를 Dependencies.create_task에 넣을 수 있다. authorize는 `(pb_id, customer_id, assessment_id)`를 받는 async 소유권 검사다. 도구에는 shared.CreateContactTaskInput 필드만 전달한다. B는 평가·고객별 유일성과 응답 유실 후 재호출 시 기존 task_id 반환을 보장해야 한다.
 
-이 후속 연결이 없는 상태에서는 실제 전체 서비스 동작 완료를 주장하지 않는다.
+## D: Harness 연결
 
-## 12. 구조화 사실 조회 연결 보정 — PR #50 대응
+HarnessBindings에 아래 async 함수를 모두 주입한다. 없는 모듈을 자동으로 가짜 구현으로 교체하지 않는다.
 
-### 합의된 원천 형식을 R2가 수용
+| 함수 | 계약 |
+| --- | --- |
+| prepare_input(payload) → dict | 개인정보 마스킹, 도구 결과 4,000자·입력 6,000토큰 예산 관리. 원문 검증용 구조는 보존하고 모델 문맥만 축약 |
+| check_message(message) → list[str] | 금지 문구·개인정보 검사. 통과 시 빈 배열 |
+| recover_llm(primary, fallback) | 429/503만 1초·3초 간격으로 2회 재시도 후 fallback. 구조 검증 오류는 구분 |
+| recover_tool(operation) | ToolResponse 반환. TIMEOUT만 1회 재시도, 나머지 오류는 그대로 반환 |
+| event(name, payload) | C 이벤트·D 관측 연결. 개인정보 없는 이벤트 전달 |
 
-R3 저장/R4 조회 형식은 유지한다. R2 `validate_facts`는 `invoke_tool`이 반환한
-**ToolResponse.data**의 `availability/rcept_no/corp_code/structured_facts/facts_hash`를 받는다.
-`{ok,data}` 응답 전체를 한 번 더 풀거나 R4 응답을 최상위 facts로 바꾸지 않는다.
+초기 안내문 7개는 한 번의 구조화 호출로 생성한다. 실패 고객만 묶어 최대 두 번 재작성한다. 기본 AI 생성은 사실 추출·설명·초안의 3회이며 고객 수 때문에 8턴을 넘지 않는다. 모델 장애 재시도는 D recovery에서 계측한다.
 
-- AVAILABLE: `structured_facts`의 공시·기업·스키마·출처를 검증하고 facts를 사용한다.
-- v1 자료형은 **string / number / integer / boolean**이다. number는 유한한 JSON 숫자만
-  허용하고 문자열·bool·NaN·Infinity는 거절한다. 결측·false·0을 서로 대체하지 않는다.
-- 다중 행 키는 R4와 동일하게 name/api/field/row_key/period/basis를 사용한다.
-- `facts_hash`를 구조화 값의 버전 키로 유지한다. R4의 canonical JSON 방식
-  (sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False)의 SHA-256을
-  R2에서도 확인한다. JSON 변조·접수번호·기업 불일치는 중단한다.
-- R2 내부 검증 결과에는 facts 목록과 **facts_hash**를 보존한다. 이를 content_hash나
-  data_version으로 개명하지 않는다. 원문 해시 및 전체 입력 input_version과 혼용하지 않는다.
-- `receive`는 dispatcher가 제공한 `ExecutionContext.facts_version`과 facts_hash를 비교한다.
-  facts_version 누락 시 input_version으로 조용히 대체하지 않는다. R4가 이 값을 주입해야 한다.
-- UNAVAILABLE/NULL은 위험 없음이 아니다. 이번 보정에서는 기존 수동 확인 처리를 유지한다.
-  원문 분석 fallback·백필 대상 선별은 별도 실행 정책이며 이 PR에서 임의로 바꾸지 않는다.
-- 순수 payload 단위 검증(옛 decimal/date 포함)은 기존 직접 호출 호환용으로만 유지한다.
-  새 MCP 통합 경로에서는 중첩 응답과 위 v1 네 자료형을 요구한다.
+A는 구간 내 도구명+동일 인자 반복을 최대 3회로 제한한다. 서로 다른 고객의 정상 업무 생성은 별개 입력이다. 이 해석은 D와 확인해야 한다. 실제 저장 adapter도 도구 호출로 집계한다. 실패 기록에는 최대 15초의 별도 정리 예산을 둔다.
 
-### 시험과 담당 경계
+LangSmith root의 trace_id와 전달 헤더를 체크포인트에 저장한다. 재개는 원래 trace의 child로 연결한다. Graph·LLM은 LangChain tracing을 사용하며 모델·프롬프트 버전을 metadata에 남긴다. D는 tracing 환경·프로젝트·도구 관측을 설정한다. 실제 서버 전송·토큰·비용·화면 캡처는 실제 키로 확인해야 한다.
 
-R2 가짜 도구도 실제 R4 중첩 응답을 사용한다. R3의 실제 수집 함수 → R4 store_facts/
-get_disclosure_facts → R2 receive 연결은 임시 DB·가짜 DART로 확인하며 실제 외부 API
-성능 평가와 구분한다. 버전·값 변조·number 거절 오류도 검사한다.
+## 현재 외부 의존성 제한
 
-R4 담당 `mcp_business.md`에는 같은 응답·자료형·facts_hash 의미를 반영 요청한다.
-R3 담당 #50 시험은 xfail을 제거하되, 모양 시험에서 facts를 지우면 해시를 다시 계산해야
-한다(또는 실제 응답을 그대로 사용). 버전 기대값도 facts_hash로 변경한다. 변조를 통과시키기
-위해 R2 검증을 약화하지 않는다. 별도 리뷰 요청 패치로 제공하며 담당 파일을 대신 수정하지 않는다.
+2026-10-20 `uv sync --frozen`으로 설치한 조합은 langchain-mcp-adapters 0.3.1, mcp 2.3.0이다. 이 환경에서 `from langchain_mcp_adapters.client import MultiServerMCPClient`가 `mcp.shared.context.RequestContext` ImportError를 낸다. 서버 연결 전의 패키지 호환 문제다.
 
-백필은 R3가 수집 완료를 인계하는 동작을 유지한다. 위험 대상/정정/후속의 선별·실행량 제한은
-R1 정책과 R4 dispatcher/enqueue_ready 책임이며 구조화 사실 유무만으로 제외하지 않는다.
+의존성 담당자가 호환 버전을 확인하고 pyproject.toml·uv.lock을 함께 조정해야 한다. A에서는 잠금 파일을 변경하지 않았고 준비 오류를 명시한다.
+
+실제 공시·MCP·D Harness·C 인증/API·모델 키가 아직 연결되지 않았다. 현재 테스트 결과는 A의 흐름·검증·저장 경계에 대한 결과이며, 실제 계산·공시 사실성·HTTP 권한·실제 저장 멱등성은 병합 후 통합 검증 대상이다.

@@ -13,10 +13,6 @@ async def handle_failure(state, deps):
 
 
 async def record_failure(state, deps, scope):
-    # A failed retry can clear a previous partial result. Do not pass null
-    # score_result into legacy stores that select their branch by key presence.
-    if state.get('score_result') is None and 'score_result' in state:
-        state = {k: v for k, v in state.items() if k != 'score_result'}
     update = {}
     errors = []
     try:

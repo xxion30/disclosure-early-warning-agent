@@ -2,8 +2,6 @@ from pydantic import ValidationError
 
 from agent.execution import call_tool, generate
 from agent.state import DraftsOutput
-from agent.public_risk import customer_context, disclosure_context, public_risk_context, reference_context
-from harness.guardrails import find_score_disclosure
 
 
 async def draft_messages(state, deps):
@@ -25,10 +23,9 @@ async def draft_messages(state, deps):
     try:
         result = await generate(deps, "rewrite_message" if rewrite else "draft_message",
                                 DraftsOutput, {
-            "disclosure": disclosure_context(state["disclosure"]), "customers": customer_context(customers),
-            "score_result": public_risk_context(state["score_result"]), "ai_explanation": state["ai_explanation"],
-            "reference": reference_context(reference), "previous_drafts": {
-                c: drafts.get(c) if not find_score_disclosure(drafts.get(c) or "") else "" for c in ids},
+            "disclosure": state["disclosure"], "customers": customers,
+            "score_result": state["score_result"], "ai_explanation": state["ai_explanation"],
+            "reference": reference, "previous_drafts": {c: drafts.get(c) for c in ids},
             "flags": state.get("guardrail_flags", []),
         })
         if set(result.drafts) != ids:

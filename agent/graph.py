@@ -25,9 +25,6 @@ def route_by_level(state):
 
 
 def build_graph(deps, checkpointer):
-    if deps.unified is not None or deps.phase1 is not None:
-        from agent.phase1_graph import build_phase1_graph
-        return build_phase1_graph(deps, checkpointer)
     graph = StateGraph(AgentState)
     operations = {
         "receive": receive, "classify": classify, "extract_facts": extract_facts,
