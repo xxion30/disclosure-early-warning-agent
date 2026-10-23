@@ -149,6 +149,20 @@ def test_timeout_is_retried_and_error_hides_key():
     assert "test-key" not in str(e.value) and e.value.__cause__ is None
 
 
+def test_api_key_never_reaches_logs(caplog):
+    """httpx는 요청 URL을 INFO로 남기고 httpcore는 DEBUG로 남긴다. 어느 로거로 가든 키가 보이면 안 된다 (실제로 한 번 샜다)."""
+    import logging
+
+    caplog.set_level(logging.DEBUG)
+    client, _ = make(lambda request: json_response("000", list=[]))
+    run(lambda: client.get_json("list.json", corp_code="00106119"))
+    logging.getLogger("httpcore.http11").debug("send b'/api/list.json?crtfc_key=test-key&corp_code=1'")  # httpcore 모양
+    logging.getLogger("anything").info("GET %s", "https://opendart.fss.or.kr/api/list.json?crtfc_key=test-key")
+    assert "HTTP Request" in caplog.text  # 로그는 남되
+    assert "test-key" not in caplog.text and "crtfc_key=***" in caplog.text  # 키만 가려진다
+    assert all("test-key" not in r.getMessage() for r in caplog.records)
+
+
 def test_rate_limiter_spaces_calls():
     waits: list[float] = []
 
