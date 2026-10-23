@@ -72,3 +72,7 @@
 R3는 `shared.facts.store_facts(session,rcept_no,payload)`로 구조화 사실을 검증·저장한다. 공시별 필수 스냅샷/조회 결과 저장이 모두 끝난 같은 트랜잭션에서 `shared.analysis.mark_ready(session,rcept_no)`를 호출한다. 이 함수는 모델·API·Graph를 호출하지 않는다. 목록만 삽입한 공시는 실행기가 가져가지 않는다. NULL을 확정 정상으로 바꾸기 위해 준비 표시를 해서는 안 되며, 알려진 결측은 MISSING으로 표현한다.
 
 명시적 재분석은 관리자 요청의 UUID `reanalysis_request_id`를 입력 manifest의 요청 버전으로 포함해 새 작업을 만든다. 같은 UUID 재요청은 멱등이다. 기존 MANUAL_CHECK/FAILED의 시도 횟수·오류 이력은 덮어쓰지 않는다.
+
+## R5 변경 요약 이력 (2026-10-23)
+
+risk_state_changes는 corp_code/state_version 유일 키로 변경 시각, 이전·현재 단계, 점수 없는 changes를 저장한다. 현재 상태 저장과 같은 트랜잭션이다. 최초 저장은 이전 상태를 추정하지 않는다. 기존 risk_states를 과거 평가와 임의 조합해 이력을 역산하지 않는다. 같은 상태를 다시 저장하면 변경 이력을 늘리지 않는다.

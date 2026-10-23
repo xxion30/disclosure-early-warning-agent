@@ -23,7 +23,8 @@ def _openai_chat(model: str, api_key: str):
             kwargs.setdefault("method", "function_calling")
             return super().with_structured_output(schema, **kwargs)
 
-    return FunctionCallingChatOpenAI(model=model, api_key=api_key)
+    # Harness owns retries; provider SDK retries would multiply the budget.
+    return FunctionCallingChatOpenAI(model=model, api_key=api_key, max_retries=0)
 
 
 def build_model(harness, settings):
@@ -43,7 +44,7 @@ def build_model(harness, settings):
     if name.startswith("claude") and settings.ANTHROPIC_API_KEY:
         from langchain_anthropic import ChatAnthropic
 
-        primary = ChatAnthropic(model=name, api_key=settings.ANTHROPIC_API_KEY)
+        primary = ChatAnthropic(model=name, api_key=settings.ANTHROPIC_API_KEY, max_retries=0)
     elif name.startswith("claude"):
         log.warning("ANTHROPIC_API_KEY 없음 → OpenAI(%s)를 기본 모델로 사용", settings.LLM_FALLBACK)
         primary = fallback

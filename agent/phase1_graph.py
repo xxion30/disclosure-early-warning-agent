@@ -22,6 +22,7 @@ from agent.nodes.save_rejection import save_rejection
 from agent.nodes.save_state import save_state
 from agent.nodes.score_orange import score_orange
 from agent.nodes.score_yellow import score_yellow
+from agent.nodes.calculate_unified import calculate_unified
 from agent.phase1 import ALERT_STAGES
 from agent.state import AgentState
 
@@ -38,6 +39,10 @@ def build_phase1_graph(deps, checkpointer):
         "save_rejection": save_rejection, "create_tasks": create_tasks,
         "save_and_summarize": save_and_summarize,
     }
+    if deps.unified is not None:
+        for name in ('mark_red', 'score_orange', 'compute_indicators', 'score_yellow', 'judge_stage'):
+            operations.pop(name)
+        operations['calculate_unified'] = calculate_unified
 
     async def prepare_approval(state):
         aid = await deps.persistence.save(state, "WAITING_APPROVAL")
@@ -69,21 +74,32 @@ def build_phase1_graph(deps, checkpointer):
     def edge(source, target):
         branch(source, lambda _: target, [target])
 
-    graph.add_edge(START, "receive")
-    for first, second in [("receive", "classify"), ("classify", "mark_red"),
+    if deps.unified is not None:
+        graph.add_conditional_edges(START, lambda s: 'find_customers' if
+                                    s.get('execution_context', {}).get('kind') == 'review' else 'receive',
+                                    {'find_customers': 'find_customers', 'receive': 'receive'})
+        edge('receive', 'classify')
+        edge('classify', 'extract_flags')
+        edge('calculate_unified', 'explain_risk')
+    else:
+        graph.add_edge(START, "receive")
+        for first, second in [("classify", "mark_red"),
                           ("mark_red", "extract_flags"), ("score_orange", "compute_indicators"),
                           ("compute_indicators", "score_yellow"), ("score_yellow", "judge_stage"),
-                          ("judge_stage", "explain_risk"), ("save_and_summarize", "completed"),
+                          ("judge_stage", "explain_risk"), ('receive', 'classify')]:
+            edge(first, second)
+    for first, second in [("save_and_summarize", "completed"),
                           ("draft_messages", "guardrail_check"), ("prepare_approval", "pb_approval"),
                           ("pb_approval", "save_rejection"), ("save_rejection", "create_tasks")]:
         edge(first, second)
     branch("extract_flags", lambda s: "extract_flags" if (
-        any(r["bucket"] == "ORANGE" and r["text_flags"] for r in s["risk_routes"])
-        and not s.get("flags")) else "score_orange", ["extract_flags", "score_orange"])
+        any(r["text_flags"] for r in s["risk_routes"])
+        and not s.get("flags")) else ('calculate_unified' if deps.unified else 'score_orange'),
+           ["extract_flags", 'calculate_unified' if deps.unified else 'score_orange'])
     branch("explain_risk", lambda s: "explain_risk" if s.get("explanation_errors") else "save_state",
            ["explain_risk", "save_state"])
-    branch("save_state", lambda s: "find_customers" if s["stage"] in ALERT_STAGES
-           else "save_and_summarize", ["find_customers", "save_and_summarize"])
+    branch("save_state", lambda s: 'completed' if deps.unified else ("find_customers" if s["stage"] in ALERT_STAGES
+           else "save_and_summarize"), ["completed", "find_customers", "save_and_summarize"])
     branch("find_customers", lambda s: "draft_messages" if pending_customers(s) else "save_and_summarize",
            ["draft_messages", "save_and_summarize"])
     branch("guardrail_check", lambda s: "draft_messages" if s["rewrite_customers"] else "prepare_approval",

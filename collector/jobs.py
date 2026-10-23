@@ -1,6 +1,9 @@
 """종목별 수집 작업과 수집 실행(run) 한 번. 계약은 docs/contracts/collector.md 3장.
 
-흐름 (종목 1개): 회사 upsert → 조회 범위(커서 하루 전 또는 백필) → list.json → 공시 upsert → 정기보고서마다 재무제표·지표 저장 → 커서 전진.
+흐름 (종목 1개): 회사 upsert → 조회 범위(커서 하루 전 또는 백필) → list.json → 공시 upsert → 정기보고서마다 재무제표·지표 저장
+→ 항목 API 구조화 사실 저장 → 분석 인계(mark_ready) → 커서 전진.
+구조화 사실과 인계는 R4의 shared/facts.py(`store_facts`)·shared/analysis.py(`mark_ready`)를 쓴다. 인계되지 않은 공시(`analysis_ready_at` 없음)만
+처리하므로 실패한 공시는 다음 실행이 다시 시도하고, 인계된 공시는 다시 건드리지 않는다.
 커서는 모든 페이지·저장이 끝난 뒤에만 전진한다. 실패하면 `success_at` 없이 예약만 풀어 커서를 그대로 둔다 (R4 `finish_stock`).
 
 실행(run)의 생성·예약·임대·종료는 R4의 shared/collection.py가 한다. R4의 `POST /collect/run`은 `PENDING` 실행을 만들고 종목을 예약한 뒤
@@ -20,7 +23,8 @@ from sqlalchemy import select
 from collector import repo
 from collector.backfill import backfill_start
 from collector.cursor import incremental_start, now_kst
-from collector.dart_client import DartClient
+from collector.dart_client import DartBadRequest, DartClient
+from collector.facts import build_payload, item_for, parse_original_date, split_title
 from collector.indicators import compute_audit_opinion, compute_financial_indicators
 from collector.reports import PeriodicReport, parse_periodic_title
 from collector.watchlist import CorpCodeBook, Target, build_watchlist, resolve
@@ -33,9 +37,11 @@ from shared.collection import (
     release_run,
     reserve_stocks,
 )
+from shared.analysis import mark_ready
 from shared.config import get_settings
 from shared.db import get_session
-from shared.models import CollectCursor, CollectRun, FinancialSnapshot
+from shared.facts import store_facts
+from shared.models import CollectCursor, CollectRun, Disclosure, FinancialSnapshot
 
 log = logging.getLogger("collector")
 
@@ -51,6 +57,9 @@ class StockOutcome:
     new_disclosures: int = 0
     snapshots: int = 0
     error: str | None = None
+    facts: int = 0  # 구조화 사실을 저장한 공시 수
+    handed_off: int = 0  # 분석에 인계(mark_ready)한 공시 수
+    problems: list[str] = field(default_factory=list)  # 사실을 만들지 못한 이유 (실패는 아님)
 
 
 @dataclass
@@ -96,6 +105,77 @@ async def _collect_report(client: DartClient, target: Target, report: PeriodicRe
     return out
 
 
+def _compact(iso: str) -> str:
+    return iso.replace("-", "")
+
+
+async def _resolve_facts(client: DartClient, target: Target, rows: list[dict], pending: set[str], fetched_at: str) -> tuple[dict, dict, list[str]]:
+    """인계 전 공시 중 항목 API 대상의 구조화 사실을 만든다. 반환: ({접수번호: payload}, {정정 접수번호: 원공시 접수번호 후보}, 문제 목록).
+
+    항목 API는 정정 체인의 최신본만 주고 기간 필터가 **체인의 최초 접수일**에 적용된다 (collector.md 3-3).
+    그래서 정정 공시는 본문의 `최초제출일`로 최초 접수일을 알아내 그 날짜로 조회한다. 못 알아내면 사실을 만들지 않는다(NULL).
+    """
+    problems: list[str] = []
+    anchors: dict[str, str] = {}  # 접수번호 → 체인의 최초 접수일(YYYY-MM-DD)
+    for r in rows:
+        if r["rcept_no"] not in pending or not item_for(r["report_nm"]):
+            continue
+        corrected, _ = split_title(r["report_nm"])
+        if not corrected:
+            anchors[r["rcept_no"]] = f"{r['rcept_dt'][:4]}-{r['rcept_dt'][4:6]}-{r['rcept_dt'][6:]}"
+            continue
+        try:
+            anchor = parse_original_date((await client.fetch_document(r["rcept_no"])).text)  # 원문은 읽기만 하고 저장하지 않는다
+        except DartBadRequest as e:  # 이 정정의 본문을 받을 수 없다: 영구 오류라 사실 없이 넘어간다 (일시 오류는 올라가 다음 실행이 다시 시도)
+            problems.append(f"{r['rcept_no']}: 정정 본문을 받지 못함 ({e.status or 'HTTP'})")
+            continue
+        if anchor is None:
+            problems.append(f"{r['rcept_no']}: 정정 본문에서 최초제출일을 읽지 못함")
+        else:
+            anchors[r["rcept_no"]] = anchor
+    payloads: dict[str, dict] = {}
+    by_group: dict[tuple[str, str], list[str]] = {}
+    for rcept, anchor in anchors.items():
+        by_group.setdefault((item_for(next(x["report_nm"] for x in rows if x["rcept_no"] == rcept))[1], anchor), []).append(rcept)
+    for (api, anchor), rcepts in by_group.items():
+        api_rows = {x.get("rcept_no"): x for x in await client.major_report(api, target.corp_code, _compact(anchor), _compact(anchor))}
+        for rcept in rcepts:
+            if rcept in api_rows:
+                payloads[rcept] = build_payload(api, api_rows[rcept], rcept_no=rcept, corp_code=target.corp_code, fetched_at=fetched_at)
+            elif api_rows:  # 같은 체인의 더 나중 정정본이 최신이라 이 공시의 행은 없다 (정상: 그쪽에 사실이 붙는다)
+                pass
+            else:
+                problems.append(f"{rcept}: 항목 API({api})가 최초 접수일 {anchor}에 행을 주지 않았다")
+    links: dict[str, str] = {}
+    for rcept, anchor in anchors.items():
+        row = next(x for x in rows if x["rcept_no"] == rcept)
+        corrected, base = split_title(row["report_nm"])
+        if corrected:  # 정정이면 같은 제목의 최초 공시를 후보로 남긴다 (확정은 R4의 confirm_event_link)
+            originals = [x["rcept_no"] for x in rows if split_title(x["report_nm"]) == (False, base) and x["rcept_dt"] == _compact(anchor)]
+            if len(originals) == 1:
+                links[rcept] = originals[0]
+    return payloads, links, problems
+
+
+def _hand_off(session, pending: set[str], payloads: dict, links: dict) -> tuple[int, int, list[str]]:
+    """사실을 저장하고 인계한다. 한 공시의 사실 저장이 검증에 실패해도 그 공시만 사실 없이 넘어간다."""
+    stored, problems = 0, []
+    for rcept, payload in sorted(payloads.items()):
+        try:
+            with session.begin_nested():
+                store_facts(session, rcept, payload)
+            stored += 1
+        except ValueError as e:  # pydantic ValidationError 포함: 사실을 만드는 코드의 버그이므로 숨기지 않고 남긴다
+            problems.append(f"{rcept}: 구조화 사실 검증 실패 — {str(e).splitlines()[0][:120]}")
+    for correction, original in links.items():
+        row = session.get(Disclosure, correction)
+        if row is not None and row.original_rcept_no is None and row.event_id is None:
+            row.original_rcept_no = original
+    for rcept in sorted(pending):
+        mark_ready(session, rcept)
+    return stored, len(pending), problems
+
+
 async def collect_stock(client: DartClient, target: Target, *, today: date, now: datetime | None = None) -> StockOutcome:
     """종목 1개를 수집한다. 예외는 밖으로 던지지 않고 실패 결과로 돌려준다."""
     now = now or now_kst()
@@ -119,7 +199,14 @@ async def collect_stock(client: DartClient, target: Target, *, today: date, now:
             snapshots = await _collect_report(client, target, report, now.isoformat())
             with get_session() as s:
                 saved += sum(repo.save_snapshot(s, target.corp_code, report, **snap) for snap in snapshots)
-        return StockOutcome(target.stock_code, True, len(new), saved)
+        # 구조화 사실과 분석 인계: 아직 인계되지 않은 공시만 (실패한 것은 다음 실행이 다시, 인계된 것은 건드리지 않는다)
+        listed = [r["rcept_no"] for r in rows]
+        with get_session() as s:
+            pending = set(s.scalars(select(Disclosure.rcept_no).where(Disclosure.rcept_no.in_(listed), Disclosure.analysis_ready_at.is_(None)))) if listed else set()
+        payloads, links, problems = await _resolve_facts(client, target, rows, pending, now.isoformat())
+        with get_session() as s:
+            stored, handed, store_problems = _hand_off(s, pending, payloads, links)
+        return StockOutcome(target.stock_code, True, len(new), saved, facts=stored, handed_off=handed, problems=[*problems, *store_problems])
     except Exception as e:  # noqa: BLE001 — 한 종목의 실패가 다른 종목을 막지 않는다
         log.warning("수집 실패 %s: %s", target.stock_code, _error_text(e))
         return StockOutcome(target.stock_code, False, error=_error_text(e))

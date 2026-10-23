@@ -10,10 +10,13 @@ const props = defineProps({
   stage: { type: String, default: null },
   stages: { type: Array, default: null },
   level: { type: String, default: null },
+  // 서버가 주는 예전 평가 표시 (/alerts의 legacy·stage_available). 없으면(null) 화면이 추측한다
+  legacy: { type: Boolean, default: null },
+  available: { type: Boolean, default: null },
   all: { type: Boolean, default: false },
 })
 
-const list = computed(() => stagesOf({ stage: props.stage, stages: props.stages, level: props.level }))
+const list = computed(() => stagesOf({ stage: props.stage, stages: props.stages, level: props.level, legacy: props.legacy, stage_available: props.available }))
 const shown = computed(() => (props.all ? list.value : list.value.slice(0, 1)))
 const extra = computed(() => (props.all ? [] : list.value.slice(1)))
 const extraText = computed(() => extra.value.map((s) => STAGES[s].label).join(', '))

@@ -3,7 +3,7 @@ import asyncio
 import re
 
 
-async def analyze_receipts(runtime, receipts, *, concurrency=1):
+async def analyze_receipts(runtime, receipts, *, concurrency=1, contexts=None):
     """Analyze unique receipts and return status summaries without private scores.
 
     The caller owns durable queue/tenant identity, retry policy and collection
@@ -15,12 +15,15 @@ async def analyze_receipts(runtime, receipts, *, concurrency=1):
     unique = list(dict.fromkeys(receipts))
     if any(not isinstance(r, str) or not re.fullmatch(r"\d{14}", r) for r in unique):
         raise ValueError("실제 DART 접수번호 형식을 확인하세요")
+    if getattr(getattr(runtime, 'deps', None), 'unified', None) is not None:
+        if contexts is None or any(r not in contexts for r in unique):
+            raise ValueError('R4 선점 후 생성한 공시별 실행 context가 필요합니다')
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(receipt):
         async with semaphore:
             try:
-                state = await runtime.start(receipt)
+                state = await runtime.start(receipt, **({'context': contexts[receipt]} if contexts else {}))
                 return {"rcept_no": receipt, "status": state["status"],
                         "stage": state.get("stage"), "assessment_id": state.get("assessment_id")}
             except Exception as exc:

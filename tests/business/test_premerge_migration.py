@@ -15,7 +15,7 @@ def test_new_migrations_preserve_existing_data_and_are_repeatable(tmp_path,monke
     command.upgrade(cfg,'head');command.upgrade(cfg,'head')
     with engine.connect() as db:
         assert db.execute(text("SELECT name FROM pbs WHERE pb_id='fixture'")).scalar_one()=='kept'
-        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='20261023_04'
+        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='20261023_05'
     assert 'structured_facts' in {c['name'] for c in inspect(engine).get_columns('disclosures')}
     assert {'analysis_jobs','public_assessments','organization_reviews'} <= set(inspect(engine).get_table_names())
     engine.dispose();get_settings.cache_clear()

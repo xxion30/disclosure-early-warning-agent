@@ -129,7 +129,7 @@ const customerState = computed(() => {
               <h1>{{ alert.company.name || alert.disclosure.title }}</h1>
               <span v-if="unscored" class="unscored">등급 미계산</span>
               <!-- 상세에서는 함께 난 단계를 모두 보여 준다 -->
-              <StageBadge v-else all :stage="alert.stage" :stages="alert.stages" :level="alert.level" />
+              <StageBadge v-else all :stage="alert.stage" :stages="alert.stages" :level="alert.level" :legacy="alert.legacy" :available="alert.stage_available" />
               <StatusBadge :status="alert.status" />
             </div>
             <p class="hero-meta muted">

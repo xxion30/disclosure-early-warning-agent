@@ -19,6 +19,7 @@ function readMode() {
 export const mockMode = () => readMode() === 'stages'
 
 let seq = 0
+const STAGE_LABELS = { RED: '즉시 경보', ORANGE: '사건 경보', YELLOW: '재무 경보', COMPOSITE: '복합 위험', WATCH: '관찰 중', NONE: '경보 없음' }
 // 날짜는 오늘 기준 며칠 전으로 만든다 (예시 화면용)
 const daysAgo = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString('sv-SE')
 const hoursAgo = (n) => new Date(Date.now() - n * 3600000).toISOString().slice(0, 16)
@@ -47,6 +48,9 @@ const ROWS = [
     filed_at: daysAgo(seq * 2),
     stage: r.stages[0],
     stages: r.stages,
+    stage_label: STAGE_LABELS[r.stages[0]],
+    stage_available: true, // 서버(R4)가 새 단계 평가라고 알려 주는 값
+    legacy: false,
     level: null,
     status: r.status,
     created_at: hoursAgo(seq),
@@ -174,6 +178,7 @@ function buildState(r) {
       active: !it.inactive && !r.resolved,
       resolved: !!r.resolved,
       missing: it.missing || [],
+      missing_labels: (it.missing || []).map((code) => ({ code, label: { interest_coverage: '금융비용 기준 보상배율' }[code] || code })),
       explanation: it.explanation,
       evidence: it.noEvidence ? [] : [{ source: '[예시] 공시 원문', quote: QUOTE, rcept_no: rcept(n), location: null }],
     }
@@ -207,6 +212,31 @@ function buildState(r) {
     items,
     resolution_evidence: r.resolved ? [{ source: '[예시] 소송 취하 공시', quote: '[예시] 원고가 소를 취하했다는 문장이 들어가요.', rcept_no: resolutionNo, location: null }] : [],
     timeline,
+    ...mockChanges(r, items),
+    ...mockReview(r),
     mock: true, // 가짜 접수번호라 DART 링크를 만들지 않는다
   }
+}
+
+// 이번에 무엇이 바뀌었나 (직전 공개 판정 → 지금). 예시물산(관찰 중)은 직전 판정이 없어 비교할 수 없는 경우
+function mockChanges(r, items) {
+  const base = { change_version: 2, changed_at: new Date(Date.now() - 3600000).toISOString() }
+  if (r.stages[0] === 'WATCH') return { ...base, comparison_available: false, changes: [] }
+  if (r.resolved) return { ...base, comparison_available: true, changes: [{ kind: 'stage_down', from: 'ORANGE', to: 'NONE' }, { kind: 'resolved', scope: 'stock' }] }
+  if (r.stages[0] === 'NONE') return { ...base, comparison_available: true, changes: [] }
+  const latest = items.find((it) => it.active)
+  return { ...base, comparison_available: true, changes: [
+    { kind: 'stage_up', from: 'WATCH', to: r.stages[0] },
+    ...(latest ? [{ kind: 'new_type', signal_type: latest.signal_type }] : []),
+    ...(r.stages.length > 1 ? [{ kind: 'evidence_added', signal_type: 'OPERATING_CASH_FLOW' }] : []),
+  ] }
+}
+
+// 안내문 검토 연결: 예시바이오는 예전 방식(지금 화면으로 검토), 예시전자는 새 조직별 검토(화면 준비 중)
+function mockReview(r) {
+  const none = { assessment_id: null, public_assessment_id: null, review_id: null, review_status: null, review_backend: null, my_approval_pending: false, can_review: false }
+  if (r.stock_code === 'MOCK01') return { ...none, assessment_id: r.assessment_id, review_backend: 'legacy', review_status: 'WAITING_APPROVAL', my_approval_pending: true, can_review: true }
+  if (r.stock_code === 'MOCK02') return { ...none, assessment_id: r.assessment_id, public_assessment_id: 'mock-public-2', review_id: 'mock-review-2', review_backend: 'organization', review_status: 'WAITING_APPROVAL', my_approval_pending: true, can_review: true }
+  if (ALERT.includes(r.stages[0])) return { ...none, assessment_id: r.assessment_id, review_backend: 'legacy', review_status: 'DONE' }
+  return none
 }

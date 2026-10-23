@@ -8,7 +8,7 @@ import { api, errorMessage } from '../api/client'
 import { mockMode } from '../api/mock'
 import DisclosureTimeline from '../components/DisclosureTimeline.vue'
 import StageBadge from '../components/StageBadge.vue'
-import { formatTime, ITEM_GROUPS, itemStatus, missingLabel, STAGES, stagesOf, stageText } from '../labels'
+import { formatTime, ITEM_GROUPS, itemStatus, missingNames, signalLabel, STAGES, stagesOf, stageText } from '../labels'
 
 const props = defineProps({ stockCode: { type: String, required: true } })
 
@@ -62,6 +62,39 @@ const groups = computed(() => ['RED', 'ORANGE', 'YELLOW']
 const activeItems = computed(() => items.value.filter((i) => i.active))
 const missingItems = computed(() => items.value.filter((i) => i.missing?.length))
 // 요약: 지금 반영 중인 항목 중 가장 최근 것
+// ---- 이번에 무엇이 바뀌었나 (서버 changes: 직전 공개 판정 → 지금 판정) ----
+const stageName = (code) => STAGES[code]?.label || code || '-'
+function changeText(c) {
+  if (c.kind === 'stage_up') return `단계가 올라갔어요: ${stageName(c.from)} → ${stageName(c.to)}`
+  if (c.kind === 'stage_down') return `단계가 내려갔어요: ${stageName(c.from)} → ${stageName(c.to)}`
+  if (c.kind === 'stage_changed') return `단계가 바뀌었어요: ${stageName(c.from)} → ${stageName(c.to)}`
+  if (c.kind === 'new_type') return `새 종류의 위험 근거가 생겼어요: ${signalLabel(c.signal_type)}`
+  if (c.kind === 'evidence_added') return `같은 위험에 근거가 더해졌어요: ${signalLabel(c.signal_type)}`
+  if (c.kind === 'resolved') return c.scope === 'stock' ? '종목의 위험이 해소됐어요' : `위험 하나가 해소됐어요: ${signalLabel(c.signal_type)}`
+  return '판정이 바뀌었어요'
+}
+const changeTone = (c) => ({ stage_up: 'warn', new_type: 'warn', evidence_added: 'info', stage_down: 'ok', resolved: 'ok' }[c.kind] || 'info')
+const hasChanges = computed(() => !!state.value && 'changes' in state.value)
+
+// ---- 안내문 검토 연결 (서버 review_backend·can_review·my_approval_pending·review_status) ----
+// 예전 방식은 지금 안내문 검토 화면으로 보낸다. 새 조직별 검토는 화면이 아직 없어 상태만 알린다
+const review = computed(() => {
+  const s = state.value
+  if (!s || !s.review_backend) return null
+  if (s.review_status === 'STALE') return { tone: 'warn', text: '판정이 바뀌어 이전 안내문은 승인할 수 없어요. 새 분석이 끝나면 다시 검토해요.' }
+  if (s.review_backend === 'legacy') {
+    if (s.can_review === true && s.assessment_id) return { to: { name: 'draft-review', params: { assessmentId: String(s.assessment_id) } }, text: '안내문 검토 · 내 승인 대기' }
+    if (s.can_review === null && s.review_status === 'UNKNOWN') return { tone: 'muted', text: '내 승인 대기 여부를 확인하지 못했어요. 경보 상세에서 확인해 주세요.' }
+    return null
+  }
+  if (s.review_backend === 'organization') {
+    if (s.my_approval_pending) return { tone: 'info', text: '내 고객의 안내문이 승인을 기다려요 · 새 검토 화면은 준비 중이에요' }
+    return null
+  }
+  if (s.review_backend === 'unsupported') return { tone: 'muted', text: '이 조직의 안내문 검토는 새 검토 화면이 필요해요 (준비 중)' }
+  return null
+})
+
 const latestActive = computed(() => [...activeItems.value].sort((a, b) => String(b.filed_at || '').localeCompare(String(a.filed_at || '')))[0] || null)
 
 // 타임라인: API는 접수번호·제목·일자·링크만 준다. 위험 항목·해소 근거와 접수번호를 맞춰 종류와 색을 붙인다
@@ -128,10 +161,30 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
 
       <!-- 지금 상태 한 줄 요약 (숫자 카드 대신) -->
       <p class="state-line"><strong>지금 상태</strong><span>{{ STAGES[topStage].label }}<template v-if="STAGES[topStage].hint"> — {{ STAGES[topStage].hint }}</template></span></p>
+      <div v-if="review || state.assessment_id" class="review-row">
+        <RouterLink v-if="review?.to" :to="review.to" class="review-link">{{ review.text }}</RouterLink>
+        <p v-else-if="review" class="review-note" :class="`review-${review.tone}`" role="status">{{ review.text }}</p>
+        <RouterLink v-if="state.assessment_id" :to="{ name: 'alert-detail', params: { assessmentId: String(state.assessment_id) } }" class="detail-link">경보 상세 보기</RouterLink>
+      </div>
       <ul class="summary-lines">
         <li v-if="latestActive">가장 최근 위험 근거: <strong>{{ latestActive.item }}</strong><template v-if="latestActive.filed_at"> ({{ latestActive.filed_at }})</template></li>
         <li>지금 판정에 반영 중인 항목 {{ activeItems.length }}개<template v-if="items.length > activeItems.length"> · 해소·기간 지난 항목 {{ items.length - activeItems.length }}개</template></li>
       </ul>
+    </section>
+
+    <!-- 이번에 무엇이 바뀌었나: 서버가 직전 공개 판정과 비교해 준다. 비교할 수 없으면 추측하지 않는다 -->
+    <section v-if="hasChanges" class="card" aria-label="이번에 무엇이 바뀌었나">
+      <div class="card-head">
+        <h2>이번에 무엇이 바뀌었나</h2>
+        <span v-if="state.changed_at" class="muted section-note">{{ formatTime(state.changed_at) }} 판정 기준</span>
+      </div>
+      <ul v-if="state.changes.length" class="changes-list">
+        <li v-for="(c, i) in state.changes" :key="i" :class="`change-${changeTone(c)}`">
+          <span class="change-mark" aria-hidden="true"></span>{{ changeText(c) }}
+        </li>
+      </ul>
+      <p v-else-if="state.comparison_available === false" class="muted">직전 판정이 없어 무엇이 바뀌었는지 비교할 수 없어요.</p>
+      <p v-else class="muted">직전 판정과 달라진 점이 없어요.</p>
     </section>
 
     <!-- 사람이 확인해야 할 것 -->
@@ -141,7 +194,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
       </span>
       <span class="banner-text">
         <strong>사람의 확인이 필요해요</strong>
-        <span>판정에 필요한 값을 일부 찾지 못해 추측하지 않고 멈췄어요.<template v-if="missingItems.length"> 확인할 항목: {{ missingItems.map((i) => `${i.item}(${i.missing.map(missingLabel).join(', ')})`).join(', ') }}</template></span>
+        <span>판정에 필요한 값을 일부 찾지 못해 추측하지 않고 멈췄어요.<template v-if="missingItems.length"> 확인할 항목: {{ missingItems.map((i) => `${i.item}(${missingNames(i).join(', ')})`).join(', ') }}</template></span>
       </span>
     </div>
 
@@ -182,7 +235,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
             <span v-if="it.filed_at" class="sub">{{ it.filed_at }}</span>
           </div>
           <p v-if="it.explanation" class="risk-text">{{ stageText(it.explanation) }}</p>
-          <p v-if="it.missing?.length" class="notice warn">찾지 못한 값: {{ it.missing.map(missingLabel).join(', ') }} — 공시 원문을 직접 확인해 주세요.</p>
+          <p v-if="it.missing?.length" class="notice warn">찾지 못한 값: {{ missingNames(it).join(', ') }} — 공시 원문을 직접 확인해 주세요.</p>
           <figure v-for="(e, j) in it.evidence" :key="j" class="quote">
             <blockquote>“{{ e.quote }}”</blockquote>
             <figcaption>
@@ -229,6 +282,19 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
 .ack-note { font-size: 12px; color: var(--muted); }
 .explanation { margin: 0; font-size: 15px; line-height: 1.75; color: #2a3554; overflow-wrap: anywhere; white-space: pre-wrap; }
 .state-line { margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 15px; line-height: 1.65; color: #2a3554; overflow-wrap: anywhere; }
+.review-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.review-link { display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: var(--pill); background: var(--blue-strong); color: #fff; font-weight: 700; }
+.review-link:hover { text-decoration: none; filter: brightness(1.05); }
+.review-note { margin: 0; padding: 10px 16px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; }
+.review-info { background: var(--blue-soft); color: var(--blue-strong); }
+.review-warn { background: var(--warn-soft); color: var(--warn); }
+.review-muted { background: var(--neutral-soft); color: var(--muted); }
+.detail-link { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; }
+.changes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.changes-list li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-md); background: var(--surface-2); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.change-mark { width: 10px; height: 10px; border-radius: 999px; flex: none; background: var(--blue); }
+.change-warn .change-mark { background: var(--warn-dot); }
+.change-ok .change-mark { background: var(--ok-dot); }
 .summary-lines { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: #2a3554; }
 .section-note { font-size: 13px; }
 .item-group { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }

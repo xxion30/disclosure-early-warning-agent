@@ -1,4 +1,4 @@
-from agent.evidence import validate_evidence, validate_known_evidence
+from agent.evidence import retained_data, validate_evidence, validate_known_evidence
 from agent.nodes.phase1_common import rule_call
 from agent.phase1 import StageResult
 from agent.ports import AgentError
@@ -26,4 +26,8 @@ async def judge_stage(state, deps):
         raise AgentError("단계 판정의 근거 내역이 없습니다")
     return {"stage": result.stage, "orange_score": result.orange_score,
             "yellow_score": result.yellow_score, "combined_ratio": result.combined_ratio,
-            "score_result": result.model_dump(), "signals": result.signals, "evidence": known}
+            "score_result": retained_data(result.model_dump()), "signals": retained_data(result.signals),
+            "evidence": retained_data(known),
+            "red_result": retained_data(state.get('red_result', {})),
+            "orange_result": retained_data(state.get('orange_result', {})),
+            "yellow_result": retained_data(state.get('yellow_result', {}))}

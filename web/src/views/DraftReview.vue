@@ -151,7 +151,7 @@ async function submit() {
       <h1>안내문 검토</h1>
       <div class="review-meta">
         <strong v-if="alertInfo?.company?.name">{{ alertInfo.company.name }}</strong>
-        <StageBadge v-if="alertInfo?.stage || alertInfo?.stages?.length || alertInfo?.level" :stage="alertInfo.stage" :stages="alertInfo.stages" :level="alertInfo.level" />
+        <StageBadge v-if="alertInfo?.stage || alertInfo?.stages?.length || alertInfo?.level" :stage="alertInfo.stage" :stages="alertInfo.stages" :level="alertInfo.level" :legacy="alertInfo.legacy" :available="alertInfo.stage_available" />
         <span class="muted"><template v-if="alertInfo?.disclosure?.title">{{ alertInfo.disclosure.title }} · </template>내 담당 고객 {{ data?.drafts.length ?? 0 }}명 · 승인 대기 {{ pending.length }}명</span>
       </div>
     </div>

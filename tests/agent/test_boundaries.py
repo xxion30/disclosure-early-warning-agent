@@ -24,7 +24,7 @@ def test_mcp_normalization_and_tool_allowlist():
 def test_versioned_prompts(name):
     version, body = read_prompt(name)
     # 프롬프트를 바꾸면 버전을 올린다. extract_facts v5: B의 signal_type·values 이름, 신호 없음 처리, 인용은 한 곳을 그대로 복사
-    assert version == {"system": "v3", "extract_facts": "v7", "explain_risk": "v5", "select_tools": "v2", "draft_message": "v2", "rewrite_message": "v2"}[name]
+    assert version == {"system": "v3", "extract_facts": "v7", "explain_risk": "v6", "select_tools": "v2", "draft_message": "v2", "rewrite_message": "v2"}[name]
     assert body.strip()
 
 

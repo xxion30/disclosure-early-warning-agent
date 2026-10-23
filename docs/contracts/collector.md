@@ -41,7 +41,7 @@
      커서 없음(last_success_at null) → backfill (최근 12개월 list + 최신 정기보고서)
      커서 있음 → list.json(corp_code, 커서 날짜 하루 전 ~ 오늘)
      신규 접수번호마다: disclosures에 upsert (본문 없음)
-        제목이 "주요사항보고서(...)" → 해당 항목 API 호출 → rcept_no로 행 고름 → disclosures.structured_facts 저장
+        제목이 "주요사항보고서(...)" → 정정 체인의 최초 접수일로 항목 API 호출 → 체인 최신 접수번호 행 → disclosures.structured_facts 저장 (3-3)
         제목이 거래소 공시 → 제목·접수번호·링크만 저장 (원문은 나중에 rag가 읽음)
         새 정기보고서 → 재무제표 API → indicators → financial_snapshots
      모든 페이지를 저장한 뒤에만 finish_stock(success_at=...) — 실패하면 success_at 없이 호출(커서 유지)
@@ -61,12 +61,28 @@ R4가 요청한 대로 의미를 고정한다.
 - **다음 조회 시작일 = `last_success_at`을 KST로 바꾼 날짜 − 1일.** 이유: `list.json`의 `rcept_dt`는 날짜까지만 있다(확인됨). 같은 날 09:05 이후에 접수된 공시는 그 실행에서 못 받으므로, 하루 겹쳐 받고 `rcept_no` 기본키로 중복을 버린다.
 - 실패한 종목은 `success_at` 없이 `finish_stock`을 불러 예약만 풀고 커서를 유지한다(R4 구현과 같다). 주말·휴일·실패로 건너뛴 날은 커서가 그대로라 다음 실행이 이어 받는다.
 - 커서는 고객사별이 아니라 **종목별**이다(공시는 고객사가 공유).
-- **발견은 `list.json`으로 한다.** 주요사항 API는 기간 필터를 믿을 수 없고(`end_de` 밖의 건이 옴, 확인됨), 행도 `list.json`보다 적을 수 있다(3-3).
+- **발견은 `list.json`으로 한다.** 항목 API는 정정 체인의 최신본만 주고 기간 필터가 최초 접수일 기준이라(3-3), 새 공시를 찾는 데 쓸 수 없다. 값을 가져오는 데만 쓴다.
 
-### 3-3. 항목 API는 `list.json`의 일부만 줄 수 있다 (확인됨)
-금양 유상증자결정은 `list.json`에 4건(2024-09-27, 10-18, 10-31, 2025-01-17)이 있는데 `piicDecsn`은 2건(10-31, 2025-01-17)만 돌려줬다. 이유는 모른다. 따라서:
-- 항목 API에서 해당 `rcept_no` 행을 못 찾으면 **오류가 아니라 `MISSING`**으로 저장하고 원문 읽기(RAG)로 넘긴다.
-- "API 행이 있으니 이 공시를 다 안다"고 가정하지 않는다.
+### 3-3. 항목 API는 정정 체인의 최신본만 준다 (확인됨, 2026-10-23)
+처음에는 "금양 유상증자결정이 `list.json`에 4건인데 `piicDecsn`은 2건만 줬다"는 현상만 알았고 이유를 몰랐다. 전 종목 탐색과 사례 44개를 만들면서 원인을 확인했다 (자세한 표는 `data_sources.md` "항목 API는 정정 체인의 최신본만 돌려준다").
+
+- 항목 API(주요사항보고서 주요정보)와 재무제표 API는 같은 사건의 **정정 체인에서 최신 정정본 1건만** 돌려준다. 정정이 없는 공시는 자기 접수번호 그대로 나온다.
+- 기간 필터(`bgn_de`~`end_de`)는 **정정본이 아니라 체인의 최초 접수일**에 적용된다. 정정본의 날짜로 조회하면 0행이다 (CJ CGV 유상증자: 최초 2023-06-20 → 정정 2023-09-04, 9월 날짜로 조회하면 0행).
+- 그래서 최초 접수번호로 행을 찾으면 **정정이 이어진 공시는 거의 항상 없다.** 정정이 최초보다 많은 항목이 있다(유상증자결정 최초 2,966 / 정정 6,684, 전환사채 2,566 / 4,318, 합병 724 / 1,744). 이 경로는 예외가 아니라 흔한 경로다.
+
+**수집기가 값을 가져오는 방법 (구현됨: `collector/jobs.py` `_resolve_facts`)**
+1. `list.json`으로 체인을 만든다: 같은 `corp_code`, 제목에서 `[기재정정]`·`[첨부정정]` 등 접두를 뺀 것이 같은 공시들. 본문의 `정정대상 공시서류`·`최초제출일`이 일치하면 확실하다 (3-4).
+2. 체인의 **최초 접수일**로 항목 API를 조회하고, 돌아온 행의 `rcept_no`를 체인의 최신 접수번호로 맞춘다.
+3. 그 값을 체인 전체의 `structured_facts`로 쓴다. 이 값은 **최신 정정본의 값**이다. 최초 공시 시점의 값은 항목 API로 얻을 수 없다.
+4. 체인에서 행을 찾지 못하면(태영건설 관리절차 개시 `20240112000001`은 다른 날짜의 행이 돌아왔다) 억지로 맞추지 않고 `MISSING`으로 저장하고 원문 읽기(RAG)로 넘긴다.
+
+"API 행이 있으니 이 공시를 다 안다"고 가정하지 않는다.
+
+**정정 본문에서 최초제출일을 읽는 방법의 실제 성공률 (2026-10-23, 항목 10종에서 무작위 74건)**
+- 본문을 받은 63건 중 **62건(98%)** 에서 읽었다. 날짜 표기가 `2024년 09월 27일`·`2025.03.20`·`2022. 3. 3.` 세 가지였다.
+- 1건은 쌍방울이 `정정대상 공시서류`와 `최초제출일` 두 칸의 값을 서로 바꿔 적은 오기였다. 이런 건 억지로 맞추지 않고 사실 없이 넘긴다.
+- **11건(15%)은 `document.xml`이 없다**(`014 파일이 존재하지 않습니다`, 영구 오류). 이 정정은 체인을 연결할 수 없어 사실이 없다.
+- 직전 최초 공시에 붙이는 단순 규칙은 틀린다: 금양 `20250117000380`은 직전 최초 공시(10/31)가 아니라 본문이 말하는 `2024-09-27`의 정정이다.
 
 ### 3-4. 정정 공시 (확인됨 + 연결 규칙은 후보)
 - 정정은 **새 접수번호의 별도 행**이다. 수집기는 정정도 한 건으로 저장한다 (R4 결정과 같음: 접수번호별 보존).
@@ -124,9 +140,34 @@ R4가 요청한 대로 의미를 고정한다.
 | **R4** | 컬럼 추가·마이그레이션, 저장 인터페이스, 공통 스키마, MCP 도구 `get_disclosure_facts(rcept_no)` |
 | **R2** | 응답 검증, Agent 활용 |
 
-**현재 상태:** R4 코드(`Pre-merge-P01-v01`)에는 `structured_facts` 컬럼도 `get_disclosure_facts` 도구도 **아직 없다**(2026-10-23 확인). 그래서 **현재 `jobs.py`는 주요사항 항목 API를 호출하지 않는다.** 공시 목록(`disclosures`)과 재무 스냅샷만 저장하고, 컬럼이 생기면 그 단계를 추가한다.
+**구현됨 (2026-10-23).** R4가 스키마(`shared/facts.py`의 `StructuredFacts`, 컬럼 `disclosures.structured_facts`, 도구 `get_disclosure_facts`)를 넣었고, R3는 `collector/facts.py`가 만든 payload를 **수집 트랜잭션 안에서 `store_facts`(R4 검증기)로 저장**한다. 이름·값 규칙:
 
-**`get_disclosure_facts` 응답 모양 (R2 정리).** 최종 스키마는 R4가 정한다. R3는 아래 모양으로 값을 만든다.
+- **의미를 확인한 항목 10종의 필드만** 사실로 만든다(아래 표). 의미를 추측해야 하는 필드(`ssl_at` 등)와 값 확인 전 항목(분할·전환사채 외 사채·자산양수도 등)은 만들지 않는다 → `structured_facts`는 NULL(UNAVAILABLE)이고 위험이 없다는 뜻이 아니다.
+- `-`는 `MISSING`(사유 `API가 값을 주지 않았다`), 읽지 못한 값은 `NEEDS_CHECK`, 값이 없을 때 0·`false`로 채우지 않는다.
+- **200자를 넘는 서술 텍스트는 구조화하지 않고 `NEEDS_CHECK`**(원문 검색으로 확인). 짧은 사유·명칭은 사실로 담는다.
+- 날짜는 ISO(`2024-10-31`), 금액은 원(정수), 주식 수는 주(정수), 비율은 %(실수). 원본 문자열은 `raw`에 남긴다.
+- **계산한 값**은 `raw`를 비우고 `source.field`에 계산식을 적는다: `issue_ratio_common_pct`(신주 ÷ 증자 전 주식 × 100, R4 규칙의 `ratio_pct`), `third_party_allocation`(증자 방식에 `제3자배정` 포함), `refixing_floor_below_price`(전환가 조정 하한 < 전환가). 하한이 비어 있으면 '조항 없음'으로 단정하지 않고 `MISSING`이다.
+- 소송은 청구 금액 필드가 없어 `claim_amount`를 `NEEDS_CHECK`로 고정한다(자기자본 대비 청구액을 만들 수 없음을 명시).
+- **정정 체인에서는 최신 정정본에만** 사실이 붙고(출처 접수번호 = 그 공시), 대체된 최초·중간 정정본은 NULL이다. 정정 공시에는 `original_rcept_no` **후보**를 남기되 `event_id`는 건드리지 않는다(확정은 R4 `confirm_event_link`).
+
+| 위험 항목 | 항목 API | 사실 이름 |
+| --- | --- | --- |
+| 부도발생 | `dfOcr` | `default_amount`, `default_bank`, `default_content`, `default_date`, `default_reason` |
+| 회생절차 개시신청 | `ctrcvsBgrq` | `applicant`, `court`, `request_date`, `request_reason` |
+| 해산사유 발생 | `dsRsOcr` | `dissolution_reason`, `dissolution_date` |
+| 채권은행 등의 관리절차 개시 | `bnkMngtPcbg` | `management_start_date`, `management_body`, `management_period`, `management_reason` |
+| 영업정지 | `bsnSp` | `suspended_business`, `suspended_revenue`, `total_revenue`, `suspended_revenue_share_pct`, `suspension_content`, `suspension_date` |
+| 유상증자 결정 | `piicDecsn` | `new_common_shares`, `new_other_shares`, `common_shares_before`, `other_shares_before`, `par_value`, `issue_method`, `use_facility`, `use_business_acquisition`, `use_operating`, `use_debt_repayment`, `use_securities_acquisition`, `use_other`, `issue_ratio_common_pct(계산)`, `third_party_allocation(계산)` |
+| 전환사채 발행결정 | `cvbdIsDecsn` | `bond_face_amount`, `bond_kind`, `issue_method`, `coupon_rate_pct`, `maturity_rate_pct`, `maturity_date`, `conversion_price`, `conversion_shares`, `conversion_shares_share_pct`, `conversion_start_date`, `conversion_end_date`, `conversion_price_floor`, `payment_date`, `refixing_floor_below_price(계산)` |
+| 감자 결정 | `crDecsn` | `reduction_ratio_common_pct`, `reduction_ratio_other_pct`, `reduced_common_shares`, `capital_before`, `capital_after`, `common_shares_before`, `common_shares_after`, `reduction_base_date`, `reduction_method`, `reduction_reason` |
+| 소송 등의 제기 | `lwstLg` | `case_name`, `court`, `plaintiff`, `filed_date`, `litigation_date`, `claim_amount(NEEDS_CHECK 고정)` |
+| 회사합병 결정 | `cmpMgDecsn` | `merger_type`, `counterparty`, `counterparty_relation`, `exchange_ratio`, `external_valuation`, `counterparty_total_assets`, `counterparty_total_debt`, `counterparty_total_equity`, `counterparty_capital`, `counterparty_revenue`, `counterparty_net_income`, `merger_date` |
+
+**분석 인계 (R4 `shared/analysis.py`).** 사실 저장 뒤 **새로 저장했거나 아직 인계되지 않은 모든 공시**를 `mark_ready`로 인계한다(사실이 없는 공시도 — 그래야 R4 `enqueue_ready`가 분석 작업으로 만든다). `analysis_ready_at`이 비어 있는 공시만 처리하므로 실패한 공시는 다음 실행이 다시 시도하고, 인계된 공시는 다시 건드리지 않는다. 한 공시의 사실이 R4 검증에 실패해도 그 공시만 사실 없이 넘어가고(저장 도중 오류는 되돌림) `StockOutcome.problems`에 남는다.
+- **실제 DART로 확인:** 금양·위니아 최근 12개월에서 공시 81건이 모두 인계되고 R4 `enqueue_ready`가 분석 작업 81개를 만들었다. 사실은 정정 체인의 최신본 2건에만 붙었다.
+- **알아 둘 점(R4·R2 확인):** 수집기는 분류하지 않고 새 공시를 **전부** 인계한다. 새 종목 백필 한 번에 종목당 약 70~280건이 분석 대기열에 들어간다(금양 74건). 분석 대상을 줄이려면 R4가 `enqueue_ready` 단계에서 거르거나 R3에게 제외 기준을 알려 줘야 한다.
+
+**`get_disclosure_facts` 응답 모양 (R2 정리, R4가 `shared/facts.py`의 `StructuredFacts` v1로 확정).** 아래 모양으로 값을 만든다.
 
 ```json
 {"schema_version": "...", "rcept_no": "...", "corp_code": "...", "collected_at": "2026-10-23T09:05:00+09:00",
@@ -137,7 +178,7 @@ R4가 요청한 대로 의미를 고정한다.
 
 - 각 사실에 `name`(안정된 영문 이름), `dtype`, `raw`(API 원본 값), `value`(정제값), `unit`, `status`, `reason`, `source`(API·필드·접수번호·수집 시각)를 둔다. 위 필드 이름은 R2가 말한 항목(항목명·자료형·원천 값·정제값·단위·상태·사유·출처)을 제가 영문으로 옮긴 **제안**이며 `TODO(확인 필요)`(R4 확정).
 - **상태 4가지 (R2):** `PRESENT`(값 있음) / `MISSING`(값 없음, 예: DART가 `-`로 줌) / `NOT_APPLICABLE`(해당 없음) / `NEEDS_CHECK`(확인 필요). 결측을 0이나 `false`로 대체하지 않는다. (R3 v2의 `OK`·`FETCH_FAILED`·`NEEDS_REVIEW`는 폐기.)
-- **조회 실패는 정상 빈 결과와 구분한다 (R2 요구).** 표현 방법(제안): 항목 API 호출이 실패하면 `structured_facts`를 **채우지 않고(`NULL`)** 수집 이력(`collect_runs.error`)에 남겨 "아직 수집하지 못함"으로 둔다. 호출은 성공했는데 그 `rcept_no`의 행이 없으면(3-3) `status: MISSING`, `reason: api_row_not_found`로 담아 **R2가 원문 분석으로 넘기게** 한다. 값은 읽었지만 정제하지 못하면 `NEEDS_CHECK`.
+- **조회 실패는 정상 빈 결과와 구분한다 (R2 요구).** 구현: 항목 API 호출이 실패하면(시간 초과·한도·5xx) 그 종목의 수집이 실패하고(커서 유지) 아무 공시도 인계하지 않는다 → 다음 실행이 다시 시도한다. 호출은 성공했는데 **그 접수번호의 행이 없는 경우**(정정 체인에서 대체됨, 정정 본문에서 최초제출일을 못 읽음, 정정 `document.xml` 없음 등)에는 **사실을 만들지 않고 `structured_facts`를 NULL로 두며 `StockOutcome.problems`에 이유를 남긴다.** NULL은 "빈 사실"도 "위험 없음"도 아니고 R4 도구가 `UNAVAILABLE`로 돌려준다. (이전 초안의 "행이 없으면 `MISSING` + `api_row_not_found`로 담는다"는 철회: 값이 없다(`MISSING`)가 아니라 값을 알 수 없는 것이라 가짜 사실을 붙이지 않는다.) 값을 읽었지만 정제하지 못한 필드만 `NEEDS_CHECK`다.
 - 정정 공시의 수량 필드가 `-`로 오는 경우(금양 정정 `20250117000380`, 확인됨)는 `MISSING`이다.
 - 정정본은 새 `rcept_no`의 새 `disclosures` 행이므로 그 행의 `structured_facts`에 따로 저장한다.
 - 인용문·원문 위치는 담지 않는다. API 값의 출처 검증은 원문 인용 검증과 구분한다(R2). 원문 근거는 rag 검색 결과가 따로 준다.
@@ -236,7 +277,8 @@ DART 호출은 모두 가짜 응답으로 한다 (키·네트워크 불필요). 
 - 예약: 다른 실행이 잡은 종목은 건너뜀 (R4 `reserve_stocks`), 임대 만료 후 늦은 작업자가 커서를 전진시키지 못함
 - 백필: 새 종목, 중간 실패 후 재실행이 중복을 만들지 않음
 - ETF 제외(`069500`)
-- 주요사항 API가 기간 밖 행을 섞어 주거나 행이 빠져도 `rcept_no`로 맞는 행만 고르고, 빠진 행은 `MISSING`
+- 정정 체인: 최초 접수번호로는 행이 없고 체인 최신본만 오는 경우를 최초 접수일로 조회해 맞추고, 체인에서 행을 못 찾으면 `MISSING` (실제 DART에서 본 4가지 체인 모양으로 시험)
+- 사례 파일(`eval/cases/r3_cases.json`): 형식·기대값 일관성 검사(오프라인, `tests/collector/test_eval_cases.py`), DART와 일치 여부는 `scripts/data/verify_cases.py`
 - `013`은 빈 결과, `020`·5xx는 재시도, 한 종목 실패가 다른 종목을 막지 않음
 - 지표: 자본잠식(자기자본 ≤ 0 → 100), 영업현금흐름 당기·전기, 구성 항목 일부 없음 → `MISSING`(0 아님), 금융비용 계정 없음·금융비용 ≤ 0 → `MISSING`(이자보상배율), 정정 보고서는 `revision` 증가
 - 연결·개별 둘 다 저장
