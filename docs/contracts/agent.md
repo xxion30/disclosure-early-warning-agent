@@ -44,7 +44,7 @@ agent는 risk_engine·collector·api를 직접 import하지 않는다. R4가 카
 
 ## 4. 구조화 사실과 충돌
 
-별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 도구·컬럼은 구현되어 있다. 조회의 ToolResponse.data에는 schema_version/rcept_no/corp_code/collected_at/facts/data_version이 평탄화되어 제공된다. 저장용 number는 응답에서만 decimal로 변환하며 값·단위·상태·출처는 보존한다. data_version은 변환 전 정규화된 저장 payload 전체(시각 포함)의 facts_hash이다. 원문 content_hash와 혼용하거나 응답 DTO를 다시 해시하지 않는다. 기존 structured_facts/facts_hash 필드는 호환용이며 신규 R2 입력에서는 사용하지 않는다. UNAVAILABLE은 facts=null이며 정상 빈 목록과 구분한다.
+별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 도구·컬럼은 구현되어 있다. R2는 ToolResponse.data의 availability/rcept_no/corp_code/structured_facts/facts_hash를 받아 structured_facts.facts를 검증한다. v1 dtype은 string/number/integer/boolean이며 number를 decimal로 바꾸지 않는다. 값·단위·상태·출처를 보존한다. 정식 버전 키 facts_hash는 정규화된 저장 payload 전체(시각 포함)의 해시다. R2가 해당 payload의 해시를 확인한다. 원문 content_hash·전체 입력 input_version과 혼용하지 않는다. 최상위 facts/data_version 등은 호환용이며 R2는 사용하지 않는다. 호환 facts도 number를 유지한다. UNAVAILABLE은 structured_facts/facts_hash=null이며 정상 빈 목록과 구분한다.
 
 | 상태 | 의미 | 처리 |
 | --- | --- | --- |
@@ -173,7 +173,7 @@ runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
 | `as_of` | 평가 기준일 YYYY-MM-DD |
 | `rules_version` | 계산 응답의 rules_digest와 일치하는 규칙 해시 |
 | `input_version` | 공시·정정·재무·이력까지 포함하는 분석 입력 manifest의 R4 버전 |
-| `facts_version` | 작업 input_manifest에 고정된 이번 공시 structured_facts의 해시. 조회 data_version과 비교한다. R4 신규 실행은 명시적으로 전달하며 전체 input_version·원문 content_hash로 대체하지 않는다. NULL은 사실 미수집이다. 기존 R2 생략 호환 경로는 신규 실행에서 사용하지 않는다. |
+| `facts_version` | 작업 input_manifest에 고정된 이번 공시 structured_facts의 해시. 조회 facts_hash와 비교한다. R4 신규 실행은 명시적으로 전달하며 전체 input_version·원문 content_hash로 대체하지 않는다. NULL은 사실 미수집이다. R2는 유효한 facts_version 누락 시 중단한다. |
 | `run_id`, `attempt` | R4 선점된 작업과 최초 포함 1~3 시도 |
 | `kind`, `tenant_id` | public 또는 review. review는 이용 조직 필수 |
 | `model_requests_used`, `active_seconds_used` | R4가 영속 예산 장부에서 복원한 누적 사용량 |
@@ -195,7 +195,7 @@ runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
 
 ### R4·R3 후속 연결 (R2 외부 담당)
 
-1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마는 구현됐다. 조회는 최상위 facts/data_version 및 number→decimal 투영으로 R2 validator와 연결한다. 실제 운영 factory 연결과 UNAVAILABLE의 원문 분석 분기는 별도 통합 확인이 필요하다.
+1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마는 구현됐다. 조회는 중첩 structured_facts와 facts_hash를 제공하며 number를 그대로 유지한다. R2 validator/receive가 해시 및 context.facts_version을 검증한다. 실제 운영 factory 연결과 UNAVAILABLE의 원문 분석 분기는 별도 통합 확인이 필요하다.
 2. R4 조립에서 새 bindings·카탈로그·모델·체크포인터를 주입한다. 현재 adapter가 자동으로 바뀐 것은 아니다.
 3. R4 dispatcher가 공개 분석 후 각 이용 조직의 review를 실행하고, 선점·lease·재시도·예산 장부를 관리한다.
 4. R4가 판정 최신성·업무 생성의 tenant·멱등성을 DB 트랜잭션으로 보장한다.
