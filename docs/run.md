@@ -300,3 +300,7 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 - `processed_at`은 새 공개 판정 저장 성공 시각이다. 승인 완료·색인 해제 시각이 아니다. MANUAL_CHECK는 성공 시각을 기록하지 않으며 명시적 재분석 요청으로만 재실행한다.
 - 기존 purge_disclosure_text와 release_disclosure_index는 구형 호출자 때문에 보존했다. 새 공개 저장은 purge를 호출하지 않는다. R2 원문 수명 전환·R3 메모리 동시 사용 정책 확인 후 기존 호출 제거/도구 정리를 진행한다.
 - 기존 refresh_states는 구형 상태 재계산 경로다. 새 불변 공개 판정의 일일 재계산은 새 기준일로 분석 작업을 등록하는 경로에 연결해야 한다. 스케줄러에서 이 인계를 연결하기 전 자동 갱신 완료로 판단하지 않는다.
+
+## R5 상태 요약 필드 (2026-10-23)
+
+추가 마이그레이션 20261023_05가 필요하다. 종목 상세의 changes는 저장된 직전 상태와의 차이며 comparison_available=false이면 과거 상태를 추측해 표시하지 않는다. version(알림), change_version(판정 변화), review의 version(검토)은 구분한다. 신규 검토 링크는 review_backend/ID 종류를 확인하며 legacy Graph 조회 불가의 null은 대기 없음과 다르다. 자세한 변경은 docs/log/2026-10-23-r4-r5-api-followup.md를 참고한다.

@@ -43,6 +43,9 @@ def update_state(session, corp_code, result, filed_at, *, resolution_evidence=No
     version = row.state_version if row else 0
     if expected is not None and expected != version:
         raise StaleStateError('위험 상태가 변경됐습니다. 최신 데이터로 재계산해야 합니다.')
+    previous_stage = row.stage if row else None
+    previous_items = list(row.items or []) if row else []
+    previous_resolved = bool(row.resolved) if row else False
     old_types = {i['signal_type'] for i in (row.items if row else []) if i.get('active')}
     new_types = {i['signal_type'] for i in result.get('breakdown', []) if i.get('active')}
     if resolution_evidence is None and result['stage'] == 'NONE':
@@ -92,6 +95,12 @@ def update_state(session, corp_code, result, filed_at, *, resolution_evidence=No
              row.orange_score, row.yellow_score, row.composite_ratio, row.sort_value, row.active_stages)
     if before != after:
         row.state_version += 1
+        from shared.models import RiskStateChange
+        from risk_engine.changes import describe_changes
+        session.add(RiskStateChange(corp_code=corp_code,state_version=row.state_version,
+            from_stage=previous_stage,to_stage=row.stage,
+            changes=describe_changes(previous_stage,previous_items,previous_resolved,row.stage,row.items,bool(row.resolved)),
+            created_at=now or datetime.now(timezone.utc).isoformat()))
     row.updated_at = now or datetime.now(timezone.utc).isoformat()
     row.latest_filed_at = filed_at
     session.flush()
