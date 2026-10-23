@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import logging
 import re
 import time
 import zipfile
@@ -36,6 +37,36 @@ PAGE_COUNT = 100
 MAX_PAGES = 200
 
 OK, NO_DATA, RATE_LIMITED, BAD_PARAM = "000", "013", "020", "100"
+
+_KEY_IN_URL = re.compile(r"(crtfc_key=)[^&\s\"']+")
+
+
+def redact_key(text: str) -> str:
+    return _KEY_IN_URL.sub(r"\1***", text)
+
+
+def _install_log_redaction() -> None:
+    """httpx는 요청 URL(쿼리 포함)을 INFO 로그로 남기고, httpcore는 DEBUG로 남긴다. 어떤 로거·핸들러로 가든 키가 새지 않도록
+    로그 레코드를 만드는 단계에서 `crtfc_key=` 값을 가린다. 여러 번 불러도 한 번만 설치된다."""
+    previous = logging.getLogRecordFactory()
+    if getattr(previous, "_redacts_dart_key", False):
+        return
+
+    def factory(*args, **kwargs):
+        record = previous(*args, **kwargs)
+        try:
+            message = record.getMessage()
+            if "crtfc_key" in message:
+                record.msg, record.args = redact_key(message), ()
+        except Exception:  # noqa: BLE001 — 로깅 때문에 호출이 실패하면 안 된다
+            pass
+        return record
+
+    factory._redacts_dart_key = True  # type: ignore[attr-defined]
+    logging.setLogRecordFactory(factory)
+
+
+_install_log_redaction()
 
 
 class DartError(Exception):

@@ -23,12 +23,13 @@
 | --- | --- |
 | `dart_client.py` | DART 호출 (`httpx` async, 재시도, 호출 속도 제한). 지금 `scripts/data/fetch_dart.py`와 `mcp_servers/rag/dart_source.py`에 따로 있는 호출 코드를 합친다. 원문 받기·정규화(`fetch_document`, `normalize_document`)도 여기 둔다 — **원문 해시는 이 함수 하나만 계산한다** (mcp_rag.md 참고) |
 | `watchlist.py` | 보유 종목 합집합 읽기, ETF 제외, 종목코드 → `corp_code` 변환 |
-| `cursor.py` | R4의 `shared/collection.py`(`reserve_stocks`, `finish_stock`, `heartbeat_run`, `finish_run`)를 감싸 종목별 증분 조회 범위를 계산한다 |
+| `cursor.py` | 종목별 증분 조회 시작일 계산 (순수 함수). 커서의 저장·예약은 R4의 `shared/collection.py`(`reserve_stocks`, `finish_stock`, `heartbeat_run`, `finish_run`)를 `jobs.py`가 직접 부른다 |
 | `jobs.py` | 종목 1개 수집 작업 (목록 → 항목 API → 재무제표 → 저장) |
-| `backfill.py` | 새 종목의 최근 12개월 + 최신 정기보고서 채우기 |
+| `backfill.py` | 새 종목의 백필 시작일(12개월 전) 계산. 정기보고서는 그 기간 목록에서 찾는다 |
+| `reports.py` | (계획에 없던 작은 모듈) 정기보고서 제목 → `reprt_code`·`period`. `사업보고서 (2024.12)`·`분기보고서 (2024.03)`·`[기재정정]` 해석, 12월 결산이 아니면 건너뜀 |
 | `indicators.py` | 재무 지표 계산 |
 | `repo.py` | DB 저장 (idempotent upsert) |
-| `scheduler.py`, `__main__.py` | APScheduler 09:05, `python -m collector` 진입점 (수동 실행·1회 실행) |
+| `scheduler.py`, `__main__.py` | 매일 09:05(KST)까지 asyncio로 기다렸다 실행(APScheduler는 아직 의존성에 없어 쓰지 않음). `python -m collector --once`(지금 1회) / `--schedule`(매일) |
 
 ## 3. 수집 흐름
 
@@ -44,7 +45,7 @@
         제목이 거래소 공시 → 제목·접수번호·링크만 저장 (원문은 나중에 rag가 읽음)
         새 정기보고서 → 재무제표 API → indicators → financial_snapshots
      모든 페이지를 저장한 뒤에만 finish_stock(success_at=...) — 실패하면 success_at 없이 호출(커서 유지)
- ④ finish_run(fetched_count, failed_count) → 상태 DONE / PARTIAL / FAILED
+ ④ finish_run(fetched_count=성공한 종목 수, failed_count=실패한 종목 수) → 상태 DONE / PARTIAL / FAILED
 ```
 
 ### 3-1. ETF·비상장 제외 (확인됨)
@@ -88,6 +89,8 @@ R4가 요청한 대로 의미를 고정한다.
 
 ### 4-1. `collect_runs` (R4 구현, 감사용)
 `run_id, tenant_id, requested_by, status, stock_codes, started_at, finished_at, fetched_count, failed_count, error, lease_expires_at`
+- **`fetched_count`는 성공한 종목 수로 쓴다** (구현 결정, R4 확인 필요). R4의 `finish_run`이 "`fetched_count` 0 + 실패 ≥ 1"을 `FAILED`로 판정하므로, 새 공시 수를 넣으면 새 공시가 없는 날 한 종목만 실패해도 `PARTIAL`이 아니라 `FAILED`로 보인다. `failed_count`는 실패한 종목 수, `error`는 `종목코드: 사유`를 `;`로 이은 문자열(키·원문 없음).
+- 전체(고객사 구분 없는) 정기 수집은 `tenant_id`가 `NULL`인 실행이다 (R4 API의 `/collect/status`가 이미 `tenant_id IS NULL`을 같이 보여 준다). 이미 `PENDING`/`RUNNING`인 전체 실행이 있으면 새로 만들지 않는다.
 - `status`: `PENDING → RUNNING → DONE / PARTIAL / FAILED`. 임대가 만료되면 R4의 `recover_expired_runs`가 `FAILED`로 닫는다.
 - 증분 기준의 정본은 이 표가 아니라 `collect_cursors`다 (R1 결정).
 - "마지막 수집 시각"(화면)은 종목별 `last_success_at`에서 구한다.
@@ -101,7 +104,7 @@ R4가 요청한 대로 의미를 고정한다.
 | 칸 | 값 (제안, R4 `select_snapshot_signals` 기준) |
 | --- | --- |
 | `period` | 사업보고서 `"2024"`, 분기·반기 `"2024-Q1"`~`"2024-Q4"` (`ANNUAL`이면 `-Q` 없음, 아니면 있음 — R4가 어기면 오류로 거절) |
-| `period_kind` | `ANNUAL` / `QUARTER` / `YTD`. 반기·분기 재무제표를 누적(YTD)으로 볼지 분기 값(QUARTER)으로 볼지는 R4 정의와 DART 응답 확인이 필요하다 `TODO(확인 필요)` |
+| `period_kind` | 사업보고서는 `ANNUAL`, 반기·분기는 `YTD`(R4 테스트 fixture와 같음). **확인됨:** 반기·분기 재무제표의 IS·CF `thstrm_amount`는 누적이 아니라 **당분기(3개월) 값**이고 누적은 `thstrm_add_amount`다(금양 2024 반기). 그래서 반기·분기는 시점 값인 재무상태표 기반 지표만 만들고, 이 구분(`YTD`/`QUARTER`)은 결과에 영향이 없다 |
 | `basis` | `CONSOLIDATED`(CFS) / `SEPARATE`(OFS). **R1 결정: 둘 다 저장**하고 `fs_div`를 기록한다. 같은 기간이면 R4가 연결을 먼저 고른다 (`select_snapshot_signals` 테스트). R1은 "판정 기준 확정 전엔 개별 임시"라고 했으므로 **자본잠식 판정에서 개별을 쓸지 연결을 쓸지는 R1·R4 확인 필요** `TODO(확인 필요)` |
 | `rcept_no` | 지표를 만든 보고서의 접수번호 (재무제표 API 행마다 있음, 확인됨) |
 | `revision` | 같은 보고서의 정정본이 새 `rcept_no`로 오면 1씩 올린다 |
@@ -121,7 +124,7 @@ R4가 요청한 대로 의미를 고정한다.
 | **R4** | 컬럼 추가·마이그레이션, 저장 인터페이스, 공통 스키마, MCP 도구 `get_disclosure_facts(rcept_no)` |
 | **R2** | 응답 검증, Agent 활용 |
 
-**현재 상태:** R4 코드(`Pre-merge-P01-v01`)에는 `structured_facts` 컬럼도 `get_disclosure_facts` 도구도 **아직 없다**(2026-10-23 확인). 컬럼이 생기기 전에는 저장 단계(`jobs.py`, `repo.py`)를 만들지 않는다.
+**현재 상태:** R4 코드(`Pre-merge-P01-v01`)에는 `structured_facts` 컬럼도 `get_disclosure_facts` 도구도 **아직 없다**(2026-10-23 확인). 그래서 **현재 `jobs.py`는 주요사항 항목 API를 호출하지 않는다.** 공시 목록(`disclosures`)과 재무 스냅샷만 저장하고, 컬럼이 생기면 그 단계를 추가한다.
 
 **`get_disclosure_facts` 응답 모양 (R2 정리).** 최종 스키마는 R4가 정한다. R3는 아래 모양으로 값을 만든다.
 
@@ -156,7 +159,9 @@ R4가 요청한 대로 의미를 고정한다.
 | `DEBT_ISSUANCE` · `FUND_USAGE` · `LARGEST_SHAREHOLDER_CHANGE` | 플래그 | 전년 대비 비교·사용 목적 판단이 필요하다. Phase 1 후순위, `MISSING`으로 시작 |
 | `EQUITY_INVESTMENT` | — | `manual_only` (R4 규칙). 값만 저장 |
 
-**반기·분기 보고서:** 금액 열(`thstrm_amount`)이 누적인지 분기 값인지 확인하지 못했다. 그래서 사업보고서(`ANNUAL`)가 아니면 재무상태표 기반 지표(`CAPITAL_IMPAIRMENT`, `SHORT_TERM_DEBT`)만 만들고 영업현금흐름·이자보상배율은 만들지 않는다 `TODO(확인 필요)`.
+**반기·분기 보고서:** 손익·현금흐름의 `thstrm_amount`가 누적이 아니라 당분기(3개월) 값이다(확인됨, 4-3). 그래서 사업보고서(`ANNUAL`)가 아니면 재무상태표 기반 지표(`CAPITAL_IMPAIRMENT`, `SHORT_TERM_DEBT`)만 만들고 영업현금흐름·이자보상배율은 만들지 않는다. 누적(`thstrm_add_amount`)으로 연환산 지표를 만들지는 정하지 않았다.
+
+**정정 보고서와 `revision`:** 재무제표 API는 정정본이 있으면 **최신 정정본의 값과 접수번호**만 돌려준다(금양 FY2022: 원본 `20230322001310`이 아니라 2년 뒤 정정 `20240313001231`의 값). 그래서 스냅샷의 `rcept_no`는 목록 제목이 아니라 **재무제표 행의 `rcept_no`**를 쓰고, 이미 같은 기간에 접수번호가 같거나 더 큰 스냅샷이 있으면 다시 받지 않는다. `revision`은 수집하는 동안 서로 다른 접수번호가 나타난 순서(접수번호 오름차순)로 1, 2, …가 매겨진다. 백필은 최신 정정본 하나만 본다.
 
 **`notes` 칸:** 각 지표는 `{status, detail, notes}`이고 `notes`는 R3가 추가한 설명 문구 목록이다(`MISSING` 사유, 세지 않은 계정, 금융비용 기준 한계 등). R4는 `status`·`detail`만 읽으므로 영향이 없다고 보지만 확인이 필요하다 `TODO(확인 필요)` (R4).
 
@@ -194,6 +199,7 @@ R4가 요청한 대로 의미를 고정한다.
 
 - 가짜 키(`x`×40)로도 `000`이 왔다(확인됨, 원인 모름). 키 오류를 응답으로 감지할 수 있다고 가정하지 않고, **키가 비어 있으면 시작 때 실패**시킨다.
 - 로그에 `crtfc_key`와 원문을 남기지 않는다. 오류 메시지에서 URL 쿼리 문자열을 지운다.
+- **실제로 샌 적이 있다 (수정함):** `httpx`는 요청 URL(쿼리 포함)을 INFO 로그로, `httpcore`는 DEBUG로 남긴다. INFO 로깅을 켜고 수집기를 실제 DART로 돌리자 `crtfc_key`가 평문으로 찍혔다(예외 메시지만 가리고 로그는 막지 못했던 것). 지금은 로그 레코드를 만드는 단계에서 `crtfc_key=` 값을 `***`로 바꾼다(`dart_client._install_log_redaction`, 회귀 테스트 있음). 이 보호는 `collector.dart_client`를 import한 프로세스에만 적용된다.
 - 이 재시도는 수집기 자체 규칙이며 `harness/recovery_tools.py`(R4)를 import하지 않는다.
 
 ## 7. 설정·의존성 — R4에게 요청 (이름·의미·단위·기본값·필수 여부)
@@ -201,7 +207,7 @@ R4가 요청한 대로 의미를 고정한다.
 | 이름 | 의미 | 단위·형식 | 기본값 (제안) | 필수 |
 | --- | --- | --- | --- | --- |
 | `DART_API_KEY` | OpenDART 키 | 문자열 | (있음) | 수집·원문 조회 시 필수 |
-| `COLLECT_ENABLED` | 스케줄러 켜기 | bool | `false` | 아니오 (로컬·테스트에서 꺼 둠) |
+| `COLLECT_ENABLED` | (현재 쓰지 않음) 스케줄러는 `python -m collector --schedule`로 명시해서 켠다 | — | — | — |
 | `COLLECT_TIME` | 매일 실행 시각 (Asia/Seoul) | `HH:MM` | `09:05` | 아니오 |
 | `COLLECT_BACKFILL_MONTHS` | 새 종목 백필 범위 | 개월 | `12` | 아니오 |
 | `DART_TIMEOUT_SECONDS` | 요청 시간 제한 | 초 | `30` | 아니오 |
@@ -210,8 +216,17 @@ R4가 요청한 대로 의미를 고정한다.
 | `DART_MAX_CONCURRENCY` | 동시 종목 수 | 정수 | `3` (제안) | 아니오 |
 | `COLLECTION_LEASE_SECONDS` | 실행 임대 | 초 | (R4가 이미 있음) | — |
 
-- 의존성: `httpx`(dev → 일반), `tenacity`, `apscheduler`. R4가 `ErrorCode.UPSTREAM_ERROR`를 추가하면 rag 도구의 한도 초과·장애 응답에 쓴다 (mcp_rag.md).
+- 의존성: `httpx`(dev → 일반)만 필요하다. 재시도·스케줄러는 직접 구현해 `tenacity`·`apscheduler`는 **아직 필요 없다**(나중에 바꾸고 싶으면 그때 요청). `COLLECT_TIME`·`DART_*` 설정은 `shared/config.py`에 있으면 읽고 없으면 기본값을 쓴다(`getattr`). R4가 `ErrorCode.UPSTREAM_ERROR`를 추가하면 rag 도구의 한도 초과·장애 응답에 쓴다 (mcp_rag.md).
 - DB: `DB_URL` 그대로. 수집기는 SQLAlchemy 세션만 쓴다.
+
+## 7-1. R4와 연결하는 방법
+
+| 연결 | 방법 |
+| --- | --- |
+| 수동 수집 (`POST /collect/run`) | R4의 `collect_run`은 `PENDING` 실행을 만들고 종목을 예약한 뒤 `request.app.state.collect_dispatcher(run_id, stock_codes)`를 `await`한다. 그 자리에 **`collector.jobs.dispatch_collection`을 꽂는다**(`app.state.collect_dispatcher = dispatch_collection`). 이 함수는 실행을 백그라운드로 시작하고 바로 돌아오므로 API는 202를 돌려줄 수 있다. 연결 코드는 `api/main.py`라 R4 몫이다. |
+| 정기 수집 (09:05) | `python -m collector --schedule` 프로세스가 `collect_once`를 매일 부른다. docker compose의 collector 서비스는 이 명령으로 띄우면 된다 (R4). 지금 1회 돌려 보려면 `python -m collector --once`. |
+| 선행 조건 | R4의 `/collect/run`은 `companies`에 있는 종목만 대상으로 삼는다(`Company`와 join). 새로 보유한 종목은 **정기 수집이나 `--once`가 한 번 돌아 `companies`를 만든 뒤**에야 수동 수집 대상이 된다. 첫 수집 전에는 `409 수집할 보유 종목이 없습니다`가 나올 수 있다. |
+| 종료 코드 | `--once`: 0 성공, 1 일부·전체 실패, 2 시작하지 않음(이미 실행 중이거나 종목 없음) |
 
 ## 8. 테스트 (`tests/collector/`)
 
