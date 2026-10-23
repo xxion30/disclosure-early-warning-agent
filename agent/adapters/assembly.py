@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from agent.adapters.harness_tools import default_harness
 from agent.adapters.store import AssessmentStore, ToolTaskCreator, audit, authorize_task
-from agent.model_adapter import KnownSignalsModel, UnsafeDraftInjector, build_model
+from agent.model_adapter import UnsafeDraftInjector, build_model
+from agent.adapters.phase1 import Phase1Model, EvidenceTools, make_phase1_classifier, signal_input
 from agent.ports import Dependencies
-from agent.rules import make_classifier, signal_input
 from harness.tracing import enable_langsmith
-from risk_engine.loader import load_rules
+from shared.rule_catalog import load_catalog
 from shared.config import get_settings
 
 
@@ -33,12 +33,12 @@ async def build_dependencies(settings=None, *, tools=None, model=None, harness=N
     if settings.FAKE_UNSAFE_DRAFT:
         model = UnsafeDraftInjector(model)
     return Dependencies(
-        tools=tools,
-        model=KnownSignalsModel(model),
+        tools=EvidenceTools(tools, harness),
+        model=Phase1Model(model, harness),
         harness=harness,
         persistence=AssessmentStore(tools, audit, harness, upsert_confirmed=True),
-        classify=make_classifier(),
+        classify=make_phase1_classifier(),
         signal_input=signal_input,
         create_task=ToolTaskCreator(tools, harness, authorize_task, idempotency_confirmed=True),
-        quiet_types=frozenset(load_rules().get("no_signal_ok_types", [])),
+        quiet_types=frozenset(load_catalog()["quiet_types"]),
     )

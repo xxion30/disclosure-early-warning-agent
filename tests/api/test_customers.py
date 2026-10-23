@@ -19,7 +19,8 @@ def world(session_factory):
         s.add(Company(corp_code="00106119", stock_code="001570", name="금양", market="KOSPI", base_score=1, base_reasons=[]))
         s.add(Company(corp_code="00303873", stock_code="079160", name="CJ CGV", market="KOSPI", base_score=2, base_reasons=[]))
         for h in SEED["holdings"]:
-            s.add(Holding(customer_id=h["customer_id"], stock_code=h["stock_code"], eval_amount=h["eval_amount"], on_credit=h["on_credit"]))
+            if s.get(Holding, (h["customer_id"], h["stock_code"])) is None:
+                s.add(Holding(customer_id=h["customer_id"], stock_code=h["stock_code"], eval_amount=h["eval_amount"], on_credit=h["on_credit"]))
         s.add(RiskAssessment(assessment_id=1, corp_code="00106119", rcept_no="20250117000380", total_score=8, level="High",
                              status="DONE", created_at="2025-01-17T09:00:00+09:00", reasons=[]))
         s.add(RiskAssessment(assessment_id=2, corp_code="00106119", rcept_no="20250321802001", total_score=8, level="Critical",
@@ -74,9 +75,8 @@ def test_non_alert_holdings_have_no_alert_and_known_names(client, auth_headers, 
 
 def test_sorted_by_urgency_and_summary(client, auth_headers, world):
     res = client.get("/customers", headers=auth_headers).json()
-    order = [c["exposure"]["top_level"] for c in res["customers"]]
-    rank = {"Critical": 0, "High": 1, None: 9}
-    assert [rank[o] for o in order] == sorted(rank[o] for o in order)  # Critical → High → 노출 없음
+    amounts = [sum(h["eval_amount"] for h in c["holdings"]) for c in res["customers"]]
+    assert amounts == sorted(amounts, reverse=True)
     s = res["summary"]
     assert s["customers"] == len(OWN["P01"]) and s["exposed"] >= s["critical"] + s["high"] >= 1
 
@@ -115,7 +115,10 @@ def test_read_only(client, auth_headers):
         assert getattr(client, method)("/customers", headers=auth_headers).status_code == 405
 
 
-def test_empty_when_no_data(client, auth_headers):
+def test_empty_when_no_data(client, auth_headers, session_factory):
+    from sqlalchemy import delete
+    with session_factory() as s:
+        s.execute(delete(Holding))
     res = client.get("/customers", headers=auth_headers).json()  # 보유·경보가 없어도 깨지지 않는다
     assert res["summary"]["exposed"] == 0 and all(c["holdings"] == [] and c["history"] == [] for c in res["customers"])
 

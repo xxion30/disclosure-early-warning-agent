@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+Stage = Literal["RED", "ORANGE", "YELLOW", "COMPOSITE", "WATCH", "NONE"]
+
 Level = Literal["Low", "Medium", "High", "Critical"]
 AssessmentStatus = Literal["RUNNING", "WAITING_APPROVAL", "DONE", "FAILED", "MANUAL_CHECK"]
 TaskStatus = Literal["승인대기", "승인", "반려", "연락완료", "보류"]
@@ -15,6 +17,7 @@ class ErrorCode(str, Enum):
     INVALID_INPUT = "INVALID_INPUT"
     DB_ERROR = "DB_ERROR"
     TIMEOUT = "TIMEOUT"
+    UPSTREAM_ERROR = "UPSTREAM_ERROR"
 
 
 # ---- 공통 응답 형식: {"ok": true, "data": ...} / {"ok": false, "error": {...}} ----
@@ -40,6 +43,8 @@ class ToolResponse(BaseModel):
 
 # ---- 신호 / 점수 ----
 class Signal(BaseModel):
+    event_id: str | None = None
+    event_started_at: str | None = None
     signal_type: str
     points: float
     detail: dict = Field(default_factory=dict)
@@ -47,6 +52,16 @@ class Signal(BaseModel):
 
 
 class ScoreResult(BaseModel):
+    as_of: str | None = None
+    rules_digest: str | None = None
+    expected_state_version: int | None = None
+    stage: Stage | None = None
+    active_stages: list[Stage] = Field(default_factory=list)
+    orange_score: float = 0
+    yellow_score: float = 0
+    composite_ratio: float = 0
+    sort_value: float = 0
+    manual_check: bool = False
     total_score: float
     level: Level
     combo_upgraded: bool = False

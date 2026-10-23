@@ -24,6 +24,19 @@ class Fact(StrictModel):
     evidence: list[Evidence] = Field(min_length=1)
 
 
+class APIEvidence(StrictModel):
+    kind: Literal['api']
+    api: str = Field(min_length=1)
+    field: str = Field(min_length=1)
+    rcept_no: str = Field(min_length=1)
+    row_key: str | None
+    value: Any
+    unit: str | None
+    period: str | None
+    basis: str | None
+    data_version: str | None
+
+
 class FactsOutput(StrictModel):
     # 비어 있을 수 있다. 신호가 없는 것이 정상인 유형(Dependencies.quiet_types)만 조용히 끝나고, 그 밖의 유형은 재시도·수동 확인이다.
     facts: list[Fact]
@@ -32,7 +45,7 @@ class FactsOutput(StrictModel):
 class ExplanationItem(StrictModel):
     breakdown_index: int = Field(ge=0)
     explanation: str = Field(min_length=1)
-    evidence: list[Evidence] = Field(min_length=1)
+    evidence: list[Evidence | APIEvidence] = Field(min_length=1)
 
 
 class ExplanationOutput(StrictModel):
@@ -84,6 +97,7 @@ class PBContext(StrictModel):
     """Constructed by authenticated API code, never from a public request body."""
     pb_id: str = Field(min_length=1)
     allowed_customer_ids: frozenset[str]
+    tenant_id: str | None = None
 
 
 class AgentState(TypedDict, total=False):
@@ -104,6 +118,7 @@ class AgentState(TypedDict, total=False):
     approval: dict[str, Any]
     task_ids: list[int]
     error: str | None
+    error_retryable: bool
     # A-local execution fields, requiring no DB schema modification.
     assessment_id: int
     status: str
@@ -120,6 +135,27 @@ class AgentState(TypedDict, total=False):
     no_signal: bool
     last_node: str
     failure_recording_error: str
+    # Phase 1: internal rule outputs; not a public API response.
+    phase1: bool
+    risk_routes: list[dict[str, Any]]
+    flags: list[dict[str, Any]]
+    red_result: dict[str, Any]
+    orange_result: dict[str, Any]
+    yellow_result: dict[str, Any]
+    financial_snapshot: dict[str, Any]
+    stage: str
+    orange_score: float
+    yellow_score: float
+    combined_ratio: float
+    flag_attempts: int
+    explanation_attempts: int
+    explanation_errors: list[str]
+    execution_context: dict[str, Any]
+    execution_budget: dict[str, Any]
+    structured_facts: dict[str, Any]
+    verified_sources: list[dict[str, Any]]
+    input_manifest: dict[str, Any]
+    analysis_complete: bool
 
 
 def initial_state(rcept_no: str, trace_id: str) -> AgentState:

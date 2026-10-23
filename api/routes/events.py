@@ -1,3 +1,4 @@
+from api.tenancy import require_legacy_runtime
 """GET /runs/{rcept_no}/events — 진행 이벤트 SSE (CLAUDE.md 8장 이벤트 이름).
 
 waiting_approval / done / failed 중 하나가 오면 스트림을 닫는다.
@@ -29,6 +30,7 @@ async def run_events(
     pb: CurrentPB = Depends(get_current_pb_sse),
     manager: RunManager = Depends(get_run_manager),
 ) -> StreamingResponse:
+    require_legacy_runtime(pb)
     if manager.get(rcept_no) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "이 서버에서 실행한 기록이 없습니다.")
 

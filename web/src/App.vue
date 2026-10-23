@@ -17,6 +17,7 @@ function logout() {
 </script>
 
 <template>
+  <a href="#main-content" class="skip-link">본문 바로 가기</a>
   <header v-if="auth.isLoggedIn" class="topbar">
     <div class="topbar-inner">
       <RouterLink to="/alerts" class="brand" aria-label="다치 홈">
@@ -37,7 +38,7 @@ function logout() {
       </div>
     </div>
   </header>
-  <main :class="auth.isLoggedIn ? 'container' : ''">
+  <main id="main-content" tabindex="-1" :class="auth.isLoggedIn ? 'container' : ''">
     <RouterView />
   </main>
 </template>

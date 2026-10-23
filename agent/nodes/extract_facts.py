@@ -1,4 +1,4 @@
-from agent.evidence import chunks_from, validate_evidence
+from agent.evidence import chunks_from, select_chunks, validate_evidence
 from agent.execution import call_tool, generate
 from agent.ports import AgentError
 from agent.state import FactsOutput
@@ -25,7 +25,8 @@ async def extract_facts(state, deps):
             extra = [c for c in found["disclosure_chunks"]
                      if all(isinstance(c.get(k), str) and c[k].strip() for k in ("source", "text", "rcept_no", "location"))
                      and (c["source"], c["location"]) not in seen]
-            chunks = chunks + extra[:3]
+            chunks = chunks + extra
+        chunks = select_chunks(chunks)
         result = await generate(deps, "extract_facts", FactsOutput, {
             "disclosure": state["disclosure"], "disclosure_type": state["disclosure_type"],
             "chunks": chunks, "attempt": attempt,
