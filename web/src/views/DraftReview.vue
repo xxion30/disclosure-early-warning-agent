@@ -213,7 +213,7 @@ async function submit() {
       <section v-if="decided.length" class="card flush decided" aria-label="결정 완료">
         <div class="card-head"><h2>결정 완료 {{ decided.length }}명</h2></div>
         <div class="table-wrap">
-          <table>
+          <table class="stack-table">
             <thead class="sr-only"><tr><th scope="col">고객</th><th scope="col">결정</th><th scope="col">결정 내용</th></tr></thead>
             <tbody>
               <tr v-for="d in decided" :key="d.customer_id">
@@ -287,11 +287,11 @@ code { background: var(--neutral-soft); padding: 1px 6px; border-radius: 6px; fo
 .message.rejected mark { background: none; font-weight: inherit; padding: 0; }
 .required { color: var(--bad); }
 .reject-reason { min-height: 72px; padding: 12px 16px; background: var(--surface-2); }
-.decided table { min-width: 560px; }
 .decided td { font-size: 14px; }
 .decided td:first-child { width: 140px; }
 .decided td:nth-child(2) { width: 100px; }
 .decided td:last-child { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .decided td:first-child, .decided td:nth-child(2) { width: auto; } }
 .decided-empty { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-style: dashed; }
 .decided-empty h2 { margin: 0; }
 .decided-empty > span, .decided-empty h2 span { font-size: 14px; font-weight: 500; }

@@ -140,12 +140,12 @@ async function change(task, status) {
 .task-filters .tabs button { min-height: 44px; padding: 0 18px; font-size: 14px; }
 .task-filters .tabs button:not(.active) .count { color: inherit; }
 .task-error { margin: 0 0 20px; }
-.remaining-summary { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px; }
+.remaining-summary { flex: 1; min-width: min(220px, 100%); display: flex; flex-direction: column; gap: 4px; }
 .remaining-summary > .muted { font-size: 14px; }
 .remaining-count { display: flex; align-items: baseline; gap: 6px; }
 .remaining-count strong { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .all-done { font-size: 24px; font-weight: 800; }
-.completion-summary { flex: 2; min-width: 260px; display: flex; flex-direction: column; gap: 8px; }
+.completion-summary { flex: 2; min-width: min(260px, 100%); display: flex; flex-direction: column; gap: 8px; }
 .completion-label { display: flex; justify-content: space-between; font-size: 13px; }
 .task-list { display: flex; flex-direction: column; gap: 14px; }
 .task-list > .card { margin-bottom: 0; }
@@ -165,7 +165,7 @@ async function change(task, status) {
 .message-label { color: var(--muted); font-size: 12px; font-weight: 700; }
 .approved-message p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; color: #2a3554; }
 .task-footer { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.memo-field { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 8px; }
+.memo-field { flex: 1; min-width: min(280px, 100%); display: flex; flex-direction: column; gap: 8px; }
 .memo-field label { margin: 0; }
 .memo-field textarea { min-height: 52px; padding: 12px 16px; background: var(--surface-2); }
 .task-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

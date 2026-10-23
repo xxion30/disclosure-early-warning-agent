@@ -7,7 +7,12 @@
   --blue-strong: #2f5be0;
   --blue-soft: #eaf0fe;
 
-  /* 바탕·글자·선 */
+  /* 페이지 바탕: 로고 아이콘의 링 색(진한 파랑). 카드 밖 글자는 흰색 계열 (흰 글자 10.4:1, 옅은 글자 6.9:1) */
+  --page-bg: #2e3d72;
+  --on-page: #ffffff;
+  --on-page-muted: #c9d3ee;
+
+  /* 바탕·글자·선 (--bg는 카드 안의 옅은 면에 쓴다) */
   --bg: #f4f6fa;
   --surface: #ffffff;
   --surface-2: #f7f9fc;
@@ -48,14 +53,22 @@
 
   font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   color: var(--text);
-  background: var(--bg);
+  background: var(--page-bg);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); }
+body { margin: 0; background: var(--page-bg); }
+
+/* 진한 파란 바탕 위에 바로 놓인 글자 (카드 밖의 페이지 제목 줄) */
+.container > .page-head h1,
+.container > .page-head h2,
+.container > .page-head strong { color: var(--on-page); }
+.container > .page-head .eyebrow,
+.container > .page-head .muted,
+.container > .page-head small { color: var(--on-page-muted); }
 a { color: var(--blue-strong); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 4px; }
@@ -81,6 +94,7 @@ small, .muted { color: var(--muted); }
 .avatar.soft { background: #eef2fa; color: var(--navy); }
 
 .container { max-width: 1240px; margin: 0 auto; padding: 36px 32px 72px; }
+@media (max-width: 800px) { .container { padding: 24px 16px 48px; } }
 
 /* ---------- 카드·머리말 ---------- */
 .card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 20px; }
@@ -239,7 +253,7 @@ blockquote { margin: 8px 0; padding: 12px 16px; border-radius: var(--radius-md);
 .quote figcaption { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .quote-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 800px) { .quote-grid { grid-template-columns: 1fr; } }
-.chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--pill); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.chip { max-width: 100%; display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--pill); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
 .chip.strong { color: var(--blue-strong); font-weight: 700; }
 .chip.soft { background: var(--neutral-soft); }
 
@@ -315,3 +329,29 @@ button.icon-button.active { background: var(--blue-soft); border-color: var(--bl
 .summary-band .muted, .summary-band small { color: #c9d3ee; }
 .summary-band .progress-bar { background: #2a3766; margin: 0; }
 .summary-band .progress-bar > span { background: var(--ok-dot); }
+
+/* ---------- 한 줄 바로 가기 (숫자 카드 대신) ---------- */
+.shortcut-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; width: 100%; margin-bottom: 20px; padding: 12px 18px; border: none; border-radius: var(--pill); background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font-size: 15px; font-weight: 400; text-align: left; line-height: 1.4; }
+a.shortcut-line:hover, button.shortcut-line:hover:not(:disabled) { background: var(--surface-2); text-decoration: none; }
+button.shortcut-line { min-height: 56px; }
+button.shortcut-line:disabled { opacity: 1; cursor: default; }
+.shortcut-icon { width: 32px; height: 32px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-strong); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.shortcut-sub { color: var(--muted); font-size: 14px; }
+.shortcut-go { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--blue-strong); font-weight: 700; font-size: 14px; }
+.tabs .count.dim { color: var(--muted); font-weight: 500; }
+
+/* ---------- 좁은 화면 표: 줄마다 카드처럼 쌓기 (가로 스크롤 없음) ---------- */
+@media (max-width: 640px) {
+  table.stack-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack-table, table.stack-table tbody, table.stack-table tr { display: block; width: 100%; }
+  table.stack-table tr { padding: 12px 16px; border-top: 1px solid #edf1f7; }
+  table.stack-table td { display: block; border: none; padding: 4px 0 !important; text-align: left; }
+  table.stack-table td.num { text-align: left; }
+  table.stack-table td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  table.stack-table td.empty { text-align: center; padding: 24px 0 !important; }
+}
+@media (max-width: 640px) {
+  .tabs { display: flex; flex-wrap: wrap; width: 100%; border-radius: 22px; }
+  .tabs button { flex: 1 1 auto; padding: 0 10px; font-size: 14px; white-space: nowrap; }
+  .card.flush > .card-head { padding: 0 16px; }
+}

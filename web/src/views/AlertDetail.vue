@@ -212,13 +212,12 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
         Graph 상태를 찾을 수 없어 보유 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
       </p>
       <div v-else class="table-wrap">
-        <table>
+        <table class="stack-table">
           <thead>
             <tr>
-              <th>고객 (보유 평가금액 순)</th>
-              <th>투자성향</th>
-              <th>담당</th>
-              <th>결정</th>
+              <th scope="col">고객 (보유 평가금액 순)</th>
+              <th scope="col">담당</th>
+              <th scope="col">결정</th>
             </tr>
           </thead>
           <tbody>
@@ -226,12 +225,11 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
               <td>
                 <div class="customer">
                   <span class="avatar sm" :class="{ soft: !c.mine }" aria-hidden="true">{{ c.mine ? (c.name || '-').slice(0, 1) : 'C' }}</span>
-                  <div class="customer-text"><strong>{{ c.name }}</strong><span v-if="c.mine" class="sub">{{ c.customer_id }}</span></div>
+                  <div class="customer-text"><strong>{{ c.name }}</strong><span class="sub"><template v-if="c.mine">{{ c.customer_id }} · </template>{{ c.risk_profile || '-' }}</span></div>
                 </div>
               </td>
-              <td>{{ c.risk_profile || '-' }}</td>
               <td><span class="chip" :class="c.mine ? 'strong mine' : 'soft'">{{ c.mine ? '내 고객' : c.pb_id }}</span></td>
-              <td><StatusBadge :status="c.decision" /></td>
+              <td class="decision-cell"><StatusBadge :status="c.decision" /></td>
             </tr>
           </tbody>
         </table>
@@ -270,7 +268,11 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
 .quote { overflow-wrap: anywhere; }
 .customers h2 small { margin-left: 6px; font-size: 14px; font-weight: 500; }
 .customers > .notice { margin: 0 24px 16px; }
-.customers table { min-width: 900px; }
+.customers th:not(:first-child) { width: 1%; white-space: nowrap; }
+@media (max-width: 640px) {
+  .customers tr { display: flex !important; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .customers td:first-child { flex: 1 1 100%; }
+}
 .customers td { font-size: 14px; }
 .customer { display: flex; align-items: center; gap: 10px; }
 .customer-text { display: flex; flex-direction: column; line-height: 1.35; }
