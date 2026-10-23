@@ -308,7 +308,7 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 - `COLLECT_DISPATCH_ENABLED=false` 기본값을 유지한다. 수동 수집을 운영에서 사용하려면 해당 실행 환경에 true를 설정하고 API를 재시작한다. 관리자로 `POST /collect/run`을 호출하면 R3 dispatch_collection으로 전달한다. 분석 실행 활성화는 PHASE1_RUNTIME_FACTORY 설정이 별도로 필요하다.
 - 활성화 경로는 R3의 실제 dispatcher와 가짜 수집 실행으로 검증한다. 테스트가 DART를 호출하거나 운영 수집 설정을 변경하지는 않는다.
 - 모든 신규 공시의 mark_ready 인계를 유지한다. enqueue_ready 선별 기준은 R1과 합의 전이며, structured_facts가 NULL이라는 이유만으로 제외하지 않는다.
-- 자본잠식은 최신 기간 OFS만 사용한다. 같은 기간 OFS가 없으면 CFS/이전 OFS로 대체하지 않고 수동 확인한다. INTEREST_BURDEN은 R1 경계값 확정 전까지 enabled=false다.
+- 자본잠식은 최신 기간 OFS·CFS를 각각 확인하고 높은 구간 하나만 적용한다. fs_div와 양쪽 basis_checks를 보존하며 과거 기간·0으로 결측을 대체하지 않는다. INTEREST_BURDEN은 활성화되어 영업이익÷금융비용이 1 미만일 때 +2를 적용한다. 금융비용<=0·누락은 산정 불가다.
 - 체크포인터는 open_executors가 생성·초기화한 객체를 factory(deps, saver)에 주입하고 종료한다. SQLite에서 실제 AgentRuntime.graph에 동일 객체가 전달되고 종료 뒤 연결이 닫히는 것을 테스트한다. PostgreSQL 검증은 별도 테스트 DB 설정이 필요하다.
 
 ## R5 상태 요약 필드 (2026-10-23)

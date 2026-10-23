@@ -178,6 +178,8 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
                      'rcept_no': sig.get('rcept_no'), 'filed_at': sig['filed_at'], 'points': points,
                      'raw_points': raw_points, 'weight': weight, 'active': not excluded and not resolved and bool(weight) and (group == 'red' or points > 0),
                      'excluded': excluded, 'policy_pending': policy_pending, 'resolved': resolved, 'quote': detail.get('quote'), 'evidence': sig['evidence'], 'missing': missing})
+        if st == 'CAPITAL_IMPAIRMENT' and 'basis_checks' in detail:
+            rows[-1].update(fs_div=detail.get('fs_div'), basis_checks=detail['basis_checks'])
     incoming_ids = {id(item) for item in incoming}
     incoming = [sig for sig in versions.values() if id(sig) in incoming_ids]
     stage, active, ratio = judge(orange, yellow, red, rules)

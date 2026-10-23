@@ -60,7 +60,7 @@ def select_snapshot_signals(snapshots, filing_dates):
                    filing_dates[snapshot.rcept_no], snapshot.rcept_no)
             if st not in candidates or key > candidates[st][0]:
                 candidates[st] = (key, signal)
-    # Capital impairment is a policy exception: latest period OFS only, no CFS/older fallback.
+    # Compare both bases in the latest period. Never add their scores together.
     cap = []
     for snapshot in snapshots:
         if snapshot.basis in ('CONSOLIDATED','SEPARATE') and 'CAPITAL_IMPAIRMENT' in snapshot.indicators and snapshot.period_kind in ('ANNUAL', 'QUARTER', 'YTD'):
@@ -69,15 +69,29 @@ def select_snapshot_signals(snapshots, filing_dates):
                 cap.append(((int(match[1]), int(match[2] or '4'), snapshot.period_kind == 'ANNUAL'), snapshot))
     if cap:
         latest = max(period for period, _ in cap)
-        eligible = [snapshot for period, snapshot in cap if period == latest and snapshot.basis == 'SEPARATE']
-        if eligible:
+        checks, valid, selected = [], [], []
+        for basis, fs_div in [('SEPARATE', 'OFS'), ('CONSOLIDATED', 'CFS')]:
+            eligible = [snap for period, snap in cap if period == latest and snap.basis == basis]
+            if not eligible:
+                checks.append({'fs_div': fs_div, 'status': 'MISSING', 'impairment_pct': None,
+                               'period': None, 'rcept_no': None, 'revision': None})
+                continue
             chosen = max(eligible, key=lambda snap: (snap.revision, filing_dates[snap.rcept_no], snap.rcept_no))
-            signal = next(sig for sig in snapshot_signals(chosen, filing_dates[chosen.rcept_no])
-                          if sig['signal_type'] == 'CAPITAL_IMPAIRMENT')
+            selected.append(chosen)
+            item = chosen.indicators['CAPITAL_IMPAIRMENT']
+            value = number((item.get('detail') or {}).get('impairment_pct')) if item.get('status') == 'OK' else None
+            checks.append({'fs_div': fs_div, 'status': 'OK' if value is not None else 'MISSING',
+                           'impairment_pct': value, 'period': chosen.period,
+                           'rcept_no': chosen.rcept_no, 'revision': chosen.revision})
+            if value is not None:
+                valid.append((value, fs_div, chosen))
+        if valid:
+            _, fs_div, chosen = max(valid, key=lambda entry: (entry[0], entry[1]))
         else:
-            chosen = max((snap for period, snap in cap if period == latest), key=lambda snap: (snap.revision, snap.rcept_no))
-            signal = next(sig for sig in snapshot_signals(chosen, filing_dates[chosen.rcept_no])
-                          if sig['signal_type'] == 'CAPITAL_IMPAIRMENT')
-            signal = {**signal, 'detail': {}, 'selection_reason': 'latest_period_ofs_missing'}
+            chosen = max(selected, key=lambda snap: (snap.revision, filing_dates[snap.rcept_no], snap.rcept_no))
+            fs_div = None
+        signal = next(sig for sig in snapshot_signals(chosen, filing_dates[chosen.rcept_no])
+                      if sig['signal_type'] == 'CAPITAL_IMPAIRMENT')
+        signal['detail'] = {**(signal['detail'] if valid else {}), 'fs_div': fs_div, 'basis_checks': checks}
         candidates['CAPITAL_IMPAIRMENT'] = ((), signal)
     return [candidates[st][1] for st in sorted(candidates)]
