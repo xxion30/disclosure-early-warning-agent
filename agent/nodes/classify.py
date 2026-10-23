@@ -1,8 +1,8 @@
 async def classify(state, deps):
-    if deps.phase1 is not None:
+    if deps.unified is not None or deps.phase1 is not None:
         from agent.phase1 import RiskRoute
         routes = [RiskRoute.model_validate(r).model_dump()
-                  for r in deps.phase1.classify(state["disclosure"]["title"])]
+                  for r in (deps.unified or deps.phase1).classify(state["disclosure"]["title"])]
         keys = [(r["bucket"], r["item"]) for r in routes]
         if len(keys) != len(set(keys)):
             raise ValueError("위험 항목 분류 중복")

@@ -3,7 +3,7 @@
 This is an Agent boundary, not an HTTP authorization layer. R4 must use the
 public projection and PB ownership checks in its API/SSE adapters as well.
 """
-from agent.state import Evidence
+from agent.state import Evidence, APIEvidence
 from harness.guardrails import find_score_disclosure
 
 
@@ -32,8 +32,9 @@ def public_risk_context(result):
         label = str(row.get("item") or row.get("signal_type") or "확인 항목")
         if find_score_disclosure(label):
             label = "확인 항목"
-        evidence = [Evidence.model_validate(e).model_dump() for e in row.get("evidence", [])]
-        if any(find_score_disclosure(e[k]) for e in evidence for k in e):
+        evidence = [(APIEvidence if e.get('kind') == 'api' else Evidence).model_validate(e).model_dump()
+                    for e in row.get("evidence", [])]
+        if any(find_score_disclosure(str(e[k])) for e in evidence for k in e if e[k] is not None):
             raise ValueError("공개 근거의 내부 점수 표현 확인 필요")
         public["breakdown"].append({"breakdown_index": index, "item": label, "evidence": evidence})
     return public

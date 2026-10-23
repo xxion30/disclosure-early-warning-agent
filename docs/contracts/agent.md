@@ -132,3 +132,73 @@ Phase 1은 DB 미처리 작업을 R4 실행 관리가 원자적으로 선점하�
 - [ ] 같은 실제 사례로 개선 전후를 측정한다. 오프라인 테스트와 실제 모델 평가를 구분한다.
 
 상세: [Harness](harness.md), [수집기](collector.md), [RAG](mcp_rag.md), [업무 도구](mcp_business.md), [DB](db.md), [API](api.md), [위험 규칙](risk_rules.md).
+
+## 11. R2 코드 반영 상태 (2026-10-23)
+
+이 절은 이번 R2 변경의 실제 연결 API를 설명한다. 앞 절의 팀 목표와 R4 미구현 연결을 구분한다.
+
+### 새 경로 활성화
+
+- `Dependencies.unified: UnifiedBindings | None`를 추가했다. `unified`가 있으면 단일 계산 도구 Graph를 선택한다.
+- 기존 `phase1: Phase1Bindings`와 legacy Graph는 호환용이다. 이를 새 단일 도구 통합 완료로 보지 않는다.
+- `UnifiedBindings`는 `classify(title) -> list[RiskRoute]`, `prepare_signals(payload) -> list[dict]`, `await ensure_current(payload) -> bool`을 R4에서 주입받는다.
+- `classify`의 route는 `{bucket, item, text_flags}`다. `text_flags`는 승인된 비수치 조건만 지정한다. RED·YELLOW에서도 명시된 텍스트 조건을 추출할 수 있다. R2가 분류 정책이나 점수를 새로 계산하지 않는다.
+- `prepare_signals` 입력은 `disclosure/structured_facts/flags/evidence/routes/as_of`다. R4가 API 필드 매핑·단위·정정 관계·API/AI 충돌 처리를 수행한다. 미해결 필수 충돌은 `AgentError`로 중단하거나 규칙의 수동 확인으로 전달한다. 확인 필요 값을 버린 뒤 NONE으로 반환하지 않는다.
+- `ensure_current`는 `context/assessment_id/rcept_no/customer_ids`를 받는다. DB의 최신 판정·tenant·고객 소유권을 확인하고 명시적인 bool을 반환한다. 승인·업무 생성의 원자적 최종 검사는 R4 저장 도구에서도 필요하다.
+
+R4 조립에서 기존 `Phase1Model`·`EvidenceTools` 중복 검증을 연결 정리한 뒤 다음 방식으로 주입한다. 아래 `approved_routes`, `convert_signals`, `check_current`, `record_budget`은 R4가 실제 함수로 연결해야 하는 자리이며 이 이름의 구현을 R2가 만들었다는 뜻이 아니다.
+
+```python
+from dataclasses import replace
+from agent.integration import UnifiedBindings
+from agent.runtime import AgentRuntime
+
+bindings = UnifiedBindings(
+    classify=approved_routes,
+    prepare_signals=convert_signals,
+    ensure_current=check_current,
+    record_budget=record_budget,
+)
+deps = replace(deps, phase1=None, unified=bindings)
+runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
+```
+
+### 실행 API
+
+`ExecutionContext`는 R4 인증·dispatcher 내부에서 생성한다. 공개 HTTP 요청 DTO로 그대로 노출하지 않는다.
+
+| 필드 | 의미 |
+| --- | --- |
+| `assessment_key` | R4가 확정한 공개 판정 ID/버전 |
+| `as_of` | 평가 기준일 YYYY-MM-DD |
+| `rules_version` | 계산 응답의 rules_digest와 일치하는 규칙 해시 |
+| `input_version` | 공시·정정·재무·이력까지 포함하는 분석 입력 manifest의 R4 버전 |
+| `facts_version` | 이번 공시 structured_facts의 content_hash/data_version. 생략하면 input_version을 같은 값으로 사용하는 호환 경로 |
+| `run_id`, `attempt` | R4 선점된 작업과 최초 포함 1~3 시도 |
+| `kind`, `tenant_id` | public 또는 review. review는 이용 조직 필수 |
+| `model_requests_used`, `active_seconds_used` | R4가 영속 예산 장부에서 복원한 누적 사용량 |
+
+- `await runtime.start(rcept_no, context=public_context)`는 공개 분석만 수행해 DONE으로 저장한다.
+- `await runtime.start_review(rcept_no, completed_public_state, context=review_context)`는 같은 판정·자료 버전의 경보에 대해 조직별 고객 검토를 시작한다. 공개 분석 State는 R4 내부 저장소에서 읽은 값이어야 한다.
+- `get_state/get_review/resume/retry_tasks`에도 같은 `context=`를 전달한다. 공개 분석과 조직별 검토의 thread는 분리된다.
+- 같은 판정의 일시 실패는 `error_retryable=True, status=FAILED`로 반환한다. 다음 `attempt`로 다시 `start`하면 소비 예산을 유지하고 재실행한다. MANUAL_CHECK는 자동 재시작하지 않는다.
+- `open_runtime(deps, checkpointer=saver)`는 주입된 saver를 사용하고 닫지 않는다. 새 unified 경로는 R2가 DB를 선택·생성하지 않는다. 기존 경로의 로컬 SQLite/Postgres 팩토리만 호환용으로 남아 있다.
+- `analyze_receipts(..., contexts={rcept_no: context})`도 지원한다. 이 함수가 DB 선점을 대신하지 않는다.
+
+### 내부 보존과 출처
+
+- 새 계산 응답은 R4의 `composite_ratio/manual_check/expected_state_version/corp_code/as_of/rules_digest`를 검증·보존한다. 옛 R2 DTO의 `combined_ratio/needs_manual_check`와 억지로 혼합하지 않는다.
+- `input_manifest`는 실제 전달한 신규 신호·이번 구조화 사실·원문 출처 버전을 보존한다. **계산 도구가 DB에서 읽은 재무 스냅샷·과거 신호의 실제 입력 기록은 R4 저장 경계에서 추가 보존해야 한다.** R2만으로 전체 재무 판정 재현이 완성된 것은 아니다.
+- API 근거는 `{kind:api, api, field, rcept_no, row_key, value, unit, period, basis, data_version}`를 사용하고 문서 quote/location을 만들지 않는다. 현재 R4 엔진의 API 근거 전달·저장은 별도 연결이 필요하다.
+- `source_chunks/chunks/text/body_text/raw_response/messages` 등 일시 본문은 영속 State에 넣기 전에 제거한다. 원문 해시와 정규화 버전이 없는 새 검색 결과는 확인 필요로 남긴다.
+
+### R4·R3 후속 연결 (R2 외부 담당)
+
+1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마를 실제 구현하고 위 R2 validator와 키를 맞춘다.
+2. R4 조립에서 새 bindings·카탈로그·모델·체크포인터를 주입한다. 현재 adapter가 자동으로 바뀐 것은 아니다.
+3. R4 dispatcher가 공개 분석 후 각 이용 조직의 review를 실행하고, 선점·lease·재시도·예산 장부를 관리한다.
+4. R4가 판정 최신성·업무 생성의 tenant·멱등성을 DB 트랜잭션으로 보장한다.
+5. R3가 검색 응답에 content_sha256·normalization_version을 제공한다. R4가 최종 검색 후 release와 실패 정리를 연결한다.
+6. R4 API·SSE가 공개 투영을 사용한다. 다른 담당 파일·규칙·의존성은 이번 R2 변경에서 수정하지 않는다.
+
+이 후속 연결이 없는 상태에서는 실제 전체 서비스 동작 완료를 주장하지 않는다.

@@ -4,6 +4,7 @@ import asyncio
 from agent.execution import current_execution, invoke_tool
 from agent.ports import AgentError
 from shared.schemas import ToolResponse
+from agent.evidence import retained_data
 
 
 def routes_for(state, bucket):
@@ -26,4 +27,6 @@ async def rule_call(deps, name, payload):
             return ToolResponse(ok=True, data=raw)
 
     # Reuse the same-input call budget and TIMEOUT recovery as every MCP call.
-    return await invoke_tool(BoundTools(), deps.harness, name, payload)
+    result = await invoke_tool(BoundTools(), deps.harness, name, payload)
+    # judge_stage validates transient source chunks locally before checkpointing.
+    return result if name == 'judge_stage' else retained_data(result)
