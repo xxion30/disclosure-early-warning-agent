@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api, errorMessage } from '../api/client'
+import { mockMode } from '../api/mock'
 import RunProgress from '../components/RunProgress.vue'
 import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -232,6 +233,7 @@ async function startRun() {
                 <span class="corp-mark" aria-hidden="true">{{ (r.corp_name || '-').slice(0, 1) }}</span>
                 <div class="corp-text">
                   <strong><RouterLink :to="{ name: 'alert-detail', params: { assessmentId: r.assessment_id } }" @click.stop>{{ r.corp_name || '-' }}</RouterLink> <small v-if="r.stock_code" class="code">{{ r.stock_code }}</small></strong>
+                  <RouterLink v-if="r.stock_code && (hasStage(r) || mockMode())" :to="{ name: 'risk-detail', params: { stockCode: r.stock_code } }" class="stock-link" @click.stop>종목 위험 상태 보기</RouterLink>
                   <span class="disclosure-title">{{ r.title || r.rcept_no }}</span>
                   <span class="sub">공시 {{ r.filed_at || '-' }} · 처리 {{ formatTime(r.created_at) }}</span>
                 </div>
@@ -300,6 +302,7 @@ async function startRun() {
   .level-cell, .customer-cell { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .alert-list td { padding-top: 4px; padding-bottom: 4px; }
 }
+.stock-link { align-self: flex-start; font-size: 13px; font-weight: 600; }
 @media (max-width: 540px) {
   .run-start { width: 100%; border-radius: var(--radius); }
   .run-start input { flex: 1 1 160px; }

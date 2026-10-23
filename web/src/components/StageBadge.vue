@@ -13,7 +13,7 @@ const props = defineProps({
   all: { type: Boolean, default: false },
 })
 
-const list = computed(() => stagesOf({ stage: props.stage, stages: props.stages }))
+const list = computed(() => stagesOf({ stage: props.stage, stages: props.stages, level: props.level }))
 const shown = computed(() => (props.all ? list.value : list.value.slice(0, 1)))
 const extra = computed(() => (props.all ? [] : list.value.slice(1)))
 const extraText = computed(() => extra.value.map((s) => STAGES[s].label).join(', '))

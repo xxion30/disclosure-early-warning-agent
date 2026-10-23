@@ -2,13 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
+import { mockMode } from '../api/mock'
 import AlertSummary from '../components/AlertSummary.vue'
 import RunProgress from '../components/RunProgress.vue'
 import StageBadge from '../components/StageBadge.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { formatTime, isAlertRow, isUnscored, MAIN_PATH, stageText, STATUS_GUIDE } from '../labels'
+import { formatTime, isAlertRow, isUnscored, MAIN_PATH, stagesOf, stageText, STATUS_GUIDE } from '../labels'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
 
@@ -139,6 +140,10 @@ const customerState = computed(() => {
                 이번 공시 DART 원문
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8" /></svg>
               </a>
+              <!-- 종목 단위 위험 상태(새 단계)가 있을 때만 종목 상세로 보낸다 -->
+              <RouterLink v-if="alert.company.stock_code && (stagesOf(alert).length || mockMode())" :to="{ name: 'risk-detail', params: { stockCode: alert.company.stock_code } }">
+                종목 위험 상태 보기
+              </RouterLink>
             </p>
           </div>
         </div>

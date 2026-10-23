@@ -54,6 +54,9 @@ export const ALERT_STAGES = ['RED', 'ORANGE', 'YELLOW', 'COMPOSITE']
 export function stagesOf(row) {
   if (!row) return []
   const list = Array.isArray(row.stages) && row.stages.length ? row.stages : row.stage ? [row.stage] : []
+  // 새 단계 칸이 생기기 전에 만든 평가는 stage가 기본값 NONE이고 예전 등급(level)만 의미가 있다.
+  // 서버 정렬(api/routes/alerts.py)과 같이, NONE인데 예전 경보 등급이 있으면 단계가 없는 것으로 본다
+  if (list.length === 1 && list[0] === 'NONE' && ['Critical', 'High', 'Medium'].includes(row.level)) return []
   return [...new Set(list.filter((s) => STAGES[s]))].sort((a, b) => STAGES[a].order - STAGES[b].order)
 }
 export const hasStage = (row) => stagesOf(row).length > 0
@@ -62,6 +65,40 @@ export const hasStage = (row) => stagesOf(row).length > 0
 export function stageText(text) {
   if (!text) return text
   return text.replace(/\b(RED|ORANGE|YELLOW|COMPOSITE|WATCH|NONE)\b/g, (code) => STAGES[code].label)
+}
+
+// 종목 상세의 위험 항목 분류 (API items[].group). 점수는 보여주지 않는다
+export const ITEM_GROUPS = {
+  RED: { label: '즉시', name: '확정 악재' },
+  ORANGE: { label: '사건', name: '사건성 공시' },
+  YELLOW: { label: '재무', name: '재무 지표' },
+}
+// 판정에 필요한데 원문에서 찾지 못한 값(API items[].missing)의 이름. 규칙 파일(risk_engine/rules.yaml)의 키를 PB가 읽는 말로
+export const MISSING_LABELS = {
+  opinion: '감사의견', going_concern: '계속기업 불확실성 여부', impairment_pct: '자본잠식률',
+  negative_years: '영업현금흐름 적자 연수', interest_coverage: '이자보상배율', debt_to_cash_pct: '현금 대비 단기채무 비율',
+  rate_increased: '금리 인상 여부', maturity_shortened: '만기 단축 여부', purpose_mismatch: '자금 용도 불일치 여부',
+  changed_within_window: '최근 최대주주 변경 여부', ratio_to_equity_pct: '자기자본 대비 비율', core_business: '핵심 사업 관련 여부',
+  loss_compensation: '결손 보전 목적 여부', reduction_ratio_pct: '감자 비율', ratio_pct: '발행 주식 대비 비율',
+  third_party: '제3자배정 여부', payment_delayed_or_failed: '납입 지연·실패 여부', refixing: '전환가액 조정(리픽싱) 조항 여부',
+  early_redemption: '조기상환 조항 여부', core_asset_sale: '핵심 자산 매각 여부', obligation_to_equity_pct: '자기자본 대비 의무 금액',
+  unfavorable_ratio: '불리한 교환 비율 여부', distressed_transfer: '부실 이전 여부', urgent_funding: '긴급 자금 조달 여부',
+  negotiation_failed: '협상 결렬 여부', normalized: '정상화 여부', distress_or_violation: '부실·위반 사유 여부',
+}
+export const missingLabel = (key) => MISSING_LABELS[key] || key
+
+/** 위험 항목의 지금 상태 (API items[].active·resolved). 숫자 대신 말로 */
+export function itemStatus(it) {
+  if (it.resolved) return { text: '해소됨', tone: 'ok' }
+  if (it.active) return { text: '지금 판정에 반영', tone: 'info' }
+  return { text: '반영 안 함 (기간 지남 등)', tone: 'muted' }
+}
+// 공시 타임라인 종류
+export const TIMELINE_KINDS = {
+  risk: '위험 공시',
+  correction: '정정',
+  resolution: '해소',
+  other: '공시',
 }
 
 /** 경보(알림 대상)인가. 단계가 있으면 단계로, 없으면 예전 등급(High·Critical)으로 판단 */

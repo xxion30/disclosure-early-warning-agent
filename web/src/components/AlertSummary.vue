@@ -15,7 +15,7 @@ const props = defineProps({
 
 const prev = computed(() => props.summary.previous)
 // 비교는 새 단계가 있으면 가장 심한 단계로, 없으면 예전 등급으로
-const nowKey = computed(() => stagesOf({ stage: props.stage, stages: props.stages })[0] || props.level)
+const nowKey = computed(() => stagesOf({ stage: props.stage, stages: props.stages, level: props.level })[0] || props.level)
 const prevKey = computed(() => (prev.value ? stagesOf(prev.value)[0] || prev.value.level : null))
 const changed = computed(() => prev.value && prevKey.value !== nowKey.value)
 const filing = computed(() => props.summary.this_filing)
@@ -40,7 +40,7 @@ const tone = computed(() => (filing.value.fixed_level ? 'bad' : filing.value.ite
 
     <div class="changes">
       <div class="change">
-        <span class="change-label">{{ stagesOf({ stage, stages }).length ? '단계' : '등급' }}</span>
+        <span class="change-label">{{ stagesOf({ stage, stages, level }).length ? '단계' : '등급' }}</span>
         <div class="change-value">
           <template v-if="changed"><StageBadge :stage="prev.stage" :stages="prev.stages" :level="prev.level" /><span class="arrow" aria-hidden="true">→</span></template>
           <StageBadge :stage="stage" :stages="stages" :level="level" />
