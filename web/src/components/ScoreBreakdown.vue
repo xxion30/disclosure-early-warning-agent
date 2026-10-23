@@ -1,4 +1,5 @@
 <script setup>
+import EvidenceCitation from './EvidenceCitation.vue'
 // 위험 항목 표. 점수 숫자는 보여 주지 않는다(서버가 응답에서 뺀다). 항목은 점수 높은 순으로 이미 정렬돼 온다.
 // 항목 모양: {group: BASE|A|B, item, points, weight, raw_points, base_points, extra_points, extras[],
 //            filed_at, rcept_no, fixed_level, evidence[], note, from_history, reasons[]}
@@ -12,15 +13,13 @@ const props = defineProps({
 })
 
 const GROUPS = {
+  RED: { label: '즉시 경보', hint: '즉시 확인이 필요한 위험 사건', cls: 'g-a' },
+  ORANGE: { label: '사건 경보', hint: '공시에서 확인한 사건 위험', cls: 'g-b' },
+  YELLOW: { label: '재무 경보', hint: '공시 재무 지표의 위험', cls: 'g-base' },
   BASE: { label: '재무 상태', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
   A: { label: '확정 악재', hint: '점수와 상관없이 등급 고정', cls: 'g-a' },
   B: { label: '숨은 신호', hint: '공시에서 찾은 위험 신호', cls: 'g-b' },
 }
-
-const num = (v) => (v == null || Number.isNaN(Number(v)) ? null : Number(Number(v).toFixed(2)))
-const pct = (w) => `${Math.round(Number(w) * 100)}%`
-const dartUrl = (rcept) => `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${rcept}`
-const short = (s, n = 90) => (s && s.length > n ? `${s.slice(0, n)}…` : s)
 
 const rows = computed(() =>
   (props.reasons || []).map((r) => {
@@ -79,18 +78,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
         </td>
         <td class="evidence">
           <!-- 발표 때 근거가 바로 보이도록 첫 인용은 펼쳐 두고, 나머지는 접는다 -->
-          <figure v-if="r.evidence.length" class="quote">
-            <blockquote :title="r.evidence[0].quote">“{{ short(r.evidence[0].quote, 140) }}”</blockquote>
-            <figcaption>
-              <a v-if="r.rcept" :href="dartUrl(r.rcept)" target="_blank" rel="noopener" class="src">DART 원문 {{ r.rcept }}</a>
-              <span v-if="r.evidence[0].source" class="chip">{{ r.evidence[0].source }}</span>
-            </figcaption>
-            <details v-if="r.evidence.length > 1 || r.evidence[0].quote?.length > 140">
-              <summary>{{ r.evidence.length > 1 ? `인용 ${r.evidence.length - 1}개 더 보기` : '전체 문장 보기' }}</summary>
-              <blockquote v-if="r.evidence[0].quote?.length > 140">“{{ r.evidence[0].quote }}”</blockquote>
-              <blockquote v-for="(e, j) in r.evidence.slice(1)" :key="j">“{{ e.quote }}”<small> · {{ e.source }}</small></blockquote>
-            </details>
-          </figure>
+          <div v-if="r.evidence.length"><EvidenceCitation v-for="(e,j) in r.evidence" :key="j" :evidence="e" /></div>
           <span v-else class="muted">근거 인용 없음</span>
         </td>
       </tr>
@@ -99,7 +87,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
       <tr>
         <td colspan="2">
           <span v-if="fixedLevels.length" class="calc fixed-note">확정 악재가 있어 등급이 {{ fixedLevels[0] }}(으)로 고정됨</span>
-          <span v-else class="calc">서로 다른 신호 3종류 이상 → 조합 규칙으로 등급 한 단계 상향</span>
+          <span v-else class="calc">여러 위험 조건이 함께 확인됐습니다.</span>
         </td>
       </tr>
     </tfoot>

@@ -16,7 +16,7 @@ function readMode() {
   }
 }
 
-export const mockMode = () => readMode() === 'stages'
+export const mockMode = () => import.meta.env.DEV && readMode() === 'stages'
 
 let seq = 0
 const STAGE_LABELS = { RED: '즉시 경보', ORANGE: '사건 경보', YELLOW: '재무 경보', COMPOSITE: '복합 위험', WATCH: '관찰 중', NONE: '경보 없음' }

@@ -44,41 +44,51 @@ async def stop_queue(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if get_settings().PHASE1_RUNTIME_FACTORY and get_settings().QUEUE_ENABLED:
+    from contextlib import AsyncExitStack
+    settings = get_settings()
+    if settings.APP_ENV == 'production':
+        if len(settings.JWT_SECRET.encode()) < 32 or settings.JWT_SECRET == 'local-development-secret-change-before-sharing':
+            raise RuntimeError('운영 JWT_SECRET을 32바이트 이상으로 설정하세요.')
+        if settings.GRAPH_ADAPTER != 'real' or settings.PHASE1_RUNTIME_FACTORY != 'agent.hosted:build_runtime' or settings.RAG_INDEX_MODE != 'ephemeral':
+            raise RuntimeError('운영 환경에는 real Graph·hosted runtime·ephemeral 색인이 필요합니다.')
+    if settings.PHASE1_RUNTIME_FACTORY and settings.QUEUE_ENABLED:
         raise RuntimeError('Phase 1 DB 실행기에서는 QUEUE_ENABLED=false가 필요합니다.')
-    init_db()  # 테이블이 없으면 만든다. 데이터 적재는 scripts/data/seed_db.py (D)
+    init_db()
     app.state.queue = None
-    if get_settings().QUEUE_ENABLED:
-        await start_queue(app)  # RabbitMQ가 없으면 여기서 실패한다 — docker compose up -d rabbitmq
-    # Explicit injection only: R2 public/review ports may be configured by the host.
+    app.state.analysis_task = None
+    app.state.ready = False
     app.state.collect_dispatcher = None
-    if get_settings().COLLECT_DISPATCH_ENABLED:
-        from collector.jobs import dispatch_collection
-        app.state.collect_dispatcher = dispatch_collection
-    execution_cm=None
-    analysis_task=None
-    if get_settings().PHASE1_RUNTIME_FACTORY:
-        import importlib
-        from agent.adapters.assembly import build_dependencies
-        from agent.adapters.executors import open_executors
-        from api.worker.analysis import serve
-        module,name=get_settings().PHASE1_RUNTIME_FACTORY.rsplit(':',1)
-        factory=getattr(importlib.import_module(module),name)
-        deps=await build_dependencies()
-        execution_cm=open_executors(factory,deps,get_settings().CHECKPOINT_DB)
-        ports=await execution_cm.__aenter__()
-        app.state.review_executor=ports.review
-        analysis_task=asyncio.create_task(serve(ports.public),name='db-analysis-worker')
     try:
-        yield
+        async with AsyncExitStack() as stack:
+            if settings.QUEUE_ENABLED:
+                await start_queue(app)
+            if settings.COLLECT_DISPATCH_ENABLED:
+                from collector.jobs import dispatch_collection
+                app.state.collect_dispatcher = dispatch_collection
+            if settings.PHASE1_RUNTIME_FACTORY:
+                import importlib
+                from agent.adapters.assembly import build_dependencies
+                from agent.adapters.executors import open_executors
+                from api.worker.analysis import serve
+                module, name = settings.PHASE1_RUNTIME_FACTORY.rsplit(':', 1)
+                factory = getattr(importlib.import_module(module), name)
+                deps = await build_dependencies()
+                ports = await stack.enter_async_context(open_executors(factory, deps, settings.CHECKPOINT_DB))
+                app.state.review_executor = ports.review
+                app.state.analysis_task = asyncio.create_task(serve(ports.public), name='db-analysis-worker')
+            app.state.ready = True
+            try:
+                yield
+            finally:
+                app.state.ready = False
+                if app.state.analysis_task is not None:
+                    app.state.analysis_task.cancel()
+                    from contextlib import suppress
+                    with suppress(asyncio.CancelledError):
+                        await app.state.analysis_task
     finally:
-        if analysis_task is not None:
-            analysis_task.cancel()
-            from contextlib import suppress
-            with suppress(asyncio.CancelledError):await analysis_task
-        if execution_cm is not None:await execution_cm.__aexit__(None,None,None)
-    await stop_queue(app)
-    await close_graph_adapter()  # 체크포인트 DB 연결 정리
+        await stop_queue(app)
+        await close_graph_adapter()
 
 
 app = FastAPI(title="공시 조기경보 PB API", lifespan=lifespan)
@@ -106,6 +116,22 @@ app.include_router(customers.router)
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/ready")
+def ready() -> dict:
+    from sqlalchemy import text
+    from shared.db import get_session
+    from fastapi import HTTPException
+    task = getattr(app.state, 'analysis_task', None)
+    if not getattr(app.state, 'ready', False) or (task is not None and task.done()):
+        raise HTTPException(503, '서비스 실행기를 확인해야 합니다.')
+    try:
+        with get_session() as db:
+            db.execute(text('SELECT 1'))
+    except Exception:
+        raise HTTPException(503, '데이터베이스 연결을 확인해야 합니다.')
+    return {'ok': True}
 
 
 from fastapi import Request

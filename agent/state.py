@@ -5,6 +5,7 @@ Additional fields are A-local; see docs/contracts/agent.md before binding other 
 from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from shared.financial_evidence import FinancialEvidence
 
 
 class StrictModel(BaseModel):
@@ -45,7 +46,7 @@ class FactsOutput(StrictModel):
 class ExplanationItem(StrictModel):
     breakdown_index: int = Field(ge=0)
     explanation: str = Field(min_length=1)
-    evidence: list[Evidence | APIEvidence] = Field(min_length=1)
+    evidence: list[Evidence | APIEvidence | FinancialEvidence] = Field(min_length=1)
 
 
 class ExplanationOutput(StrictModel):
@@ -139,6 +140,7 @@ class AgentState(TypedDict, total=False):
     phase1: bool
     risk_routes: list[dict[str, Any]]
     flags: list[dict[str, Any]]
+    numeric_facts: list[dict[str, Any]]
     red_result: dict[str, Any]
     orange_result: dict[str, Any]
     yellow_result: dict[str, Any]
@@ -162,7 +164,7 @@ def initial_state(rcept_no: str, trace_id: str) -> AgentState:
     return AgentState(
         disclosure={"rcept_no": rcept_no}, status="RUNNING", trace_id=trace_id,
         retry_count=0, tool_call_counts={}, fact_attempts=0, draft_attempts={},
-        signals=[], evidence=[], affected_customers=[], drafts={}, guardrail_flags=[],
+        signals=[], evidence=[], numeric_facts=[], affected_customers=[], drafts={}, guardrail_flags=[],
         approval={}, decisions={}, customer_tasks={}, task_ids=[], manual_drafts=[],
         rewrite_customers=[], error=None,
     )

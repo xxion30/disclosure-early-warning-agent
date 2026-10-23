@@ -111,7 +111,7 @@ async function runDrafts() {
     message.value = '안내문 초안을 만들었어요.'
   } catch (err) {
     const st = err.response?.status
-    error.value = st === 503 ? '안내문 초안 생성기가 아직 연결되지 않았어요. AI 흐름(R2) 연결 뒤에 사용할 수 있어요.' : errorMessage(err)
+    error.value = st === 503 ? '안내문 초안 생성을 완료하지 못했어요. 실행 상태와 모델 연결을 확인해 주세요.' : errorMessage(err)
   } finally {
     running.value = false
     await load({ keepError: true })

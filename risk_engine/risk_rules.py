@@ -63,6 +63,10 @@ def clean_evidence(items, *, allow_api=False) -> list[dict]:
     """근거 {source, quote, rcept_no, location}만 남긴다. 모양이 틀린 항목은 버린다(지어내지 않는다)."""
     out = []
     for e in items or []:
+        if allow_api and isinstance(e, dict) and e.get('kind') == 'financial':
+            from shared.financial_evidence import FinancialEvidence
+            out.append(FinancialEvidence.model_validate(e).model_dump())
+            continue
         if allow_api and isinstance(e, dict) and e.get('kind') == 'api':
             from shared.facts import API_REFERENCE_KEYS
             if (all(k in e for k in API_REFERENCE_KEYS)

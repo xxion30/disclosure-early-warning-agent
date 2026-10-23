@@ -49,7 +49,7 @@ def main() -> None:
         line(False, "mcp 패키지 없음", "`uv sync`")
     node, npm = shutil.which("node"), shutil.which("npm")
     line(bool(node and npm), "Node.js / npm (화면용)" + ("" if node else " 없음"), "https://nodejs.org 에서 설치하거나 --no-web으로 화면 없이 돌린다")
-    line((ROOT / "web" / "node_modules").exists() or None, "web/node_modules" + ("" if (ROOT / 'web' / 'node_modules').exists() else " 없음 (run_stack이 npm install을 한다)"))
+    line((ROOT / "web" / "node_modules").exists() or None, "web/node_modules" + ("" if (ROOT / 'web' / 'node_modules').exists() else " 없음 (run_stack이 npm ci를 한다)"))
 
     print("\n[.env]")
     env_file = ROOT / ".env"
@@ -59,43 +59,35 @@ def main() -> None:
 
         s = get_settings()
     except Exception as e:  # noqa: BLE001
-        line(False, f".env 읽기 실패: {type(e).__name__}: {e}")
+        line(False, f".env 읽기 실패: {type(e).__name__}")
         s = None
     if s:
         line(bool(s.OPENAI_API_KEY) if real else None, "OPENAI_API_KEY" + ("" if s.OPENAI_API_KEY else " 비어 있음"), "진짜 모드에 필요하다 (임베딩·모델)")
         line(None, "ANTHROPIC_API_KEY " + ("있음 → 기본 모델 Claude" if s.ANTHROPIC_API_KEY else "없음 → OpenAI가 기본·대체 모델을 모두 맡는다"))
         line(None, "LANGSMITH_API_KEY " + ("있음 → trace 전송" if s.LANGSMITH_API_KEY else "없음 → trace 없이 실행 (증빙 캡처는 못 한다)"))
-        line(s.JWT_SECRET != "change-me" or None, "JWT_SECRET " + ("설정됨" if s.JWT_SECRET != "change-me" else "기본값(change-me) — 개발용으로는 괜찮다"))
+        line(len(s.JWT_SECRET.encode()) >= 32 if real else None, "JWT_SECRET 길이(32바이트 이상)", "scripts.ops.prepare_release로 비밀값을 생성해 환경 변수로 전달한다.")
         line(None, f"GRAPH_ADAPTER={s.GRAPH_ADAPTER} (run_stack이 모드에 맞춰 덮어쓴다)")
 
-    print("\n[데이터]")
-    line((ROOT / "data" / "disclosures").glob("*.json").__next__() is not None if any((ROOT / "data" / "disclosures").glob("*.json")) else False,
-         "data/disclosures/*.json (DART 공시 목록)", "git pull 후에도 없으면 D에게 확인 (scripts/data/fetch_dart.py)")
-    docs = len(list((ROOT / "rag_docs").rglob("*.md")))
-    line(docs > 0, f"rag_docs/ 원문 {docs}건", "git pull")
-    db = ROOT / "data" / "app.db"
-    if db.exists():
+    print("\n[데이터·실행 연결]")
+    if s:
+        line(bool(s.DART_API_KEY) if real else None, "DART_API_KEY 설정 여부", ".env에 키를 설정한다. 값은 출력하지 않는다.")
         try:
-            c = sqlite3.connect(db)
-            n = c.execute("select count(*) from companies").fetchone()[0]
-            d = c.execute("select count(*) from disclosures").fetchone()[0]
-            a = c.execute("select count(*) from risk_assessments").fetchone()[0]
-            line(n > 0 and d > 0, f"data/app.db: 회사 {n}, 공시 {d}, 이미 처리한 평가 {a}", "`uv run python scripts/data/seed_db.py --reset`")
-            if a:
-                line(None, "이미 처리한 평가가 있다 → 같은 공시를 다시 실행하면 409. 처음부터 하려면 seed_db --reset 과 data/checkpoints.db 삭제")
-        except sqlite3.Error as e:
-            line(False, f"data/app.db 읽기 실패: {e}", "`uv run python scripts/data/seed_db.py --reset`")
-    else:
-        line(False, "data/app.db 없음", "`uv run python scripts/data/seed_db.py --reset`")
-    if real:
-        try:
-            from mcp_servers.rag import store
-
-            col = store.get_collection(store.DISCLOSURES)
-            ref = store.get_collection(store.REFERENCE)
-            line(col.count() > 0 and ref.count() > 0, f"data/chroma: 공시 조각 {col.count()}, 참고 문서 조각 {ref.count()}", "`uv run python -m mcp_servers.rag.ingest`")
-        except Exception as e:  # noqa: BLE001
-            line(False, f"data/chroma 색인 없음/불일치 ({type(e).__name__})", "`uv run python -m mcp_servers.rag.ingest` (설정을 바꿨다면 --reset)")
+            from sqlalchemy import inspect, text
+            from shared.db import get_engine
+            engine = get_engine()
+            tables = set(inspect(engine).get_table_names())
+            required = {'companies', 'disclosures', 'pbs', 'analysis_jobs', 'organization_reviews'}
+            line(required <= tables, "현재 DB의 서비스 테이블", "PostgreSQL: uv run alembic upgrade head / SQLite: run_stack 실행 시 스키마 준비")
+            if required <= tables:
+                with engine.connect() as connection:
+                    users = connection.execute(text('SELECT count(*) FROM pbs')).scalar_one()
+                    holdings = connection.execute(text('SELECT count(*) FROM holdings')).scalar_one()
+                line(users > 0, f"로그인 계정 {users}개", "scripts.ops.bootstrap_admin으로 초기 계정 생성")
+                line(holdings > 0, f"보유 내역 {holdings}개", "고객·보유 내역을 등록해야 종목 수집이 가능하다.")
+        except Exception as exc:
+            line(False, f"DB 연결 확인 실패 ({type(exc).__name__})", "DB_URL과 DB 서버 실행 상태를 확인한다. 기존 DB를 reset하지 않는다.")
+        line(None, "실제 실행: hosted Graph + DB 작업 실행기 + DART 임시 색인 (run_stack에서 설정)")
+        line(None, "키 유무만 검사했다. 실제 API 유효성 및 종단 분석 성공은 별도 검증한다.")
 
     print("\n[포트] (이미 쓰고 있으면 서버가 뜨지 않는다)")
     for port, name in PORTS.items():

@@ -94,6 +94,69 @@ def test_changed_input_cannot_publish(seeded_db):
         assert db.scalar(select(PublicAssessment)) is None
 
 
+def test_daily_recalculation_keeps_equivalent_review_and_does_not_requeue_forever(seeded_db):
+    from shared.analysis import enqueue_recalculations
+    from mcp_servers.business.reviews import matching_review
+    aid = publish()
+    with db_module.get_session() as db:
+        public = db.get(PublicAssessment, aid)
+        review = db.scalar(select(OrganizationReview).where(OrganizationReview.assessment_id == aid))
+        rid, original_version = review.review_id, public.state_version
+        claimed = claim_review(db, rid, review.tenant_id)
+        customers = db.scalars(select(Customer.customer_id).join(Holding,
+            Holding.customer_id == Customer.customer_id).where(Holding.stock_code == '001570')).all()
+        save_drafts(db, rid, review.tenant_id, claimed.lease_token,
+            {cid:'{고객명}님, 공시 내용을 확인하고 PB와 상담해 주세요.' for cid in customers})
+        jobs = enqueue_recalculations(db, '2025-03-22', public.rules_digest)
+        assert len(jobs) == 1 and jobs[0].as_of == '2025-03-22'
+        assert enqueue_recalculations(db, '2025-03-22', public.rules_digest) == []
+        job_id = jobs[0].job_id
+    result = calculate_risk_score(public.corp_code, public.result['signals'], '2025-03-22')['data']
+    with db_module.get_session() as db:
+        job = claim(db)
+        assert job.job_id == job_id
+        fresh = complete_analysis(db, job.job_id, job.lease_token, result, '공시 근거를 확인해 주세요.')
+        assert fresh.state_version == original_version
+        assert matching_review(db, review.tenant_id, fresh).review_id == rid
+        assert db.get(OrganizationReview, rid).status == 'WAITING_APPROVAL'
+        assert enqueue_recalculations(db, '2025-03-22', fresh.rules_digest) == []
+
+
+def test_backfill_publishes_history_without_rolling_back_current_state(seeded_db):
+    from tests.wiring.test_unified_facts_mapping import inputs
+    from agent.adapters.unified import prepare_signals
+    from shared.facts import store_facts
+    from shared.analysis import enqueue_recalculations
+    from shared.models import Signal
+    payload = inputs()
+    receipt = payload['disclosure']['rcept_no']
+    with db_module.get_session() as db:
+        store_facts(db, receipt, payload['structured_facts'])
+    aid = publish()
+    with db_module.get_session() as db:
+        public = db.get(PublicAssessment, aid)
+        previous_version = public.state_version
+        review = db.scalar(select(OrganizationReview).where(OrganizationReview.assessment_id == aid))
+        rid = review.review_id
+        mark_ready(db, receipt)
+    historical = calculate_risk_score(public.corp_code, prepare_signals(payload), payload['as_of'])['data']
+    with db_module.get_session() as db:
+        job = enqueue(db, receipt, payload['as_of'], historical['rules_digest'])
+        claimed = claim(db)
+        assert claimed.job_id == job.job_id
+        old = complete_analysis(db, job.job_id, claimed.lease_token, historical, '과거 공시 근거를 확인해 주세요.')
+        assert old.state_version == 0
+        state = db.get(RiskState, public.corp_code)
+        assert state.public_assessment_id == aid and state.state_version == previous_version
+        assert db.get(OrganizationReview, rid).status == 'PENDING'
+        assert db.scalar(select(Signal).where(Signal.rcept_no == receipt)) is not None
+        with pytest.raises(ValueError, match='최신'):
+            create_review(db, review.tenant_id, old.assessment_id)
+        # Same-day history changes must still trigger a current-day reassessment.
+        pending = enqueue_recalculations(db, DAY, public.rules_digest)
+        assert len(pending) == 1 and pending[0].rcept_no == RCEPT
+
+
 def add_second_org(db,stock):
     db.add(Tenant(tenant_id='org-two',name='org-two'))
     db.add(PB(pb_id='pb-two',tenant_id='org-two',name='fixture',email='pb-two@example.invalid',password_hash='unused'));db.flush()

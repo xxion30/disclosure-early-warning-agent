@@ -139,7 +139,7 @@ get_disclosure_facts(rcept_no)의 정식 응답은 `{ok,data:{availability,rcept
 
 공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 structured_facts/facts_hash 및 호환 필드는 null이다. 실패 여부를 추측하거나 facts=[]로 바꾸지 않는다. 저장된 정상 빈 목록은 AVAILABLE + structured_facts.facts=[]로 구분한다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
 
-R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번 접수번호의 저장 payload를 같은 규칙으로 해시한 값이다. input_hash(전체 분석 입력) 및 원문 content_hash와 구분한다. R2 factory는 `context.execution_context`를 runtime.start(rcept_no, context=...)에 전달한다. 이 매핑은 R4 adapter가 만든 공개 ExecutionContext이며 facts_version을 명시한다. 최신 DB 값으로 스냅샷 버전을 덮어쓰지 않는다. UNAVAILABLE은 facts_version=null이며 R2에서 수동 확인/원문 분석 경로를 별도로 결정해야 한다.
+R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번 접수번호의 저장 payload를 같은 규칙으로 해시한 값이다. input_hash(전체 분석 입력) 및 원문 content_hash와 구분한다. R2 factory는 `context.execution_context`를 runtime.start(rcept_no, context=...)에 전달한다. 이 매핑은 R4 adapter가 만든 공개 ExecutionContext이며 facts_version을 명시한다. 최신 DB 값으로 스냅샷 버전을 덮어쓰지 않는다. UNAVAILABLE은 facts_version=null이며 아래 전체 통합 결정에 따라 원문 분석으로 이어진다.
 
 수집기의 전체 mark_ready 인계는 유지한다. enqueue_ready는 이번 변경에서 선별하지 않는다. 자동 분석 제외 기준은 R1과 합의 후 별도로 구현하며, structured_facts NULL만으로 제외하거나 미분석 건을 성공 처리하지 않는다.
 
@@ -148,9 +148,17 @@ UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한�
 본문 삭제와 공개 분석 완료 기록은 분리한다. 새 작업 완료는 공개 판정 저장과 processed_at 갱신을 같은 트랜잭션에서 수행한다. MANUAL_CHECK는 성공 processed_at을 쓰지 않는다. 구형 purge는 모든 legacy 호출자 전환 전까지 호환용으로만 유지하며 새 실행 경로는 사용하지 않는다.
 # R4 hosted 런타임 연결 (2026-10-23)
 
-- `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`일 때 R4 조립이 실제 `UnifiedBindings`를 주입한다. 구형 `Phase1Model/EvidenceTools`는 이 경로에서 사용하지 않는다. R2 Graph와 수집기는 수정하지 않는다.
-- 텍스트 조건은 YAML의 flags/values/zero_if에서 지정하고 수치값은 `structured_facts`의 확정된 필드만 매핑한다. 비율 단위는 `%`를 검증하며 다중 행·상충 값·필수 수치 누락은 수동 확인한다. 수치 추측과 결측의 0/false 대체는 하지 않는다.
-- 현재 승인된 수치 매핑은 유상증자 `issue_ratio_common_pct→ratio_pct`, `third_party_allocation→third_party`, 감자 `reduction_ratio_common_pct→reduction_ratio_pct`다. 소송·양수도·풋백옵션의 자기자본 대비 비율은 R3 확정 사실이 없으면 수동 확인한다. 재무 지표는 기존 DB 스냅샷으로만 계산한다.
+## 전체 서비스 통합 결정 (2026-10-24, 사용자 승인)
+
+- 구조화 사실 UNAVAILABLE은 원문 경로로 진행한다. 작업에 고정된 facts_version이 null인 경우에만 허용하며, 정상 빈 사실 AVAILABLE과 구분한다. 원문 근거가 없으면 수동 확인한다.
+- 재무 근거는 문서 quote나 항목 API 사실로 위장하지 않는다. `kind:financial`에 기업·접수번호·기간·연결/개별·정정 버전·지표·실제 지표값·원천 해시를 보존한다. `verify_financial_evidence(corp_code, as_of, evidence[])`가 DB 스냅샷과 대조한다. 재무 지표 계산은 수집기, 위험 점수는 규칙 엔진이 계속 맡는다.
+- 과거 API 근거는 해당 접수번호의 facts 응답과 검증한다. 현재 공시의 사실 목록에 억지로 대조하지 않는다.
+
+- `PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime`일 때 R4 조립이 실제 `UnifiedBindings`를 주입한다. 구형 `Phase1Model/EvidenceTools`는 이 경로에서 사용하지 않는다. 이번 전체 통합 작업에서는 사용자 승인으로 Graph·수집기 연결도 함께 보완했다.
+- 텍스트 조건은 YAML의 flags/values/zero_if에서 지정하고 수치값은 `structured_facts`의 확정된 필드 또는 원문에 직접 적힌 백분율을 검증해 매핑한다. 비율 단위는 `%`를 검증하며 다중 행·상충 값·필수 수치 누락은 수동 확인한다. 수치 추측과 결측의 0/false 대체는 하지 않는다.
+- 현재 승인된 수치 매핑은 유상증자 `issue_ratio_common_pct→ratio_pct`, `third_party_allocation→third_party`, 감자 `reduction_ratio_common_pct→reduction_ratio_pct`다. 소송·양수도·풋백옵션의 자기자본 대비 비율은 원문에 해당 비율과 %가 직접 기재돼 인용이 검증된 경우만 보완할 수 있다. 금액을 나눠 비율을 추정하지 않으며 API/원문이 상충하거나 필요한 값이 없으면 수동 확인한다. 재무 지표는 기존 DB 스냅샷으로만 계산한다.
 - API 근거는 API/field/receipt/row/value/unit/period/basis/data_version을 보존하고 계산 도구가 저장된 PRESENT 사실과 대조한다. 과거 API 근거도 해당 접수번호의 저장본으로 검증한다. 문서 인용문을 만들어 대신하지 않는다.
 - 공개 분석·조직별 초안은 각각 작업/검토 ID에 누적 예산을 저장한다. 호출 전에 소비량을 기록하고 재선점·재작성 버전 변경에도 초기화하지 않는다. 임대가 바뀐 실행자의 기록은 거절한다. PB 승인 대기 시간은 실행 시간에서 제외한다.
-- 구조화 사실 UNAVAILABLE의 원문 fallback은 R2 후속 연결 사항이다. 현재 수동 확인을 유지하며 운영 설정만으로 해당 경로가 완성됐다고 보지 않는다.
+- UNAVAILABLE 원문 경로와 재무/과거 근거 검증은 통합 시험으로 확인했다. 유효한 공급자 키를 통한 실제 종단 호출·브라우저 확인 완료 여부는 통합 로그를 따른다.
+- 재무 검증 응답은 `{evidence: [...]}`이며 각 항목은 `kind, corp_code, rcept_no, period, basis, revision, indicator, values, source_hash`다. `values`는 스냅샷의 지표 detail이고 `source_hash`는 해당 식별자·지표·원천 자료를 함께 고정한 해시다. 저장본과 정확히 일치해야 한다.
+- 날짜·규칙 변경은 새 분석 작업으로 평가한다. 같은 state_version의 재평가는 조직별 검토를 재사용한다. 실제 단계·근거·값·결측·규칙 변경으로 state_version이 달라지면 기존 미완료 검토를 종료한다. 알림 버전, 판정 버전, 검토 버전은 서로 구분한다.

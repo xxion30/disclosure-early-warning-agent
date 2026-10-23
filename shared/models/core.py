@@ -32,6 +32,7 @@ class Disclosure(Base):
     event_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     event_started_at: Mapped[str | None] = mapped_column(String, nullable=True)
     original_rcept_no: Mapped[str | None] = mapped_column(String, nullable=True)
+    event_link_evidence: Mapped[list | None] = mapped_column(JSON, nullable=True)
     structured_facts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     analysis_ready_at: Mapped[str | None] = mapped_column(String, nullable=True)
     input_version: Mapped[str | None] = mapped_column(String, nullable=True)

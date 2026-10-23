@@ -1,5 +1,7 @@
 # Agent 계약 — R2 구현·통합 기준
 
+> 전체 통합(2026-10-24): UNAVAILABLE 사실은 pinned facts_version이 null일 때 원문 분석으로 이어진다. numeric_facts는 원문에 직접 기재된 백분율과 검증 인용만 허용하며 모델 계산은 금지한다. financial 근거는 스냅샷 식별자·실제 값·source_hash를 verify_financial_evidence로 대조한다. 과거 API 근거는 각 접수번호의 사실을 따로 검증한다. 공개 판정과 조직별 초안·승인은 hosted runtime/DB 경로를 사용한다.
+
 작성일: 2026-10-23 · 담당: R2 윤찬웅 · 검토: R3·R4
 
 > R2 측에서 채택한 구현 기준이다. 타 역할에 해당하는 변경은 담당자가 검토·반영한다. 문서 작성은 코드 구현·통합 검증 완료를 뜻하지 않는다. 기존 CLAUDE.md·업무 카드·R1 정책을 유지한다.

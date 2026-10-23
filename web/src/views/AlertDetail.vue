@@ -7,6 +7,7 @@ import AlertSummary from '../components/AlertSummary.vue'
 import RunProgress from '../components/RunProgress.vue'
 import StageBadge from '../components/StageBadge.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
+import EvidenceCitation from '../components/EvidenceCitation.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
 import { formatTime, isAlertRow, isUnscored, MAIN_PATH, stagesOf, stageText, STATUS_GUIDE } from '../labels'
@@ -31,6 +32,7 @@ async function load() {
 
 // 지난 진행 이벤트를 그리고, 아직 실행 중이면 SSE로 이어 받는다
 async function loadProgress() {
+  if (alert.value.review_backend === 'organization') { hasRunHistory.value = false; return }
   try {
     const run = await api.getRun(alert.value.rcept_no)
     hasRunHistory.value = true
@@ -62,8 +64,8 @@ const evidence = computed(() => {
   const fromDisclosure = (alert.value?.evidence || []).map((e) => ({ ...e, rcept_no: e.rcept_no || alert.value?.rcept_no, rank: 1 }))
   const quotes = [...fromReasons, ...fromDisclosure].sort((a, b) => a.rank - b.rank) // 같은 순위 안에서는 서버 순서 유지
   return quotes.filter((e) => {
-    if (!e.quote) return false
-    const key = `${e.source}|${e.rcept_no}|${e.quote}`
+    if (!e.quote && !['api','financial'].includes(e.kind)) return false
+    const key = JSON.stringify(e)
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -149,16 +151,15 @@ const customerState = computed(() => {
         </div>
       </div>
       <p class="explanation"><strong>핵심 사유</strong><br />{{ unscored ? '위험 평가를 완료하지 못했어요.' : keyReason }}</p>
-      <figure v-if="primaryEvidence" class="quote">
-        <blockquote>“{{ primaryEvidence.quote }}”</blockquote>
-        <figcaption>
-          <span v-if="primaryEvidence.source" class="chip strong">{{ primaryEvidence.source }}</span>
-          <a v-if="evidenceUrl(primaryEvidence)" :href="evidenceUrl(primaryEvidence)" target="_blank" rel="noopener">{{ evidenceLinkLabel(primaryEvidence) }}</a>
-        </figcaption>
-      </figure>
+      <EvidenceCitation v-if="primaryEvidence" :evidence="primaryEvidence" />
       <p v-else class="notice warn">원문 인용을 확인할 수 없어요. 위의 "이번 공시 DART 원문"에서 직접 확인해 주세요.</p>
       <RouterLink
-        v-if="myPending.length && !impactSkipped && !alert.graph_error && alert.graph_state_available"
+        v-if="alert.review_backend === 'organization' && alert.review_id"
+        :to="{name:'org-review', params:{reviewId:alert.review_id}, query:{stock:alert.company.stock_code}}"
+        class="review-link"
+      >안내문 {{ alert.status === 'WAITING_APPROVAL' ? '검토' : '초안 및 검토 상태 확인' }}</RouterLink>
+      <RouterLink
+        v-else-if="myPending.length && !impactSkipped && !alert.graph_error && alert.graph_state_available"
         :to="{ name: 'draft-review', params: { assessmentId } }"
         class="review-link"
       >내 고객 안내문 검토 · {{ myPending.length }}명 승인 대기</RouterLink>
@@ -190,13 +191,7 @@ const customerState = computed(() => {
       <p class="explanation">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
       <p class="muted section-note">AI가 쓴 설명은 등급에 영향을 주지 않아요.</p>
       <div v-if="evidence.length > 1" class="quote-grid">
-        <figure v-for="(e, i) in evidence.slice(1)" :key="i" class="quote">
-          <blockquote>“{{ e.quote }}”</blockquote>
-          <figcaption>
-            <span v-if="e.source" class="chip strong">{{ e.source }}</span>
-            <a v-if="evidenceUrl(e)" :href="evidenceUrl(e)" target="_blank" rel="noopener">{{ evidenceLinkLabel(e) }}</a>
-          </figcaption>
-        </figure>
+        <EvidenceCitation v-for="(e, i) in evidence.slice(1)" :key="i" :evidence="e" />
       </div>
     </details>
 

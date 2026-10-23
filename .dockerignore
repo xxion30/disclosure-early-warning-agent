@@ -1,6 +1,11 @@
 .git
 .venv
 .env
+.env.*
+data/release.env
+data/imports
+.aws
+.codex
 __pycache__
 .pytest_cache
 web/node_modules

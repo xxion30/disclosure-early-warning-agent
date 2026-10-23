@@ -16,6 +16,9 @@ def require_assessment_access(db, pb, assessment):
 
 
 def require_legacy_runtime(pb):
+    from shared.config import get_settings
+    if get_settings().PHASE1_RUNTIME_FACTORY:
+        raise HTTPException(409, '현재 서비스는 /analysis/jobs와 조직별 /reviews 경로를 사용합니다.')
     # R2 runtime still keys checkpoints by rcept_no. No private execution across companies until migrated.
     if pb.tenant_id != 'default':
         raise HTTPException(503, '회사별 Agent 실행 연결이 필요합니다.')

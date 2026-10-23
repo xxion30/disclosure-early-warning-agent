@@ -24,7 +24,7 @@ from collector import repo
 from collector.backfill import backfill_start
 from collector.cursor import incremental_start, now_kst
 from collector.dart_client import DartBadRequest, DartClient
-from collector.facts import build_ambiguous_payload, build_payload, item_for, parse_original_date, split_title
+from collector.facts import build_ambiguous_payload, build_payload, item_for, parse_original_date, original_date_evidence, split_title
 from collector.indicators import compute_audit_opinion, compute_financial_indicators
 from collector.reports import PeriodicReport, parse_periodic_title
 from collector.watchlist import CorpCodeBook, Target, build_watchlist, resolve
@@ -110,13 +110,14 @@ def _compact(iso: str) -> str:
 
 
 async def _resolve_facts(client: DartClient, target: Target, rows: list[dict], pending: set[str], fetched_at: str) -> tuple[dict, dict, list[str]]:
-    """인계 전 공시 중 항목 API 대상의 구조화 사실을 만든다. 반환: ({접수번호: payload}, {정정 접수번호: 원공시 접수번호 후보}, 문제 목록).
+    """인계 전 공시 중 항목 API 대상의 구조화 사실을 만든다. 반환: ({접수번호: payload}, {정정 접수번호: 원공시 접수번호와 검증 근거}, 문제 목록).
 
     항목 API는 정정 체인의 최신본만 주고 기간 필터가 **체인의 최초 접수일**에 적용된다 (collector.md 3-3).
     그래서 정정 공시는 본문의 `최초제출일`로 최초 접수일을 알아내 그 날짜로 조회한다. 못 알아내면 사실을 만들지 않는다(NULL).
     """
     problems: list[str] = []
     anchors: dict[str, str] = {}  # 접수번호 → 체인의 최초 접수일(YYYY-MM-DD)
+    link_evidence = {}
     for r in rows:
         if r["rcept_no"] not in pending or not item_for(r["report_nm"]):
             continue
@@ -125,7 +126,9 @@ async def _resolve_facts(client: DartClient, target: Target, rows: list[dict], p
             anchors[r["rcept_no"]] = f"{r['rcept_dt'][:4]}-{r['rcept_dt'][4:6]}-{r['rcept_dt'][6:]}"
             continue
         try:
-            anchor = parse_original_date((await client.fetch_document(r["rcept_no"])).text)  # 원문은 읽기만 하고 저장하지 않는다
+            text = (await client.fetch_document(r["rcept_no"])).text
+            anchor = parse_original_date(text)
+            link_evidence[r["rcept_no"]] = original_date_evidence(text, r["rcept_no"])
         except DartBadRequest as e:  # 이 정정의 본문을 받을 수 없다: 영구 오류라 사실 없이 넘어간다 (일시 오류는 올라가 다음 실행이 다시 시도)
             problems.append(f"{r['rcept_no']}: 정정 본문을 받지 못함 ({e.status or 'HTTP'})")
             continue
@@ -153,14 +156,14 @@ async def _resolve_facts(client: DartClient, target: Target, rows: list[dict], p
                 pass
             else:
                 problems.append(f"{rcept}: 항목 API({api})가 최초 접수일 {anchor}에 행을 주지 않았다")
-    links: dict[str, str] = {}
+    links: dict[str, dict] = {}
     for rcept, anchor in anchors.items():
         row = next(x for x in rows if x["rcept_no"] == rcept)
         corrected, base = split_title(row["report_nm"])
-        if corrected:  # 정정이면 같은 제목의 최초 공시를 후보로 남긴다 (확정은 R4의 confirm_event_link)
+        if corrected:  # 정정이면 최초제출일·제목이 일치하는 유일한 원공시만 연결한다
             originals = [x["rcept_no"] for x in rows if split_title(x["report_nm"]) == (False, base) and x["rcept_dt"] == _compact(anchor)]
             if len(originals) == 1:
-                links[rcept] = originals[0]
+                links[rcept] = {'original_rcept_no': originals[0], 'evidence': [link_evidence[rcept]]}
     return payloads, links, problems
 
 
@@ -174,10 +177,11 @@ def _hand_off(session, pending: set[str], payloads: dict, links: dict) -> tuple[
             stored += 1
         except ValueError as e:  # pydantic ValidationError 포함: 사실을 만드는 코드의 버그이므로 숨기지 않고 남긴다
             problems.append(f"{rcept}: 구조화 사실 검증 실패 — {str(e).splitlines()[0][:120]}")
-    for correction, original in links.items():
+    from shared.events import confirm_event_link
+    for correction, link in links.items():
         row = session.get(Disclosure, correction)
-        if row is not None and row.original_rcept_no is None and row.event_id is None:
-            row.original_rcept_no = original
+        if row is not None and row.event_id is None:
+            confirm_event_link(session, correction, link['original_rcept_no'], link['evidence'])
     for rcept in sorted(pending):
         mark_ready(session, rcept)
     return stored, len(pending), problems

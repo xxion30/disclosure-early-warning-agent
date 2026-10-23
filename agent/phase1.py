@@ -6,7 +6,7 @@ pending integration contract at docs/contracts/agent.md before wiring real tools
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Literal
 
-from pydantic import Field, StrictBool, StrictStr, field_validator, model_validator
+from pydantic import Field, StrictBool, StrictStr, StrictFloat, StrictInt, field_validator, model_validator
 import re
 
 from agent.state import Evidence, StrictModel
@@ -45,6 +45,7 @@ class RiskFlag(StrictModel):
 
 class FlagsOutput(StrictModel):
     flags: list[RiskFlag]
+    numeric_facts: list['NumericFact'] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_flags(self):
@@ -52,6 +53,18 @@ class FlagsOutput(StrictModel):
         if len(keys) != len(set(keys)):
             raise ValueError("같은 항목·플래그 중복")
         return self
+
+
+class NumericFact(StrictModel):
+    """Directly quoted numeric facts only; financial/risk calculations stay code-owned."""
+    item: str
+    field: str
+    value: StrictFloat | StrictInt
+    unit: str
+    evidence: list[Evidence] = Field(min_length=1)
+
+
+FlagsOutput.model_rebuild()
 
 
 class StageResult(StrictModel):

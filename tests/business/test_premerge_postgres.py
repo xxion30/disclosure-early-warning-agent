@@ -51,3 +51,28 @@ def test_postgres_checkpointer_is_injected_and_round_trips(postgres):
             state=await builder.compile(checkpointer=saver).aget_state({'configurable':{'thread_id':'public:fixture'}})
             assert state.values['value']=='public-contract'
     asyncio.run(run())
+
+
+def test_different_jobs_of_one_issuer_cannot_run_concurrently(postgres):
+    Base.metadata.create_all(postgres)
+    with Session(postgres) as db:
+        db.add(Company(corp_code='issuer', stock_code='001570', name='protocol')); db.flush()
+        for receipt in ('20250321802001', '20250321802002'):
+            db.add(Disclosure(rcept_no=receipt, corp_code='issuer', title='protocol', filed_at='2025-03-21'))
+        db.flush()
+        for receipt in ('20250321802001', '20250321802002'):
+            mark_ready(db, receipt); enqueue(db, receipt, '2025-03-21', 'rules-protocol')
+        db.commit()
+    barrier = Barrier(2)
+    def take():
+        with Session(postgres) as db:
+            barrier.wait(timeout=10)
+            row = claim(db)
+            result = row.job_id if row else None
+            db.commit()
+            return result
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(take), pool.submit(take)]
+        assert sum(f.result(timeout=20) is not None for f in futures) == 1
+    with Session(postgres) as db:
+        assert claim(db) is None

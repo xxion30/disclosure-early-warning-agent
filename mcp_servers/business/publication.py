@@ -2,7 +2,7 @@
 from sqlalchemy import select
 from shared.analysis import locked_job, current_manifest, utcnow
 from shared.facts import facts_hash
-from shared.models import PublicAssessment, Disclosure, RiskAssessment
+from shared.models import PublicAssessment, Disclosure, RiskAssessment, Company, RiskState
 from risk_engine.loader import load_rules
 from risk_engine.states import update_state, score_fingerprint
 from shared.schemas import ScoreResult
@@ -49,22 +49,33 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
     # The active lease check, CAS, publication and completion are one transaction.
     disc=db.get(Disclosure,job.rcept_no)
     latest=max(d['filed_at'] for d in job.input_manifest['disclosures'])
-    state=update_state(db,job.corp_code,safe,latest,now=now.isoformat())
+    db.scalar(select(Company).where(Company.corp_code==job.corp_code).with_for_update())
+    current=db.scalar(select(RiskState).where(RiskState.corp_code==job.corp_code).with_for_update()
+                      .execution_options(populate_existing=True))
+    historical=bool(current and (job.as_of < (current.as_of or current.latest_filed_at[:10])
+                                 or latest < current.latest_filed_at))
+    # Backfill still publishes verified historical signals, but cannot roll the
+    # current state/approval token backwards. A final current-day job incorporates
+    # that history. Version 0 is deliberately not an approvable current decision.
+    state=None if historical else update_state(db,job.corp_code,safe,latest,now=now.isoformat())
+    state_version=state.state_version if state else 0
     legacy=RiskAssessment(corp_code=job.corp_code,rcept_no=job.rcept_no,stage=parsed.stage,
-        risk_state_version=state.state_version,score_fingerprint=None,total_score=parsed.total_score,
+        risk_state_version=state_version,score_fingerprint=None,total_score=parsed.total_score,
         level=parsed.level,combo_upgraded=parsed.combo_upgraded,reasons=safe.get('breakdown',[]),
         ai_explanation=explanation,status='DONE',created_at=now.isoformat())
     db.add(legacy);db.flush()
     assessment=PublicAssessment(assessment_id=job.job_key,job_id=job.job_id,corp_code=job.corp_code,
         rcept_no=job.rcept_no,as_of=job.as_of,input_hash=job.input_hash,rules_digest=job.rules_digest,
-        legacy_assessment_id=legacy.assessment_id,result=safe,explanation=explanation,state_version=state.state_version,created_at=now.isoformat())
+        legacy_assessment_id=legacy.assessment_id,result=safe,explanation=explanation,state_version=state_version,created_at=now.isoformat())
     db.add(assessment)
-    state.public_assessment_id=assessment.assessment_id
+    if state:
+        state.public_assessment_id=assessment.assessment_id
     # A changed public result invalidates pending private drafts; existing tasks are untouched.
     from shared.models import OrganizationReview
     from sqlalchemy import update
     from risk_engine.stages import ALERT_STAGES
-    previous=db.scalars(select(PublicAssessment.assessment_id).where(PublicAssessment.corp_code==job.corp_code)).all()
+    previous=db.scalars(select(PublicAssessment.assessment_id).where(PublicAssessment.corp_code==job.corp_code,
+        PublicAssessment.state_version != state_version)).all() if state else []
     if previous:
         db.execute(update(OrganizationReview).where(OrganizationReview.assessment_id.in_(previous),
             OrganizationReview.status.in_(['PENDING','RUNNING','WAITING_APPROVAL','MANUAL_CHECK'])).values(
@@ -85,7 +96,7 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
     job.status='DONE';job.finished_at=now.isoformat();job.error_code=None
     job.lease_token=job.lease_expires_at=None
     db.flush()
-    if state.stage in ALERT_STAGES:
+    if state and state.stage in ALERT_STAGES:
         from shared.models import Customer, Holding
         from mcp_servers.business.reviews import create_review
         tenants=set(db.scalars(select(Customer.tenant_id).join(Holding,Holding.customer_id==Customer.customer_id).where(

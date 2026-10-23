@@ -1,4 +1,5 @@
 <script setup>
+import EvidenceCitation from '../components/EvidenceCitation.vue'
 // 종목 상세 (R5 카드 3번). 종목 하나의 위험 상태를 공시 1건이 아니라 종목 단위로 본다.
 // 데이터: GET /states/{stock_code} (R4, api/routes/states.py). ?mock=stages면 같은 모양의 예시 종목을 쓴다.
 // 점수 숫자는 보여주지 않는다. 단계 배지, 항목 이름·설명, 근거 인용, DART 링크, 공시 타임라인만.
@@ -262,13 +263,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
           </div>
           <p v-if="it.explanation" class="risk-text">{{ stageText(it.explanation) }}</p>
           <p v-if="it.missing?.length" class="notice warn">찾지 못한 값: {{ missingNames(it).join(', ') }} — 공시 원문을 직접 확인해 주세요.</p>
-          <figure v-for="(e, j) in it.evidence" :key="j" class="quote">
-            <blockquote>“{{ e.quote }}”</blockquote>
-            <figcaption>
-              <span v-if="e.source" class="chip strong">{{ e.source }}</span>
-              <a v-if="dartUrl(e.rcept_no || it.rcept_no)" :href="dartUrl(e.rcept_no || it.rcept_no)" target="_blank" rel="noopener">DART 원문 확인</a>
-            </figcaption>
-          </figure>
+          <EvidenceCitation v-for="(e, j) in it.evidence" :key="j" :evidence="e" />
           <p v-if="!it.evidence?.length" class="notice warn">근거 인용을 찾지 못했어요. 추측하지 않고 수동 확인으로 남겼어요.</p>
         </article>
       </div>

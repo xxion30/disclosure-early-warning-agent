@@ -70,13 +70,16 @@ class LocalModel:
         raise AssertionError(prompt)
 
 
-def prepare():
+def prepare(*, available=True):
     from risk_engine.loader import load_rules
     # A known-empty facts payload exercises the protocol, not actual API coverage.
     with db_module.get_session() as db:
         disclosure = db.get(Disclosure, RCEPT)
-        store_facts(db, RCEPT, {'schema_version': '1', 'rcept_no': RCEPT, 'corp_code': disclosure.corp_code,
-                               'collected_at': '2025-03-21T09:00:00+09:00', 'facts': []})
+        if available:
+            store_facts(db, RCEPT, {'schema_version': '1', 'rcept_no': RCEPT, 'corp_code': disclosure.corp_code,
+                                   'collected_at': '2025-03-21T09:00:00+09:00', 'facts': []})
+        else:
+            disclosure.structured_facts = None
         mark_ready(db, RCEPT)
         import json
         rules = hashlib.sha256(json.dumps(load_rules(), sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -175,3 +178,32 @@ def test_exhausted_budget_stops_before_model_and_releases_search(seeded_db, tmp_
     assert 'release_disclosure_index' in [name for name, _ in tools.calls]
     with db_module.get_session() as db:
         assert db.get(AnalysisJob, job_id).status == 'MANUAL_CHECK'
+
+
+def test_unavailable_facts_and_verified_financial_sources_complete_public_analysis(seeded_db, tmp_path):
+    """Financial numbers here are protocol fixtures, not issuer accuracy labels."""
+    from shared.models import FinancialSnapshot
+    from mcp_servers.business.tools.verify_financial_evidence import verify_financial_evidence
+    from copy import deepcopy
+    with db_module.get_session() as db:
+        corp = db.get(Disclosure, RCEPT).corp_code
+        db.add(FinancialSnapshot(corp_code=corp, rcept_no=RCEPT, period='2024', period_kind='ANNUAL',
+            basis='CONSOLIDATED', revision=1, created_at=DAY,
+            indicators={'CAPITAL_IMPAIRMENT': {'status':'OK','detail':{'impairment_pct':100}}},
+            sources=[{'api':'protocol-fixture','accounts':[]}]))
+    job_id = prepare(available=False)
+    tools, model = LocalTools(), LocalModel()
+
+    async def run():
+        deps = await build_dependencies(hosted_settings(), tools=tools, model=model)
+        async with open_executors(build_runtime, deps, tmp_path/'financial.db') as ports:
+            assert await AnalysisWorker(ports.public).run_once() is not None
+    asyncio.run(run())
+    with db_module.get_session() as db:
+        public = db.scalar(select(PublicAssessment).where(PublicAssessment.job_id == job_id))
+        financial = [ev for row in public.result['breakdown'] for ev in row['evidence'] if ev.get('kind') == 'financial']
+    assert financial and all('quote' not in ev for ev in financial)
+    assert verify_financial_evidence(corp, DAY, financial)['ok']
+    forged = deepcopy(financial)
+    forged[0]['values']['impairment_pct'] = 0
+    assert not verify_financial_evidence(corp, DAY, forged)['ok']

@@ -55,7 +55,20 @@ def job_status(job_id:str,pb:CurrentPB=Depends(get_current_pb),db=Depends(get_db
     require_holding(db,pb,row.corp_code)
     assessment=db.scalar(select(PublicAssessment).where(PublicAssessment.job_id==job_id))
     return {'job_id':job_id,'status':row.status,'attempts':row.attempts,'error_code':row.error_code,
-            'assessment_id':assessment.assessment_id if assessment else None}
+            'public_assessment_id':assessment.assessment_id if assessment else None,
+            'assessment_id':assessment.legacy_assessment_id if assessment else None}
+
+
+@router.get('/analysis/jobs')
+def analysis_jobs(pb:CurrentPB=Depends(get_current_pb),db=Depends(get_db)):
+    from shared.models import Company
+    from api.tenancy import visible_stock_codes
+    rows = db.execute(select(AnalysisJob, Company).join(Company, Company.corp_code == AnalysisJob.corp_code)
+        .where(Company.stock_code.in_(visible_stock_codes(pb)))
+        .order_by(AnalysisJob.created_at.desc()).limit(50)).all()
+    return {'items': [{'job_id': j.job_id, 'rcept_no': j.rcept_no, 'status': j.status,
+                       'attempts': j.attempts, 'error_code': j.error_code, 'corp_name': c.name,
+                       'stock_code': c.stock_code, 'created_at': j.created_at} for j,c in rows]}
 
 
 @router.post('/public-assessments/{assessment_id}/reviews',status_code=201)

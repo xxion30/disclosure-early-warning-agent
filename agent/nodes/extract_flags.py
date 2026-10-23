@@ -12,7 +12,9 @@ from agent.tool_loop import select_and_run
 
 
 async def extract_flags(state, deps):
-    routes = [r for r in state.get('risk_routes', []) if r['text_flags']]
+    from shared.rule_catalog import load_catalog
+    numeric_fields = load_catalog()['numeric_fields'] if deps.unified is not None else {}
+    routes = [r for r in state.get('risk_routes', []) if r['text_flags'] or numeric_fields.get(r['item'])]
     if not routes:
         return {"flags": [], "flag_attempts": 0}
     attempt = state.get("flag_attempts", 0) + 1
@@ -45,11 +47,26 @@ async def extract_flags(state, deps):
         chunks = select_chunks(chunks)
         result = await generate(deps, "extract_flags", FlagsOutput, {
             "disclosure": disclosure_context(state["disclosure"]), "routes": routes, "chunks": chunks, "attempt": attempt,
+            "numeric_fields": {r['item']: numeric_fields.get(r['item'], []) for r in routes},
         })
         required = {(r["item"], flag) for r in routes for flag in r["text_flags"]}
         if {(f.item, f.flag) for f in result.flags} != required:
             raise ValueError("요청한 플래그 누락·추가")
         evidence = [e.model_dump() for f in result.flags for e in f.evidence]
+        import re
+        from math import isfinite
+        seen = set()
+        for fact in result.numeric_facts:
+            key = (fact.item, fact.field)
+            if (fact.field not in numeric_fields.get(fact.item, []) or fact.item not in {r['item'] for r in routes}
+                    or key in seen or fact.unit != '%' or not isfinite(fact.value) or fact.value < 0):
+                raise ValueError('요청하지 않거나 유효하지 않은 수치 사실')
+            seen.add(key)
+            quoted = [float(token.replace(',', '')) for ev in fact.evidence
+                      for token in re.findall(r'(?<![\d.])([\d,]+(?:\.\d+)?)\s*%', ev.quote)]
+            if not any(abs(value - fact.value) < 1e-8 for value in quoted):
+                raise ValueError('수치와 % 단위가 인용문에 직접 나타나지 않음')
+            evidence.extend(e.model_dump() for e in fact.evidence)
         validate_evidence(evidence, chunks)
         if any(f.value is None for f in result.flags):
             raise ValueError("본문 조건 확인 불가")
@@ -57,6 +74,7 @@ async def extract_flags(state, deps):
                     **{k: c[k] for k in ("content_sha256", "normalization_version") if c.get(k)}}
                    for c in chunks]
         return {"flags": result.model_dump()["flags"], "evidence": [*state["evidence"], *evidence],
+                "numeric_facts": result.model_dump()['numeric_facts'],
                 "verified_sources": sources,
                 "flag_attempts": attempt, "retry_count": attempt - 1}
     except (ValidationError, ValueError, AgentError) as exc:

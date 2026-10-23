@@ -1,5 +1,7 @@
 # API·화면 계약
 
+> 전체 통합(2026-10-24): /analysis/jobs GET은 권한 있는 종목의 최근 작업 50건을 반환하고 /analysis/jobs/{id}는 public_assessment_id(문자열)와 화면 경보 링크용 assessment_id(정수)를 구분한다. /alerts는 새 공개 판정의 조직별 검토를 DB에서 조회하며 review_backend/review_id를 제공한다. hosted 설정 시 구형 /runs·구형 승인은 차단한다. /ready는 DB와 실행기 상태를 확인한다.
+
 ## 승인 재개 트랜잭션 보완 (2026-10-23)
 
 구형 `POST /alerts/{id}/decision`은 권한·승인 대기·판정·문안 검증 후 RunManager에서 해당 공시의 재개 자리를 선점한다. 감사 기록을 요청 DB 세션에서 명시적으로 커밋한 뒤에만 Graph의 DB 접근을 시작한다. 선점과 task 생성은 커밋 전에 하되 시작 gate는 커밋 성공 후 연다. 커밋 실패는 rollback·선점 취소 및 503이며 Graph를 실행하지 않는다. 중복 실행은 409다. 202는 결정 요청 저장·실행 인계 수락이며 Graph 처리 완료를 뜻하지 않는다. 커밋 이후 실행 실패 시 수락된 요청의 감사 기록은 보존한다.

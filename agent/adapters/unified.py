@@ -16,7 +16,7 @@ def approved_routes(title):
             continue
         bucket = catalog['buckets'][item]
         # Financial numbers are supplied by R3 snapshots in calculate_risk_score.
-        flags = [flag for flag in catalog['text_flags'][item] if flag not in FACT_FIELDS.get(item, {})]
+        flags = catalog['text_flags'][item]
         if bucket == 'RED':
             flags = ['reason']
         routes.append({'bucket': bucket, 'item': item, 'text_flags': flags})
@@ -53,8 +53,10 @@ def prepare_signals(payload):
             evidence.extend(flag['evidence'])
         for key, (name, unit) in FACT_FIELDS.get(item, {}).items():
             candidates = [fact for fact in facts if fact['name'] == name]
-            if len(candidates) != 1 or candidates[0]['status'] != 'PRESENT':
-                raise AgentError(f'필수 API 사실 확인 필요: {name}')
+            if not candidates or (len(candidates) == 1 and candidates[0]['status'] != 'PRESENT'):
+                continue  # validated quoted facts may supply the field below
+            if len(candidates) != 1:
+                raise AgentError(f'API 다중 행 구분 필요: {name}')
             fact = candidates[0]
             if fact.get('unit') != unit:
                 raise AgentError(f'API 사실 단위 불일치: {name}')
@@ -64,9 +66,19 @@ def prepare_signals(payload):
             evidence.append({'kind': 'api', **{
                 k: fact['source'].get(k, fact.get(k, payload['structured_facts'].get(k)))
                 for k in ('api', 'field', 'rcept_no', 'row_key', 'value', 'unit', 'period', 'basis', 'data_version')}})
+        for fact in payload.get('numeric_facts', []):
+            if fact['item'] != item:
+                continue
+            key = fact['field']
+            if key not in catalog['numeric_fields'][item] or fact['unit'] != '%':
+                raise AgentError('허용되지 않은 수치 사실')
+            if key in detail and detail[key] != fact['value']:
+                raise AgentError('API와 원문 수치가 달라 확인 필요')
+            detail[key] = fact['value']
+            evidence.extend(fact['evidence'])
         if item == 'CAPITAL_REDUCTION':
             other = [f for f in facts if f['name'] == 'reduction_ratio_other_pct' and f['status'] == 'PRESENT']
-            if any(f['value'] != detail['reduction_ratio_pct'] for f in other):
+            if any(f['value'] != detail.get('reduction_ratio_pct') for f in other):
                 raise AgentError('종류주식과 보통주 감자 비율이 달라 확인 필요')
         required = set(catalog['numeric_fields'][item])
         if required - set(detail):
@@ -97,8 +109,8 @@ async def ensure_current(payload):
         ids = payload.get('customer_ids', [])
         owned = set(db.scalars(select(Customer.customer_id).where(
             Customer.tenant_id == context['tenant_id'], Customer.customer_id.in_(ids))))
-        return bool(review and state and state.state_version == assessment.state_version
-                    and state.public_assessment_id == assessment.assessment_id and not state.resolved
+        return bool(review and state and assessment.state_version > 0 and state.state_version == assessment.state_version
+                    and not state.resolved
                     and state.stage in ('RED', 'ORANGE', 'YELLOW', 'COMPOSITE')
                     and review.status in ('PENDING', 'RUNNING', 'WAITING_APPROVAL', 'MANUAL_CHECK')
                     and assessment.rcept_no == payload['rcept_no']

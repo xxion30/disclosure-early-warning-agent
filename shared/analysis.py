@@ -3,7 +3,8 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from shared.models import Disclosure, FinancialSnapshot, Signal, AnalysisJob
+from sqlalchemy.orm import aliased
+from shared.models import Disclosure, FinancialSnapshot, Signal, AnalysisJob, Company, RiskState, PublicAssessment
 from shared.facts import facts_hash
 from shared.config import get_settings
 
@@ -100,8 +101,20 @@ def claim(db, *, now=None):
     rows = db.scalars(select(AnalysisJob).where(*eligible).order_by(AnalysisJob.created_at)
                        .with_for_update(skip_locked=True).limit(20)).all()
     for row in rows:
+        # Serialize different jobs for one issuer as their signal histories are
+        # dependent. PostgreSQL workers skip an issuer another claimant owns.
+        company = db.scalar(select(Company).where(Company.corp_code == row.corp_code)
+                            .with_for_update(skip_locked=True))
+        if company is None or db.scalar(select(AnalysisJob.job_id).where(
+                AnalysisJob.corp_code == row.corp_code, AnalysisJob.status == 'RUNNING',
+                AnalysisJob.job_id != row.job_id).limit(1)):
+            continue
         token = str(uuid4())
-        changed = db.execute(update(AnalysisJob).where(AnalysisJob.job_id==row.job_id,*eligible).values(
+        other = aliased(AnalysisJob)
+        busy_issuer = select(other.job_id).where(other.corp_code == row.corp_code,
+            other.status == 'RUNNING', other.job_id != row.job_id).exists()
+        changed = db.execute(update(AnalysisJob).where(AnalysisJob.job_id==row.job_id,*eligible,
+            ~busy_issuer).values(
             status='RUNNING',attempts=AnalysisJob.attempts+1,lease_token=token,
             lease_expires_at=(now+timedelta(seconds=get_settings().ANALYSIS_LEASE_SECONDS)).isoformat()))
         if changed.rowcount:
@@ -149,9 +162,53 @@ def fail_job(db, job_id, token, code, *, retryable=False, manual=False, now=None
 
 
 def enqueue_ready(db, as_of, rules_digest, *, limit=100):
+    busy = set(db.scalars(select(AnalysisJob.corp_code).where(
+        AnalysisJob.status.in_(('PENDING', 'RUNNING', 'RETRY_WAIT')))))
     rows=db.scalars(select(Disclosure).where(Disclosure.analysis_ready_at.is_not(None),
-        Disclosure.processed.is_(False),Disclosure.filed_at<=as_of+'~').order_by(Disclosure.filed_at,Disclosure.rcept_no).limit(limit)).all()
-    return [enqueue(db,row.rcept_no,as_of,rules_digest) for row in rows]
+        Disclosure.processed.is_(False),Disclosure.filed_at<=as_of+'~',
+        Disclosure.corp_code.not_in(busy)).order_by(Disclosure.filed_at,Disclosure.rcept_no)).yield_per(100)
+    scheduled = []
+    for row in rows:
+        if row.corp_code in busy:
+            continue
+        # Build the next manifest only after the preceding filing publishes its
+        # signals. Historical backfill cannot use future filings/snapshots.
+        latest = db.scalar(select(Disclosure.rcept_no).where(
+            Disclosure.corp_code == row.corp_code, Disclosure.analysis_ready_at.is_not(None),
+            Disclosure.filed_at <= as_of + '~').order_by(Disclosure.filed_at.desc(), Disclosure.rcept_no.desc()).limit(1))
+        evaluation_day = as_of if row.rcept_no == latest else row.filed_at[:10]
+        scheduled.append(enqueue(db, row.rcept_no, evaluation_day, rules_digest))
+        busy.add(row.corp_code)
+        if len(scheduled) >= limit:
+            break
+    return scheduled
+
+
+def enqueue_recalculations(db, as_of, rules_digest, *, limit=100):
+    """Re-evaluate the latest filing when only time/rules changed; never mutate
+    the current state behind its immutable public assessment or approval token.
+    A failed/manual run for the same daily input is not silently retried forever.
+    """
+    busy = select(AnalysisJob.corp_code).where(AnalysisJob.status.in_(('PENDING','RUNNING','RETRY_WAIT')))
+    unprocessed = select(Disclosure.corp_code).where(Disclosure.analysis_ready_at.is_not(None),
+        Disclosure.processed.is_(False), Disclosure.filed_at <= as_of + '~')
+    states = db.scalars(select(RiskState).where(RiskState.public_assessment_id.is_not(None),
+        RiskState.corp_code.not_in(busy), RiskState.corp_code.not_in(unprocessed)).limit(limit)).all()
+    jobs = []
+    for state in states:
+        receipt = db.scalar(select(Disclosure.rcept_no).where(Disclosure.corp_code == state.corp_code,
+            Disclosure.analysis_ready_at.is_not(None), Disclosure.filed_at <= as_of + '~')
+            .order_by(Disclosure.filed_at.desc(), Disclosure.rcept_no.desc()).limit(1))
+        if receipt:
+            public = db.get(PublicAssessment, state.public_assessment_id)
+            previous = db.get(AnalysisJob, public.job_id) if public else None
+            current = input_manifest(db, state.corp_code, as_of, exclude_rcept=receipt)
+            pinned = ({k:v for k,v in previous.input_manifest.items() if k != '_request_version'}
+                      if previous else None)
+            if (state.as_of != as_of or state.rules_digest != rules_digest
+                    or facts_hash(current) != facts_hash(pinned)):
+                jobs.append(enqueue(db, receipt, as_of, rules_digest))
+    return jobs
 
 
 def current_manifest(db, job):

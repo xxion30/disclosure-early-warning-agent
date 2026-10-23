@@ -1,16 +1,16 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 import { api, errorMessage } from '../api/client'
 import { mockMode } from '../api/mock'
-import RunProgress from '../components/RunProgress.vue'
 import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
-import { useRunEvents } from '../composables/useRunEvents'
 import { ALERT_STAGES, ASSESSMENT_STATUS, COLLECT_STATUS, formatTime, hasStage, isAlertRow, isUnscored, signalLabel, STAGES, stagesOf } from '../labels'
 
 const router = useRouter()
+const auth = useAuthStore()
 
 // 탭: 경보 / 관찰 중 / 전체. stages는 새 단계, levels는 단계 값이 없는 예전 행에 쓰는 등급
 const TABS = {
@@ -47,9 +47,11 @@ async function load() {
 const states = ref([])
 const statesReady = ref(false)
 const runs = ref(null)
+const analysisJobs = ref([])
 const showAllStates = ref(false)
 async function loadDashboard() {
-  const [st, col] = await Promise.allSettled([api.listStates({ alert: true, limit: 100 }), api.collectStatus()])
+  const [st, col, jobs] = await Promise.allSettled([api.listStates({ alert: true, limit: 100 }), api.collectStatus(), mockMode() ? Promise.resolve({items:[]}) : api.listAnalysis()])
+  analysisJobs.value = jobs.status === 'fulfilled' ? jobs.value.items || [] : []
   statesReady.value = st.status === 'fulfilled'
   states.value = st.status === 'fulfilled' ? st.value.items || [] : []
   runs.value = col.status === 'fulfilled' ? col.value.runs || [] : null
@@ -107,6 +109,13 @@ function showStatus(status) {
 
 watch(tab, () => { stageChips.value = [] })
 onMounted(load)
+let refreshTimer
+onMounted(() => {
+  refreshTimer = setInterval(() => {
+    if (!document.hidden && !loading.value) load()
+  }, 10000)
+})
+onBeforeUnmount(() => clearInterval(refreshTimer))
 
 // 진짜 모드에서 MCP 서버가 꺼져 있으면 영향 고객 수를 못 센다. 목록은 DB 내용으로 계속 보여준다
 const graphError = computed(() => allRows.value.find((r) => r.graph_error)?.graph_error || '')
@@ -134,24 +143,40 @@ const openAlert = (r) => router.push({ name: 'alert-detail', params: { assessmen
 const rceptNo = ref('')
 const runError = ref('')
 const running = ref(false)
-const { state: runState, connect } = useRunEvents()
+const analysisStatus = ref('')
+let disposed = false
+onBeforeUnmount(() => { disposed = true })
 
 async function startRun() {
   runError.value = ''
+  running.value = true
   try {
-    await api.startRun(rceptNo.value.trim())
-    running.value = true
-    connect(rceptNo.value.trim(), {
-      onEnd: (name, data) => {
-        load()
-        if (name === 'waiting_approval' && data.assessment_id) {
-          router.push({ name: 'alert-detail', params: { assessmentId: data.assessment_id } })
-        }
-      },
-    })
+    const job = await api.startAnalysis(rceptNo.value.trim())
+    for (let attempt = 0; attempt < 240 && !disposed; attempt++) {
+      const current = await api.getAnalysis(job.job_id)
+      analysisStatus.value = ({PENDING:'분석 대기', RUNNING:'공시 분석 중', RETRY_WAIT:'외부 서비스 응답을 기다린 뒤 재시도합니다', DONE:'분석 완료', MANUAL_CHECK:'수동 확인 필요', FAILED:'분석 실패'})[current.status] || current.status
+      if (['DONE','MANUAL_CHECK','FAILED'].includes(current.status)) {
+        await load()
+        if (current.assessment_id) router.push({name:'alert-detail', params:{assessmentId:String(current.assessment_id)}})
+        else runError.value = `${analysisStatus.value}. 확인 가능한 근거가 부족하거나 실행을 완료하지 못했습니다.`
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+    if (!disposed) runError.value = '분석은 서버에서 계속 진행됩니다. 분석 작업 상태에서 결과를 확인해 주세요.'
   } catch (err) {
     runError.value = errorMessage(err)
+  } finally {
+    running.value = false
   }
+}
+
+const collecting = ref(false)
+async function collectNow() {
+  collecting.value = true
+  try { await api.collectRun(); await load() }
+  catch (err) { error.value = errorMessage(err) }
+  finally { collecting.value = false }
 }
 </script>
 
@@ -162,6 +187,15 @@ async function startRun() {
       <h1>경보 목록</h1>
     </div>
   </div>
+
+  <section v-if="auth.pb?.role === 'ADMIN'" class="card" aria-label="공시 수집">
+    <button type="button" :disabled="collecting" @click="collectNow">{{ collecting ? '수집 요청 중…' : '보유 종목 공시 수집' }}</button>
+    <p class="muted">수집한 공시는 자동으로 분석합니다. 완료 상태는 아래 수집·분석 목록에서 확인할 수 있습니다.</p>
+  </section>
+  <section v-if="analysisJobs.some(j => j.status !== 'DONE')" class="card" aria-label="분석 작업 상태">
+    <h2>분석 작업 상태</h2>
+    <ul><li v-for="job in analysisJobs.filter(j => j.status !== 'DONE').slice(0,10)" :key="job.job_id">{{ job.corp_name }} · {{ job.rcept_no }} · {{ ({PENDING:'대기', RUNNING:'분석 중', RETRY_WAIT:'재시도 대기', MANUAL_CHECK:'수동 확인 필요', FAILED:'실패'})[job.status] || job.status }}<span v-if="job.error_code"> · {{ job.error_code }}</span></li></ul>
+  </section>
 
   <button type="button" class="shortcut-line pending-shortcut" :class="{ on: pendingOnly }" :disabled="!stats.pending && !pendingOnly" :aria-pressed="pendingOnly" @click="togglePending">
     <span class="shortcut-icon" aria-hidden="true">
@@ -181,16 +215,8 @@ async function startRun() {
     <div class="card-head">
       <h2>처리 진행 <small v-if="rceptNo" class="run-number">· {{ rceptNo }}</small></h2>
     </div>
-    <RunProgress v-if="running" :state="runState" />
+    <p v-if="running" role="status">{{ analysisStatus || '분석 작업을 등록합니다' }}</p>
     <p v-if="runError" class="error">{{ runError }}</p>
-    <RouterLink
-      v-if="['failed', 'done'].includes(runState.last) && runState.lastData?.assessment_id"
-      :to="{ name: 'alert-detail', params: { assessmentId: String(runState.lastData.assessment_id) } }"
-      class="run-detail-link"
-    >
-      경보 상세 보기
-      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-    </RouterLink>
   </section>
 
   <div v-if="showAttention" class="banner warn" role="status">
@@ -325,7 +351,7 @@ async function startRun() {
   </section>
   <details class="card">
     <summary>공시 직접 처리</summary>
-    <form class="row run-start" @submit.prevent="startRun">
+    <form v-if="auth.pb?.role === 'ADMIN'" class="row run-start" @submit.prevent="startRun">
       <label for="rcept" class="sr-only">접수번호</label>
       <input id="rcept" v-model="rceptNo" placeholder="접수번호 14자리" pattern="\d{14}" required />
       <button type="submit">공시 처리 시작</button>

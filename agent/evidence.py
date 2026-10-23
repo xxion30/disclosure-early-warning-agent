@@ -37,12 +37,14 @@ def validate_evidence(evidence, chunks):
 def validate_known_evidence(evidence, known):
     # Explanation citations can only refer to previously verified facts/score sources.
     from agent.state import APIEvidence
+    from shared.financial_evidence import FinancialEvidence
     chunks = [{**item, "text": item["quote"]} for item in known if 'quote' in item]
     for item in evidence:
         if hasattr(item, 'model_dump'):
             item = item.model_dump()
-        if item.get('kind') == 'api':
-            reference = APIEvidence.model_validate(item).model_dump()
+        if item.get('kind') in ('api', 'financial'):
+            model = FinancialEvidence if item['kind'] == 'financial' else APIEvidence
+            reference = model.model_validate(item).model_dump()
             if reference not in known:
                 raise AgentError('확인되지 않은 API 근거')
         else:
@@ -50,6 +52,10 @@ def validate_known_evidence(evidence, known):
 
 
 def render_evidence(item):
+    if item.get('kind') == 'financial':
+        basis = '연결' if item['basis'] == 'CONSOLIDATED' else '개별'
+        values = ', '.join(f'{key}={value}' for key, value in item['values'].items())
+        return f"{item['indicator']}: {values} (접수번호 {item['rcept_no']}, {item['period']} {basis}, 정정 버전 {item['revision']})"
     if item.get('kind') == 'api':
         return (f"{item['api']}.{item['field']}: {item['value']} {item.get('unit') or ''} "
                 f"(접수번호 {item['rcept_no']}, 행 {item.get('row_key') or '단일 행'}, "

@@ -43,4 +43,4 @@ if __name__ == "__main__":
     if filing.is_ephemeral():
         reference.warm()  # 첫 요청이 느려지지 않게 미리 (실패해도 시작은 한다)
     port = urlparse(get_settings().RAG_MCP_URL).port or PORT
-    mcp.run(transport="streamable-http", host="127.0.0.1", port=port, path="/mcp")
+    mcp.run(transport="streamable-http", host=get_settings().MCP_HOST, port=port, path="/mcp")

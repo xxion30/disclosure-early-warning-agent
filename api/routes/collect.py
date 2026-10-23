@@ -36,7 +36,6 @@ async def collect_run(request: Request, pb: CurrentPB = Depends(get_current_pb),
     db.scalar(select(Tenant).where(Tenant.tenant_id == pb.tenant_id).with_for_update())
     recover_expired_runs(db)
     stocks = sorted(set(db.scalars(select(Holding.stock_code).join(Customer, Customer.customer_id == Holding.customer_id)
-                                  .join(Company, Company.stock_code == Holding.stock_code)
                                   .where(Holding.tenant_id == pb.tenant_id, Customer.tenant_id == pb.tenant_id))))
     if not stocks:
         raise HTTPException(409, '수집할 보유 종목이 없습니다.')

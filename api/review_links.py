@@ -13,8 +13,8 @@ async def review_links(db,pb,state,assessment,adapter):
     if public and public.state_version==state.state_version:
         links.update(assessment_id=public.legacy_assessment_id,public_assessment_id=public.assessment_id,
                      review_backend='organization')
-        review=db.scalar(select(OrganizationReview).where(OrganizationReview.tenant_id==pb.tenant_id,
-                         OrganizationReview.assessment_id==public.assessment_id))
+        from mcp_servers.business.reviews import matching_review
+        review=matching_review(db,pb.tenant_id,public)
         if review:
             links.update(review_id=review.review_id,review_status=review.status)
             if not state.resolved and state.stage in ALERT_STAGES and review.status=='WAITING_APPROVAL':

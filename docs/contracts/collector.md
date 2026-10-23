@@ -1,6 +1,7 @@
 # collector 계약 (DART 수집기)
 
-> 담당: **R3** · 상태: **초안 v2 — R1·R2·R4 검토(PR #31 코멘트, 2026-10-23) 반영.** DB 표 모양은 R4가 `R4-V02` 브랜치에 구현한 것(`shared/models/operations.py`, `shared/collection.py`, `risk_engine/financials.py`)을 기준으로 맞췄다. 아직 `main`에 합쳐지지 않았으므로 합쳐진 뒤 다시 확인한다.
+> 2026-10-24 전체 통합: 아래 3-4의 유일 원공시 연결은 shared.events.confirm_event_link로 자동 확정하고 최초제출일 원문 근거를 disclosures.event_link_evidence에 저장한다. enqueue_ready는 기업별 한 건씩 순차 생성한다. 당시 실호출 건수는 과거 검증 기록이다. 실행은 [run.md](../run.md)를 따른다.
+> 담당: **R3** · 과거 계약 상태: **초안 v2 — R1·R2·R4 검토(PR #31 코멘트, 2026-10-23) 반영.** DB 표 모양은 R4가 `R4-V02` 브랜치에 구현한 것(`shared/models/operations.py`, `shared/collection.py`, `risk_engine/financials.py`)을 기준으로 맞췄다. 아직 `main`에 합쳐지지 않았으므로 합쳐진 뒤 다시 확인한다.
 > 근거 문서: [설계서 STEP 03](../dartch_phase1_mvp.md), [데이터 출처표](data_sources.md), [파일 구성 계획](../dartch_file_plan.md), [mcp_rag](mcp_rag.md).
 > `확인됨`은 2026-10-23 OpenDART 실호출로 본 것, `결정됨`은 팀 검토에서 정해진 것, `제안`은 제가 정한 안, `TODO(확인 필요)`는 아직 모르는 것이다.
 
@@ -84,14 +85,14 @@ R4가 요청한 대로 의미를 고정한다.
 - **11건(15%)은 `document.xml`이 없다**(`014 파일이 존재하지 않습니다`, 영구 오류). 이 정정은 체인을 연결할 수 없어 사실이 없다.
 - 직전 최초 공시에 붙이는 단순 규칙은 틀린다: 금양 `20250117000380`은 직전 최초 공시(10/31)가 아니라 본문이 말하는 `2024-09-27`의 정정이다.
 
-### 3-4. 정정 공시 (확인됨 + 연결 규칙은 후보)
+### 3-4. 정정 공시 (2026-10-24 통합 반영)
 - 정정은 **새 접수번호의 별도 행**이다. 수집기는 정정도 한 건으로 저장한다 (R4 결정과 같음: 접수번호별 보존).
 - API는 원본을 알려 주지 않지만, **정정 공시 본문에 `정정대상 공시서류`(서류명)와 `최초제출일`이 있다**(금양 유상증자 정정 `20250117000380`: 정정대상 "유상증자 결정", 최초제출일 2024-09-27 → `list.json`에 같은 날 `20240927000916` 주요사항보고서(유상증자결정) 존재).
 - 연결 규칙 **후보**: `(corp_code, 정정대상 서류명, 최초제출일)` = 원본의 `(corp_code, 서류명, rcept_dt)`.
 - **한계:** 이 패턴은 1건에서만 확인했다. 오스템 횡령·배임 정정(`20220110900349`) 본문에는 "정정" 문구가 없었다. 보편 규칙이 아니므로, 후보로 못 찾으면 **연결하지 않고** `original_rcept_no`를 비워 수동 확인으로 둔다 (R4·R2 원칙과 같음).
 - 같은 서류명이어도 후속 재결정(10-31 `20241031000530`은 제목에 정정 표시 없음)이 같은 사건인지는 이 규칙으로 알 수 없다 → 자동 연결하지 않는다.
 - **정정이 곧 철회일 수 있다.** 위 금양 정정의 "정정 후"는 "유상증자 철회"다. 해소 판정의 근거가 될 수 있지만 판단은 R4·R2 몫이다. 수집기는 `정정사유` 텍스트를 따로 해석하지 않는다.
-- 수집기가 `event_id`·`original_rcept_no`를 채울지(R3), R4가 채울지: **수집기는 후보 값(`original_rcept_no`)만 제안하고, `event_id` 확정은 R4**로 한다 `TODO(확인 필요)` (R4 확인).
+- 수집기가 원문의 최초제출일과 정규화 제목으로 같은 회사의 원공시를 찾는다. 유일하게 일치할 때 shared.events.confirm_event_link를 호출해 event_id·event_started_at을 확정하고 작은 원문 근거를 보존한다. 없거나 모호하면 임의 연결하지 않는다.
 
 ### 3-5. 백필
 - 새 종목은 `list.json`을 최근 12개월 한 구간으로 받는다. `corp_code`를 지정하면 16개월을 한 번에 조회할 수 있었다(확인됨).
@@ -128,7 +129,7 @@ R4가 요청한 대로 의미를 고정한다.
 | `indicators` | 5장 |
 
 ### 4-4. 기존 표 사용
-- `disclosures`: `rcept_no corp_code title filed_at url`을 채운다. **`body_text`는 항상 비워 둔다.** `processed=false`로 넣는다. R4가 `event_id`·`event_started_at`·`original_rcept_no` 칸을 추가했다. 수집기는 3-4의 후보 `original_rcept_no`만 제안한다. 항목 API 값은 `structured_facts`(4-5)에 넣는다 — 이 컬럼은 R4가 추가해야 한다.
+- `disclosures`: `rcept_no corp_code title filed_at url`을 채운다. **`body_text`는 항상 비워 둔다.** `processed=false`로 넣는다. R4가 `event_id`·`event_started_at`·`original_rcept_no` 칸을 추가했다. 수집기는 3-4의 검증 가능한 유일 연결을 shared.events에 전달한다. 항목 API 값은 `structured_facts`(4-5)에 넣는다 — 이 컬럼과 마이그레이션은 구현됐다.
 - `companies`: `corp_code stock_code name market`을 채운다.
 
 ### 4-5. 구조화 사실 `disclosures.structured_facts` (결정됨: R2, 2026-10-23 PR #32 코멘트)
@@ -148,7 +149,7 @@ R4가 요청한 대로 의미를 고정한다.
 - 날짜는 ISO(`2024-10-31`), 금액은 원(정수), 주식 수는 주(정수), 비율은 %(실수). 원본 문자열은 `raw`에 남긴다.
 - **계산한 값**은 `raw`를 비우고 `source.field`에 계산식을 적는다: `issue_ratio_common_pct`(신주 ÷ 증자 전 주식 × 100, R4 규칙의 `ratio_pct`), `third_party_allocation`(증자 방식에 `제3자배정` 포함), `refixing_floor_below_price`(전환가 조정 하한 < 전환가). 하한이 비어 있으면 '조항 없음'으로 단정하지 않고 `MISSING`이다.
 - 소송은 청구 금액 필드가 없어 `claim_amount`를 `NEEDS_CHECK`로 고정한다(자기자본 대비 청구액을 만들 수 없음을 명시).
-- **정정 체인에서는 최신 정정본에만** 사실이 붙고(출처 접수번호 = 그 공시), 대체된 최초·중간 정정본은 NULL이다. 정정 공시에는 `original_rcept_no` **후보**를 남기되 `event_id`는 건드리지 않는다(확정은 R4 `confirm_event_link`).
+- **정정 체인에서는 최신 정정본에만** 사실이 붙고(출처 접수번호 = 그 공시), 대체된 최초·중간 정정본은 NULL이다. 정정 공시의 유일 원공시와 원문 근거를 확인하면 R4 `confirm_event_link`로 같은 사건을 확정한다. 정정 접수번호 자체는 별도 행으로 보존한다.
 
 | 위험 항목 | 항목 API | 사실 이름 |
 | --- | --- | --- |
@@ -164,8 +165,9 @@ R4가 요청한 대로 의미를 고정한다.
 | 회사합병 결정 | `cmpMgDecsn` | `merger_type`, `counterparty`, `counterparty_relation`, `exchange_ratio`, `external_valuation`, `counterparty_total_assets`, `counterparty_total_debt`, `counterparty_total_equity`, `counterparty_capital`, `counterparty_revenue`, `counterparty_net_income`, `merger_date` |
 
 **분석 인계 (R4 `shared/analysis.py`).** 사실 저장 뒤 **새로 저장했거나 아직 인계되지 않은 모든 공시**를 `mark_ready`로 인계한다(사실이 없는 공시도 — 그래야 R4 `enqueue_ready`가 분석 작업으로 만든다). `analysis_ready_at`이 비어 있는 공시만 처리하므로 실패한 공시는 다음 실행이 다시 시도하고, 인계된 공시는 다시 건드리지 않는다. 한 공시의 사실이 R4 검증에 실패해도 그 공시만 사실 없이 넘어가고(저장 도중 오류는 되돌림) `StockOutcome.problems`에 남는다.
-- **실제 DART로 확인:** 금양·위니아 최근 12개월에서 공시 81건이 모두 인계되고 R4 `enqueue_ready`가 분석 작업 81개를 만들었다. 사실은 정정 체인의 최신본 2건에만 붙었다.
-- **알아 둘 점(R4·R2 확인):** 수집기는 분류하지 않고 새 공시를 **전부** 인계한다. 새 종목 백필 한 번에 종목당 약 70~280건이 분석 대기열에 들어간다(금양 74건). 분석 대상을 줄이려면 R4가 `enqueue_ready` 단계에서 거르거나 R3에게 제외 기준을 알려 줘야 한다.
+- **2026-10-23 당시 실제 DART로 확인한 기록(현재 작업 생성 방식과 구별):** 금양·위니아 최근 12개월에서 공시 81건이 모두 인계되고 R4 `enqueue_ready`가 분석 작업 81개를 만들었다. 사실은 정정 체인의 최신본 2건에만 붙었다.
+- **2026-10-24 실행 정책:** NULL 사실만으로 제외하지 않는다. 기업별 한 건만 대기열에 추가하고 앞 판정이 끝난 뒤 다음 입력 스냅샷을 만든다. 과거 건은 당시, 마지막 건은 현재 기준일로 평가한다.
+- **백필 규모 참고:** 수집기는 분류하지 않고 새 공시를 **전부** 인계한다. 새 종목 백필 한 번에 종목당 약 70~280건이 분석 대기열에 들어간다(금양 74건). 분석 대상을 줄이려면 R4가 `enqueue_ready` 단계에서 거르거나 R3에게 제외 기준을 알려 줘야 한다.
 
 **`get_disclosure_facts` 응답 모양 (R2 정리, R4가 `shared/facts.py`의 `StructuredFacts` v1로 확정).** 아래 모양으로 값을 만든다.
 

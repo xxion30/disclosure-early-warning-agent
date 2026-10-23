@@ -42,7 +42,11 @@ def test_enabled_collection_connects_real_dispatcher_and_committed_reservation(
         await asyncio.wait_for(completed.wait(), timeout=2)
 
     client.portal.call(wait_for_background)
-    assert calls == [(run_id, ['001570'])]
+    # A new deployment has holdings before Company/corp_code resolution. Do not
+    # drop those stocks at the API boundary; R3 resolves/excludes them with DART.
+    stocks = calls[0][1]
+    assert len(calls) == 1 and calls[0][0] == run_id
+    assert '001570' in stocks and '069500' in stocks and len(stocks) > 1
     with session_factory() as db:
-        assert db.get(CollectRun, run_id).stock_codes == ['001570']
+        assert db.get(CollectRun, run_id).stock_codes == stocks
         assert db.get(CollectCursor, '001570').active_run_id == run_id

@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 WORKDIR /app
-COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /usr/local/bin/uv
+RUN pip install --no-cache-dir uv==0.9.5
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY . .

@@ -28,6 +28,7 @@ def snapshot_signals(snapshot, filed_at):
     """indicators = {signal_type: {status, detail, comparison?}}. Never interpret missing as zero."""
     from risk_engine.loader import load_rules
     allowed = load_rules()['yellow']
+    from shared.financial_evidence import snapshot_reference
     signals = []
     for st, item in snapshot.indicators.items():
         if st not in allowed:
@@ -37,7 +38,7 @@ def snapshot_signals(snapshot, filed_at):
             detail = {}
         signals.append({'signal_type': st, 'event_id': f'financial:{snapshot.corp_code}:{st}',
                         'rcept_no': snapshot.rcept_no, 'filed_at': filed_at,
-                        'evidence': snapshot.sources, 'detail': detail})
+                        'evidence': ([snapshot_reference(snapshot, st)] if snapshot.sources else []), 'detail': detail})
     return signals
 
 

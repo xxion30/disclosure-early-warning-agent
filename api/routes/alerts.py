@@ -20,7 +20,24 @@ from risk_engine.stages import sort_value
 from api.tenancy import visible_stock_codes, require_assessment_access, require_legacy_runtime
 from shared.models import Holding
 from api.graph_adapter import GraphAdapter, get_graph_adapter, pending_customers
-from shared.models import Company, Customer, Disclosure, RiskAssessment
+from shared.models import Company, Customer, Disclosure, RiskAssessment, PublicAssessment, OrganizationReview, RiskState
+
+
+def hosted_view(db, pb, assessment):
+    public = db.scalar(select(PublicAssessment).where(PublicAssessment.legacy_assessment_id == assessment.assessment_id))
+    if public is None:
+        return None, None, None
+    from mcp_servers.business.reviews import matching_review
+    review = matching_review(db, pb.tenant_id, public)
+    company = db.get(Company, assessment.corp_code)
+    holders = db.execute(select(Customer.customer_id, Holding.eval_amount).join(Holding, Holding.customer_id == Customer.customer_id)
+        .where(Customer.tenant_id == pb.tenant_id, Holding.tenant_id == pb.tenant_id,
+               Holding.stock_code == company.stock_code).order_by(Holding.eval_amount.desc(), Customer.customer_id)).all()
+    view = {'affected_customers': [{'customer_id': cid, 'eval_amount': value} for cid, value in holders],
+            'drafts': review.drafts if review else {}, 'decided': review.decisions if review else {},
+            'status': review.status if review else 'PENDING',
+            'evidence': [ev for row in public.result.get('breakdown', []) for ev in row.get('evidence', [])]}
+    return public, review, view
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -173,8 +190,6 @@ async def list_alerts(
         q = q.where(RiskAssessment.level.in_(level))
     if alert:
         q = q.where(RiskAssessment.level.in_(ALERT_LEVELS), RiskAssessment.status != "FAILED")
-    if status_:
-        q = q.where(RiskAssessment.status == status_)
     if date:
         q = q.where(or_(Disclosure.filed_at.startswith(date), RiskAssessment.created_at.startswith(date)))
 
@@ -182,10 +197,17 @@ async def list_alerts(
     my_ids = set(db.scalars(select(Customer.customer_id).where(Customer.pb_id == pb.pb_id, Customer.tenant_id == pb.tenant_id)))
     result = []
     graph_error = None  # 한 번 실패하면 남은 행은 다시 붙어 보지 않는다 (목록이 느려지지 않게)
+    from shared.config import get_settings
+    legacy_enabled = not get_settings().PHASE1_RUNTIME_FACTORY
     for a, corp_name, title, filed_at in rows:
-        view = None
-        if a.level in ALERT_LEVELS and graph_error is None and pb.tenant_id == "default":
+        public, review, view = hosted_view(db, pb, a)
+        if public is None and legacy_enabled and a.level in ALERT_LEVELS and graph_error is None and pb.tenant_id == "default":
             view, graph_error = await read_state(adapter, a.rcept_no)
+        effective_status = review.status if review else a.status
+        if status_ and effective_status != status_:
+            continue
+        current_state = db.get(RiskState, a.corp_code) if public else None
+        current_review_row = public is None or bool(current_state and current_state.public_assessment_id == public.assessment_id)
         customers = (view or {}).get("affected_customers", [])
         result.append({
             "assessment_id": a.assessment_id,
@@ -197,11 +219,14 @@ async def list_alerts(
             "stage": a.stage,
             **stage_fields(a),
             "combo_upgraded": a.combo_upgraded,
-            "status": a.status,
+            "status": effective_status,
+            'analysis_status': a.status, 'review_backend': 'organization' if public else 'legacy',
+            'review_id': review.review_id if review else None,
+            'public_assessment_id': public.assessment_id if public else None,
             "created_at": a.created_at,
             "affected_count": len(customers),
-            "my_pending_count": sum(c in my_ids for c in pending_customers(view)) if view else 0,
-            "graph_error": graph_error if a.level in ALERT_LEVELS else None,
+            "my_pending_count": sum(c in my_ids for c in pending_customers(view)) if current_review_row and view and view.get('status') == 'WAITING_APPROVAL' else 0,
+            "graph_error": graph_error if public is None and a.level in ALERT_LEVELS else None,
         })
     return result
 
@@ -215,10 +240,17 @@ async def get_alert(
 ) -> dict:
     a = get_assessment(db, assessment_id)
     require_assessment_access(db, pb, a)
-    require_legacy_runtime(pb)
+    public, review, view = hosted_view(db, pb, a)
     company = db.get(Company, a.corp_code)
     disclosure = db.get(Disclosure, a.rcept_no)
-    view, graph_error = await read_state(adapter, a.rcept_no)
+    graph_error = None
+    if public is None:
+        from shared.config import get_settings
+        if get_settings().PHASE1_RUNTIME_FACTORY:
+            graph_error = '이전 실행 기록입니다. 최신 판정의 조직별 검토를 사용하세요.'
+        else:
+            require_legacy_runtime(pb)
+            view, graph_error = await read_state(adapter, a.rcept_no)
     affected = (view or {}).get("affected_customers", [])  # 보유 평가금액 큰 순 (find_customers가 정렬)
     people = _customers(db, [c["customer_id"] for c in affected])
 
@@ -245,7 +277,11 @@ async def get_alert(
     return {
         "assessment_id": a.assessment_id,
         "rcept_no": a.rcept_no,
-        "status": a.status,
+        "status": review.status if review else a.status,
+        'analysis_status': a.status,
+        'review_backend': 'organization' if public else 'legacy',
+        'review_id': review.review_id if review else None,
+        'public_assessment_id': public.assessment_id if public else None,
         "level": a.level,
         "stage": a.stage,
         **stage_fields(a),

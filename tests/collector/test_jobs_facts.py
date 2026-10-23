@@ -88,8 +88,15 @@ def test_correction_links_to_the_original_named_in_its_text_not_to_the_nearest_o
     assert disclosure("20250117000380")["original"] == "20240927000916"
     assert disclosure("20241018000341")["original"] == "20240927000916"
     assert disclosure("20241031000530")["original"] is None and disclosure("20240927000916")["original"] is None
-    # 후보만 남긴다: 사건 연결(event_id)의 확정은 R4의 confirm_event_link
-    assert all(disclosure(r["rcept_no"])["event_id"] is None for r in CHAIN)
+    # A unique same-title original on the explicitly quoted original date is confirmed.
+    assert disclosure("20250117000380")["event_id"] == "20240927000916"
+    assert disclosure("20241018000341")["event_id"] == "20240927000916"
+    assert disclosure("20241031000530")["event_id"] is None
+    with get_session() as session:
+        correction = session.get(Disclosure, "20250117000380")
+        assert correction.event_started_at[:10] == "2024-09-27"
+        assert correction.event_link_evidence[0]['quote'] in DOC_0117
+        assert correction.event_link_evidence[0]['rcept_no'] == correction.rcept_no
 
 
 def test_second_run_does_not_touch_handed_off_disclosures_or_call_dart_again(db, fake):
@@ -174,9 +181,12 @@ def test_handoff_is_consumable_by_r4_analysis_queue_and_facts_by_the_mcp_tool(db
     assert got["availability"] == "AVAILABLE" and got["structured_facts"]["facts"] and got["facts_hash"]
     with get_session() as s:
         queued = enqueue_ready(s, "2025-04-01", "rules-digest")  # R4: analysis_ready_at이 있는 공시만 분석 작업이 된다
-    assert sorted(j.rcept_no for j in queued) == sorted(r["rcept_no"] for r in CHAIN)
+    # A later manifest must include the preceding filing's published history.
+    assert [j.rcept_no for j in queued] == [min(r["rcept_no"] for r in CHAIN)]
+    assert queued[0].as_of == "2024-09-27"
     with get_session() as s:
         assert s.scalar(select(AnalysisJob).limit(1)).status == "PENDING"
+        assert enqueue_ready(s, "2025-04-01", "rules-digest") == []
 
 
 def test_rerun_after_new_correction_hands_off_only_the_new_one(db, fake):

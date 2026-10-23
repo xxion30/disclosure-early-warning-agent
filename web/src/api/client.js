@@ -50,6 +50,10 @@ export const api = {
 
   startRun: (rceptNo) => http.post('/runs', { rcept_no: rceptNo }).then((r) => r.data),
   getRun: (rceptNo) => http.get(`/runs/${rceptNo}`).then((r) => r.data),
+  startAnalysis: (rceptNo) => http.post('/analysis/jobs', { rcept_no: rceptNo, as_of: new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Seoul'}) }).then((r) => r.data),
+  getAnalysis: (jobId) => http.get(`/analysis/jobs/${jobId}`).then((r) => r.data),
+  listAnalysis: () => http.get('/analysis/jobs').then((r) => r.data),
+  collectRun: () => http.post('/collect/run').then((r) => r.data),
 
   // ?mock=stages면 화면 확인용 가짜 데이터(api/mock.js)를 쓴다. 실제 서버는 부르지 않는다
   listAlerts: (params) => (mockMode() ? mockApi.listAlerts(params) : http.get('/alerts', { params }).then((r) => r.data)),

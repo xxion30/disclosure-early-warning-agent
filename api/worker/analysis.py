@@ -119,13 +119,30 @@ async def serve(executor, once=False):
     import json
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    from shared.analysis import enqueue_ready
+    from shared.analysis import enqueue_ready, enqueue_recalculations
+    from sqlalchemy.exc import OperationalError, InterfaceError
+    import logging
     from risk_engine.loader import load_rules
     worker=AnalysisWorker(executor)
+    last_recalculation = None
     while True:
         digest=hashlib.sha256(json.dumps(load_rules(),sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         day=datetime.now(ZoneInfo('Asia/Seoul')).date().isoformat()
-        with get_session() as db:enqueue_ready(db,day,digest)
-        await worker.run_once()
+        try:
+            with get_session() as db:
+                enqueue_ready(db,day,digest)
+                from time import monotonic
+                tick = monotonic()
+                if last_recalculation is None or tick - last_recalculation >= 60:
+                    enqueue_recalculations(db,day,digest)
+                    last_recalculation = tick
+            await worker.run_once()
+        except (OperationalError, InterfaceError) as exc:
+            # Database outages must not permanently kill the embedded worker.
+            # Raw SQL/connection errors may contain private input; log type only.
+            logging.getLogger(__name__).warning('분석 DB 연결 재시도: %s', type(exc).__name__)
+            if once:
+                raise
+            await asyncio.sleep(5)
         if once:return
         await asyncio.sleep(1)

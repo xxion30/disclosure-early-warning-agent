@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     DART_API_KEY: str = ""
     JWT_SECRET: str = "change-me"
+    APP_ENV: str = 'development'
 
     DB_URL: str = "sqlite:///data/app.db"
     CHECKPOINT_DB: str = "data/checkpoints.db"

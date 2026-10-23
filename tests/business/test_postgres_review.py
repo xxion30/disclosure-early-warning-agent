@@ -43,7 +43,7 @@ def test_postgres_additive_review_migration(postgres):
     command.upgrade(cfg,'head');command.upgrade(cfg,'head')
     with postgres.connect() as db:
         assert db.execute(text("SELECT name FROM pbs WHERE pb_id='fixture'")).scalar_one()=='kept'
-        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='20261023_05'
+        assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one()=='20261024_07'
     assert 'state_version' in {c['name'] for c in inspect(postgres).get_columns('risk_states')}
 
 

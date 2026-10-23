@@ -15,9 +15,20 @@ def lock_current(db, assessment):
     db.scalar(select(Company).where(Company.corp_code==assessment.corp_code).with_for_update())
     state=db.scalar(select(RiskState).where(RiskState.corp_code==assessment.corp_code).with_for_update()
                     .execution_options(populate_existing=True))
-    if state is None or state.public_assessment_id!=assessment.assessment_id or state.state_version!=assessment.state_version or state.resolved or state.stage not in ALERT_STAGES:
+    if state is None or not state.public_assessment_id or assessment.state_version <= 0 or state.state_version!=assessment.state_version or state.resolved or state.stage not in ALERT_STAGES:
         raise ValueError('최신 경보 판정이 아닙니다. 새 검토가 필요합니다.')
     return state
+
+
+def matching_review(db, tenant_id, assessment):
+    """Equivalent recalculations retain one review and its approval history.
+    state_version covers stage, evidence, values, missing data and rule version.
+    """
+    return db.scalar(select(OrganizationReview).join(PublicAssessment,
+        PublicAssessment.assessment_id == OrganizationReview.assessment_id).where(
+        OrganizationReview.tenant_id == tenant_id, PublicAssessment.corp_code == assessment.corp_code,
+        PublicAssessment.state_version == assessment.state_version)
+        .order_by(OrganizationReview.created_at).limit(1))
 
 
 def create_review(db, tenant_id, assessment_id):
@@ -27,8 +38,7 @@ def create_review(db, tenant_id, assessment_id):
     if not db.scalar(select(Customer.customer_id).join(Holding,Holding.customer_id==Customer.customer_id).where(
         Customer.tenant_id==tenant_id,Holding.tenant_id==tenant_id,Holding.stock_code==state.stock_code).limit(1)):
         raise PermissionError('해당 조직의 보유 고객이 없습니다.')
-    existing=db.scalar(select(OrganizationReview).where(OrganizationReview.tenant_id==tenant_id,
-                       OrganizationReview.assessment_id==assessment_id))
+    existing=matching_review(db, tenant_id, assessment)
     if existing:return existing
     try:
         with db.begin_nested():

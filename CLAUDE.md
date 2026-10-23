@@ -5,6 +5,10 @@
 
 ---
 
+## 2026-10-24 전체 통합 작업
+
+사용자가 R4에게 전체 역할 통합·배포와 문서 정리를 맡겼다. 이번 작업에서는 역할별 수정 제한과 별도 협의 절차 대신 사용자 승인 범위 안에서 필요한 연결을 직접 보완한다. 위험 정책의 숫자는 rules.yaml을 유지한다. 현재 실행은 docs/run.md, 판단 근거와 실제 검증 범위는 docs/log/2026-10-24-service-integration-release.md를 따른다. 아래 역할 표는 팀 분담 기록으로 보존한다.
+
 ## 0. 한 줄 소개
 
 증권사 PB가 고객 보유 종목의 위험을 공시로 판단하던 일(노가다)을 AI가 대신하고, 경보와 그 **근거**를 웹 화면으로 알려 주는 B2B2E 서비스.
@@ -47,7 +51,7 @@
 ```
 shared/        config·db·schemas, models/(base core tenant risk collect)        [R4]
 risk_engine/   규칙 엔진(rules.yaml, 판정). MCP 없이 쓰는 라이브러리              [R4]
-collector/     DART 수집기 (뼈대만 있음)                                         [R3]
+collector/     DART 수집기 (증분·백필·구조화 사실·재무 지표)                                         [R3]
 mcp_servers/   business/(R4)  rag/(R3)
 agent/         graph·state·runtime·nodes·prompts·model_adapter·harness_llm·rules [R2], adapters/ [R4]
 harness/       context·guardrails·loop_limits·recovery_llm [R2], masking·tracing·recovery_tools [R4]

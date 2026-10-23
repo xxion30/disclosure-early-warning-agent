@@ -110,6 +110,15 @@ def parse_original_date(text: str) -> str | None:
     return _iso(*m.groups()) if m else None
 
 
+def original_date_evidence(text: str, rcept_no: str) -> dict | None:
+    """Keep only the exact correction header used to verify the unique original."""
+    match = _ORIGINAL_DATE.search(text or '')
+    if match is None or _iso(*match.groups()) is None:
+        return None
+    return {'rcept_no': rcept_no, 'source': f'https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rcept_no}',
+            'quote': match.group(0), 'location': f'chars:{match.start()}:{match.end()}'}
+
+
 def _num(raw, cast):
     """'5,917,159' → 5917159. 읽지 못하면 (None, 사유). 빈 값·'-'는 호출하는 make_fact가 먼저 MISSING으로 처리한다."""
     try:

@@ -28,6 +28,13 @@ async def receive(state, deps):
         raw = await call_tool(deps, 'get_disclosure_facts', {'rcept_no': rcept_no})
         if not isinstance(raw, dict) or 'availability' not in raw:
             raise AgentError('get_disclosure_facts 중첩 응답 계약 불일치')
+        if raw.get('availability') == 'UNAVAILABLE':
+            if (raw.get('rcept_no') != rcept_no or raw.get('corp_code') != data['corp_code']
+                    or context.get('facts_version') is not None
+                    or raw.get('structured_facts') is not None or raw.get('facts_hash') is not None):
+                raise AgentError('미수집 사실의 식별자 또는 고정 버전 불일치')
+            return {'disclosure': data, 'structured_facts': {
+                'availability': 'UNAVAILABLE', 'rcept_no': rcept_no, 'corp_code': data['corp_code'], 'facts': []}}
         facts = validate_facts(raw, data)
         actual_version = facts.get('facts_hash')
         expected_version = context.get('facts_version')

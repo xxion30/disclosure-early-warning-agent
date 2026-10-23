@@ -32,7 +32,8 @@ def public_item(item):
                           ('fs_div', 'period', 'rcept_no', 'revision', 'status', 'impairment_pct')}
                          for basis in item.get('basis_checks', []) if isinstance(basis, dict)],
         'evidence': [{key: e.get(key) for key in (
-            ('kind', 'api', 'field', 'rcept_no', 'row_key', 'value', 'unit', 'period', 'basis', 'data_version')
+            ('kind', 'corp_code', 'rcept_no', 'period', 'basis', 'revision', 'indicator', 'values', 'source_hash')
+            if e.get('kind') == 'financial' else ('kind', 'api', 'field', 'rcept_no', 'row_key', 'value', 'unit', 'period', 'basis', 'data_version')
             if e.get('kind') == 'api' else ('source', 'quote', 'rcept_no', 'location'))}
                      for e in item.get('evidence', []) if isinstance(e, dict)]}
 

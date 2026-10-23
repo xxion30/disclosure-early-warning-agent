@@ -6,6 +6,7 @@ from uuid import uuid4
 from shared.schemas import ToolResponse
 
 ALLOWED_TOOLS = frozenset({
+    'verify_financial_evidence',
     "list_new_disclosures", "get_disclosure", "get_disclosure_facts", "get_company_profile", "get_signal_history",
     "calculate_risk_score", "get_holders", "save_assessment", "get_risk_state", "save_risk_state",
     "create_contact_task", "search_disclosure_text", "search_reference",

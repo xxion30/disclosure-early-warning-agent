@@ -6,7 +6,7 @@ from agent.evidence import retained_data, validate_evidence, validate_known_evid
 from agent.execution import call_tool
 from agent.integration import UnifiedResult
 from agent.ports import AgentError
-from agent.structured_facts import api_evidence
+from agent.structured_facts import api_evidence, validate_facts
 
 
 async def calculate_unified(state, deps):
@@ -16,6 +16,7 @@ async def calculate_unified(state, deps):
     prepared = deps.unified.prepare_signals({
         'disclosure': deepcopy(disclosure), 'structured_facts': deepcopy(state.get('structured_facts', {})),
         'flags': deepcopy(state.get('flags', [])), 'evidence': deepcopy(state.get('evidence', [])),
+        'numeric_facts': deepcopy(state.get('numeric_facts', [])),
         'routes': deepcopy(state.get('risk_routes', [])), 'as_of': context['as_of'],
     })
     if not isinstance(prepared, list) or any(not isinstance(s, dict) for s in prepared):
@@ -44,13 +45,36 @@ async def calculate_unified(state, deps):
     if result.manual_check:
         raise AgentError('규칙 엔진의 수동 확인 요청')
     known, sources, fetched = input_evidence, list(state.get('verified_sources', [])), {}
+    financial = [ev for row in result.breakdown for ev in row.get('evidence', [])
+                 if ev.get('kind') == 'financial']
+    if financial:
+        checked = await call_tool(deps, 'verify_financial_evidence', {
+            'corp_code': disclosure['corp_code'], 'as_of': context['as_of'], 'evidence': financial})
+        if checked.get('evidence') != financial:
+            raise AgentError('재무 근거 검증 응답 불일치')
+        known.extend(financial)
+    historical_facts = {}
     for row in result.breakdown:
         evidence = row.get('evidence') or []
         if not evidence:
             raise AgentError('판정 항목 출처 누락')
         for ev in evidence:
+            if ev.get('kind') == 'financial':
+                validate_known_evidence([ev], known)
+                continue
             if ev.get('kind') == 'api':
-                api_evidence(ev, state.get('structured_facts', {}))
+                receipt = ev.get('rcept_no')
+                facts = state.get('structured_facts', {})
+                if receipt != disclosure['rcept_no']:
+                    if receipt not in historical_facts:
+                        meta = await call_tool(deps, 'get_disclosure', {'rcept_no': receipt})
+                        if (meta.get('corp_code') != disclosure['corp_code']
+                                or date.fromisoformat(meta['filed_at'][:10]) > date.fromisoformat(context['as_of'])):
+                            raise AgentError('다른 기업·기준일 이후 API 근거')
+                        envelope = await call_tool(deps, 'get_disclosure_facts', {'rcept_no': receipt})
+                        historical_facts[receipt] = validate_facts(envelope, meta)
+                    facts = historical_facts[receipt]
+                api_evidence(ev, facts)
                 known.append(ev)
                 continue
             try:

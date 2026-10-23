@@ -21,6 +21,7 @@ from mcp_servers.business.tools.risk_states import get_risk_state, save_risk_sta
 PORT = 8001  # 기본값. BUSINESS_MCP_URL의 포트가 다르면 그 포트로 뜬다 (한 노트북에 시험용 서버를 따로 띄울 때)
 
 mcp = FastMCP("business-mcp")
+from mcp_servers.business.tools.verify_financial_evidence import verify_financial_evidence
 
 # MCP 도구 주석(annotations): 조회 도구는 readOnlyHint, 데이터를 바꾸는 도구는 destructiveHint로 표시한다.
 # Agent·MCP 클라이언트가 변경 도구를 알아보고 실행 전에 사람의 승인을 거치게 하는 근거다 (수업 자료: 변경 도구는 destructiveHint).
@@ -28,6 +29,7 @@ READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": T
 MUTATING = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
 
 for _tool, _hints in (
+    (verify_financial_evidence, READ_ONLY),
     (list_new_disclosures, READ_ONLY),
     (get_disclosure, READ_ONLY),
     (get_disclosure_facts, READ_ONLY),

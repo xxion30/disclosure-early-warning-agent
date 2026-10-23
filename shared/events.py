@@ -23,6 +23,7 @@ def confirm_event_link(db, rcept_no, original_rcept_no, verified_evidence):
     current.original_rcept_no=original_rcept_no
     current.event_id=original.event_id or original.rcept_no
     current.event_started_at=original.event_started_at or original.filed_at
+    current.event_link_evidence=verified_evidence
     current.analysis_ready_at=None
     db.flush()
     return current.event_id
