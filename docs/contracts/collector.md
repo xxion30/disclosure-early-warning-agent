@@ -40,7 +40,7 @@
      커서 없음(last_success_at null) → backfill (최근 12개월 list + 최신 정기보고서)
      커서 있음 → list.json(corp_code, 커서 날짜 하루 전 ~ 오늘)
      신규 접수번호마다: disclosures에 upsert (본문 없음)
-        제목이 "주요사항보고서(...)" → 해당 항목 API 호출 → rcept_no로 행 고름 → disclosure_facts 저장
+        제목이 "주요사항보고서(...)" → 해당 항목 API 호출 → rcept_no로 행 고름 → disclosures.structured_facts 저장
         제목이 거래소 공시 → 제목·접수번호·링크만 저장 (원문은 나중에 rag가 읽음)
         새 정기보고서 → 재무제표 API → indicators → financial_snapshots
      모든 페이지를 저장한 뒤에만 finish_stock(success_at=...) — 실패하면 success_at 없이 호출(커서 유지)
@@ -109,30 +109,36 @@ R4가 요청한 대로 의미를 고정한다.
 | `indicators` | 5장 |
 
 ### 4-4. 기존 표 사용
-- `disclosures`: `rcept_no corp_code title filed_at url`을 채운다. **`body_text`는 항상 비워 둔다.** `processed=false`로 넣는다. R4가 `event_id`·`event_started_at`·`original_rcept_no` 칸을 추가했다. 수집기는 3-4의 후보 `original_rcept_no`만 제안한다.
+- `disclosures`: `rcept_no corp_code title filed_at url`을 채운다. **`body_text`는 항상 비워 둔다.** `processed=false`로 넣는다. R4가 `event_id`·`event_started_at`·`original_rcept_no` 칸을 추가했다. 수집기는 3-4의 후보 `original_rcept_no`만 제안한다. 항목 API 값은 `structured_facts`(4-5)에 넣는다 — 이 컬럼은 R4가 추가해야 한다.
 - `companies`: `corp_code stock_code name market`을 채운다.
 
-### 4-5. `disclosure_facts` — 신규 (R4·R2 모두 방향 동의, 필드 확정 필요)
-R2·R4가 요구한 정보를 담는다. 원문 텍스트는 담지 않고 **API가 준 필드 값**만 담는다. 모델은 `shared/models/collect.py`(R3 주담당, R4 검토)에 둔다.
+### 4-5. 구조화 사실 `disclosures.structured_facts` (결정됨: R2, 2026-10-23 PR #32 코멘트)
+항목 API가 준 값은 **별도 표가 아니라 `disclosures.structured_facts` JSON 컬럼**에 저장한다. R3 초안 v2의 `disclosure_facts` 표 제안은 철회한다. 원문 텍스트는 담지 않고 **API가 준 필드 값**만 담는다.
 
-| 칸 | 설명 |
+| 역할 | 맡는 것 |
 | --- | --- |
-| `id` | PK |
-| `rcept_no`, `corp_code` | 공시 접수번호·기업 코드 |
-| `fact_type` | 사실 유형. 항목 API 이름(`piicDecsn`)과 분리해 위험 항목 코드(예: `RIGHTS_OFFERING`)와 같은 어휘를 쓰는 것을 제안 `TODO(확인 필요)` (R4 `phase1_classification`과 맞춤) |
-| `item` | 사실 이름 (`ic_mthn` → `issue_method` 같은 안정된 영문 이름). **원본 필드명은 `source_field`에 따로 둔다** |
-| `value` | 값. 숫자는 쉼표를 지워 숫자로, 못 읽으면 `null`+상태 |
-| `unit` | `원`, `주`, `%`, 없음 |
-| `as_of` | 기준일 또는 대상 기간 (있을 때) |
-| `origin` | `API` (이 표는 항상 `API`; 코드 계산 값은 `financial_snapshots`, AI 추출은 별도) |
-| `source_api`, `source_field` | 출처. 예: `piicDecsn` / `ic_mthn` |
-| `fetched_at` | 수집 시각 |
-| `status` | `OK` / `MISSING`(값 없음, DART가 `-`로 줌) / `NOT_APPLICABLE`(해당 없음) / `FETCH_FAILED`(조회 실패) / `NEEDS_REVIEW`(확인 필요) — **R2 요구: 이 넷을 0·`false`로 합치지 않는다** |
+| **R3** | 항목 API 값의 정제(쉼표·`-` 처리, 단위), 출처 기록, `structured_facts`에 쓰는 저장 연결 |
+| **R4** | 컬럼 추가·마이그레이션, 저장 인터페이스, 공통 스키마, MCP 도구 `get_disclosure_facts(rcept_no)` |
+| **R2** | 응답 검증, Agent 활용 |
 
-- 유일 키 `(rcept_no, fact_type, item)`. 정정본은 새 `rcept_no`의 새 행이다.
-- 정정 공시의 수량 필드가 `-`로 오는 경우(금양 정정, 확인됨)는 `MISSING`이다.
-- **조회 경로(`disclosure_facts`를 R2가 읽는 방법)는 R4의 MCP 도구와 어댑터를 거친다** (R2 제안). 도구 이름·입출력은 R4·R2가 정한다 `TODO(확인 필요)`.
-- 인용문·원문 위치는 이 표에 없다 (API 값은 인용 검증 대상이 아님, R2도 "구조화 값의 출처 검증은 원문 인용 검증과 구분"에 동의). 원문 근거는 rag 검색 결과가 따로 준다.
+**현재 상태:** R4 코드(`Pre-merge-P01-v01`)에는 `structured_facts` 컬럼도 `get_disclosure_facts` 도구도 **아직 없다**(2026-10-23 확인). 컬럼이 생기기 전에는 저장 단계(`jobs.py`, `repo.py`)를 만들지 않는다.
+
+**`get_disclosure_facts` 응답 모양 (R2 정리).** 최종 스키마는 R4가 정한다. R3는 아래 모양으로 값을 만든다.
+
+```json
+{"schema_version": "...", "rcept_no": "...", "corp_code": "...", "collected_at": "2026-10-23T09:05:00+09:00",
+ "facts": [{"name": "issue_method", "dtype": "string", "raw": "주주배정후 실권주 일반공모", "value": "주주배정후 실권주 일반공모",
+            "unit": null, "status": "PRESENT", "reason": null,
+            "source": {"api": "piicDecsn", "field": "ic_mthn", "rcept_no": "...", "fetched_at": "..."}}]}
+```
+
+- 각 사실에 `name`(안정된 영문 이름), `dtype`, `raw`(API 원본 값), `value`(정제값), `unit`, `status`, `reason`, `source`(API·필드·접수번호·수집 시각)를 둔다. 위 필드 이름은 R2가 말한 항목(항목명·자료형·원천 값·정제값·단위·상태·사유·출처)을 제가 영문으로 옮긴 **제안**이며 `TODO(확인 필요)`(R4 확정).
+- **상태 4가지 (R2):** `PRESENT`(값 있음) / `MISSING`(값 없음, 예: DART가 `-`로 줌) / `NOT_APPLICABLE`(해당 없음) / `NEEDS_CHECK`(확인 필요). 결측을 0이나 `false`로 대체하지 않는다. (R3 v2의 `OK`·`FETCH_FAILED`·`NEEDS_REVIEW`는 폐기.)
+- **조회 실패는 정상 빈 결과와 구분한다 (R2 요구).** 표현 방법(제안): 항목 API 호출이 실패하면 `structured_facts`를 **채우지 않고(`NULL`)** 수집 이력(`collect_runs.error`)에 남겨 "아직 수집하지 못함"으로 둔다. 호출은 성공했는데 그 `rcept_no`의 행이 없으면(3-3) `status: MISSING`, `reason: api_row_not_found`로 담아 **R2가 원문 분석으로 넘기게** 한다. 값은 읽었지만 정제하지 못하면 `NEEDS_CHECK`.
+- 정정 공시의 수량 필드가 `-`로 오는 경우(금양 정정 `20250117000380`, 확인됨)는 `MISSING`이다.
+- 정정본은 새 `rcept_no`의 새 `disclosures` 행이므로 그 행의 `structured_facts`에 따로 저장한다.
+- 인용문·원문 위치는 담지 않는다. API 값의 출처 검증은 원문 인용 검증과 구분한다(R2). 원문 근거는 rag 검색 결과가 따로 준다.
+- 어휘 주의: `financial_snapshots.indicators`의 상태는 R4 구현대로 `OK`/`MISSING`이고, 구조화 사실은 R2 기준 `PRESENT`/`MISSING`/`NOT_APPLICABLE`/`NEEDS_CHECK`다. 두 곳의 상태 어휘가 다르다. 통일할지는 R4·R2 `TODO(확인 필요)`.
 
 ## 5. 재무 지표 `indicators` (R1 결정 반영)
 
@@ -146,7 +152,7 @@ R2·R4가 요구한 정보를 담는다. 원문 텍스트는 담지 않고 **API
 | `OPERATING_CASH_FLOW` | `negative_years` | 제안: 당기 영업활동현금흐름 ≥ 0이면 0, 당기 < 0·전기 ≥ 0이면 1, 당기·전기 모두 < 0이면 2. 같은 응답의 당기·전기 열을 쓴다(금양 2024 당기 −203억, 확인됨). `ANNUAL`에만 넣는다 (R4 `snapshot_signals`가 분기에선 비움) |
 | `INTEREST_BURDEN` | `interest_coverage` | **결정됨(R1, 2026-10-23):** `영업이익 ÷ 금융비용`. 분모는 손익계산서 `금융비용`/`금융원가`(`ifrs-full_FinanceCosts`)이다(5-2). 계정을 못 찾으면 0점이 아니라 `MISSING`("산정 불가")이고 점수에 안 넣는다. 금융비용 ≤ 0이면 나눌 수 없어 `MISSING`으로 두고 사유를 `sources`에 남긴다(R4 `ratio()`도 분모 ≤ 0이면 수동 확인) `TODO(확인 필요)` (R4: 이 경우를 "부담 없음"으로 볼지) |
 | `SHORT_TERM_DEBT` | `debt_to_cash_pct` | **결정됨(R1):** 분자 = CP·단기사채·1년 내 회사채(유동성사채 포함)·단기차입금·유동성장기부채, 분모 = `현금및현금성자산`만. `단기차입금`은 표준계정코드가 없어 이름으로 찾는다(확인됨). 구성 항목 **하나라도 못 찾으면 `MISSING`**(일부만 더하면 과소 계산). 유동성사채·유동성장기부채의 실제 계정명과, CP·단기사채·회사채를 주기 API 만기 구간(`yy1_below` 등)에서 가져올지 재무제표 계정으로 가져올지는 `TODO(확인 필요)` |
-| `AUDIT_OPINION` | `opinion`(거절·부적정·한정·적정), `going_concern`(bool) | `accnutAdtorNmNdAdtOpinion`의 `adt_opinion`(구조화 값, 확인됨). 계속기업 불확실성은 별도 필드가 없어 `emphs_matter`·`core_adt_matter` 텍스트에서 읽어야 한다 → 텍스트 해석은 R2 영역이므로 수집기는 `going_concern`을 채우지 않고 원문 문구만 `NEEDS_REVIEW`로 넘길 수 있다 `TODO(확인 필요)` |
+| `AUDIT_OPINION` | `opinion`(거절·부적정·한정·적정), `going_concern`(bool) | `accnutAdtorNmNdAdtOpinion`의 `adt_opinion`(구조화 값, 확인됨). 계속기업 불확실성은 별도 필드가 없어 `emphs_matter`·`core_adt_matter` 텍스트에서 읽어야 한다 → 텍스트 해석은 R2 영역이므로 수집기는 `going_concern`을 채우지 않는다(`detail`에서 빼고 `opinion`만 `OK`로 넣음). 계속기업 불확실성은 R2가 원문에서 읽는다 `TODO(확인 필요)` |
 | `DEBT_ISSUANCE` · `FUND_USAGE` · `LARGEST_SHAREHOLDER_CHANGE` | 플래그 | 전년 대비 비교·사용 목적 판단이 필요하다. Phase 1 후순위, `MISSING`으로 시작 |
 | `EQUITY_INVESTMENT` | — | `manual_only` (R4 규칙). 값만 저장 |
 
@@ -223,7 +229,7 @@ DART 호출은 모두 가짜 응답으로 한다 (키·네트워크 불필요). 
 | # | 내용 | 상태 |
 | --- | --- | --- |
 | 1 | `collect_cursors` 신설 | **결정됨** (R1 승인, R4 구현). `last_success_at` 의미는 3-2로 제안 → R4 확인 |
-| 2 | 구조화 값 저장 | 방향 합의(`disclosure_facts`). 칸·MCP 조회 경로 확정 필요 (R2·R3·R4) |
+| 2 | 구조화 값 저장 | **결정됨** (R2): `disclosures.structured_facts` JSON 컬럼 + MCP `get_disclosure_facts(rcept_no)`, 상태 `PRESENT/MISSING/NOT_APPLICABLE/NEEDS_CHECK`. 컬럼·도구는 R4가 추가해야 한다(2026-10-23 기준 없음). 필드 이름 확정은 R4 |
 | 3 | 정정 ↔ 원본 | 방향 합의(`event_id`·`original_rcept_no`). DART에서 확인할 근거는 3-4. 연결 알고리즘 확정 필요 (R4·R2) |
 | 4 | 거래소 공시 경보 대상 | **결정됨** (R1, data_sources.md에 반영). 위니아 풍문 정지 사례 확인은 `eval/cases` 작업 때 |
 | 5 | 재무 지표 정의 | **대부분 결정됨** (R1). 이자비용은 `금융비용`/`금융원가`로 **결정됨**. 유동성사채 계정명, 연결/개별 판정 기준, 금융비용 ≤ 0 처리는 열림 |
