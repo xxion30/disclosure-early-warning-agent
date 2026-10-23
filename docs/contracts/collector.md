@@ -184,7 +184,7 @@ R4가 요청한 대로 의미를 고정한다.
 - 인용문·원문 위치는 담지 않는다. API 값의 출처 검증은 원문 인용 검증과 구분한다(R2). 원문 근거는 rag 검색 결과가 따로 준다.
 - 어휘 주의: `financial_snapshots.indicators`의 상태는 R4 구현대로 `OK`/`MISSING`이고, 구조화 사실은 R2 기준 `PRESENT`/`MISSING`/`NOT_APPLICABLE`/`NEEDS_CHECK`다. 두 곳의 상태 어휘가 다르다. 통일할지는 R4·R2 `TODO(확인 필요)`.
 
-**메타데이터·해시·재수집 규칙 (R2 반영안, 2026-10-23 — 아래는 계약이며 `collector/facts.py`에는 아직 없는 부분이 있다).**
+**메타데이터·해시·재수집 규칙 (R2 반영안, 2026-10-23).** 구현 상태: 같은 접수번호에 항목 API 행이 여러 개면 첫 행을 고르지 않고 모든 사실을 `NEEDS_CHECK`로 둔다(`collector/facts.py`의 `build_ambiguous_payload`, `jobs.py`). 행을 구분할 안정된 값을 아직 확인하지 못해 **`row_key`는 채우지 않는다**(다중 행 사례를 DART에서 찾으면 그때 정한다). 재수집 실패 시 기존 값 보존은 인계된 공시를 다시 건드리지 않는 구조라 이미 지켜진다(`test_second_run_does_not_touch_handed_off_disclosures_or_call_dart_again`). 해시 정의는 R4 확인 대기.
 - **고정 항목 코드:** 사실의 `name`은 안정된 영문 이름이다(위 표). 이름이 바뀌면 `schema_version`을 올린다.
 - **`row_key`:** 항목 API가 한 접수번호에 여러 행을 주면 첫 행을 임의로 고르지 않는다. 원천 API·업무 구분·대상/기간 등 **안정된 구분 값**으로 `source.row_key`를 만든다. 안정된 구분이 없으면 해당 다중 행을 `NEEDS_CHECK`로 둔다. API 행 번호는 수집 내 위치일 뿐 사건 ID가 아니다. R4 스키마는 `(name, api, field, row_key, period, basis)` 중복을 거절한다(`shared/facts.py`).
 - **값 표현:** `raw`는 개별 원천 값이다. HTTP 전체 응답이나 공시 원문을 넣지 않는다. 금액·정밀 수치는 단위를 명시하고, 자료형은 R4 스키마(`number` 등)를 따른다. `0`·`false`는 원천에 실제 있을 때만 `PRESENT`다.

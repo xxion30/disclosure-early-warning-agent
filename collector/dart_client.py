@@ -107,6 +107,11 @@ def strip_markup(raw: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", raw)).strip()
 
 
+# 정규화 방식(압축 파일 순서, 문자 디코딩, 태그 제거, 공백 정리)을 바꾸면 올린다.
+# 다른 버전으로 만든 텍스트의 해시·인용 위치(location)는 서로 비교하거나 섞지 않는다 (docs/contracts/mcp_rag.md).
+NORMALIZATION_VERSION = "1"
+
+
 def normalize_document(files: Iterable[bytes]) -> str:
     """document.xml 압축 안의 파일들(`namelist()` 순서) → 이어 붙여 태그를 지운 평문."""
     return strip_markup("\n".join(_decode(b) for b in files))
@@ -121,6 +126,7 @@ class Document:
     rcept_no: str
     text: str  # 비어 있을 수 있다 (호출한 쪽이 NOT_FOUND로 볼지 정한다)
     sha256: str
+    normalization_version: str = NORMALIZATION_VERSION
 
 
 def _ymd(d: date | str) -> str:

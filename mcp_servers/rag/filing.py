@@ -12,7 +12,7 @@ import logging
 from collections.abc import Awaitable
 from typing import TypeVar
 
-from collector.dart_client import DartClient, DartError, DartRateLimited, DartUnavailable, Document
+from collector.dart_client import NORMALIZATION_VERSION, DartClient, DartError, DartRateLimited, DartUnavailable, Document
 from mcp_servers.rag import ingest, memory, reference
 from shared.config import get_settings
 from shared.db import get_session
@@ -92,7 +92,8 @@ def search(rcept_no: str, query: str, k: int, holder: str | None = None) -> dict
         hits = entry.top(embed([query])[0], k)
         chunks = [{"source": entry.meta[i]["source"], "text": entry.texts[i], "rcept_no": rcept_no,
                    "location": entry.meta[i]["location"], "score": round(score, 4)} for score, i in hits]
-        return {"count": len(chunks), "chunks": chunks, "content_sha256": entry.sha256, "truncated": entry.truncated}
+        return {"count": len(chunks), "chunks": chunks, "content_sha256": entry.sha256, "truncated": entry.truncated,
+                "normalization_version": NORMALIZATION_VERSION}
 
 
 def release(rcept_no: str, holder: str | None = None) -> dict:
