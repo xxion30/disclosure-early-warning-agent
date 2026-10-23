@@ -1,0 +1,2661 @@
+{
+ "_note": "R5가 만든 테스트 사례 (회귀 타임라인·정상 회사). 접수번호·제목·접수일은 DART 공시 목록의 실제 값, facts는 DART API 원본 또는 R3 수집기(collector.indicators)로 계산한 값이며 지어낸 값이 없다. scripts/demo/build_r5_cases.py로 다시 만들 수 있고, scripts/demo/eval_cases.py로 채점한다. expected_*가 null이면 정답 미정(R1 확인 필요)이다.",
+ "schema_version": "1",
+ "generated_at": "2026-10-23T06:15:52+00:00",
+ "source": "OpenDART (list.json, 항목 API, fnlttSinglAcntAll, accnutAdtorNmNdAdtOpinion)",
+ "stages": [
+  "RED",
+  "ORANGE",
+  "YELLOW",
+  "COMPOSITE",
+  "WATCH",
+  "NONE"
+ ],
+ "cases": [
+  {
+   "case_id": "r5-timeline-001",
+   "title": "금양 감사의견 거절까지 12개월 (2024-03-21 ~ 2025-03-21)",
+   "group": "TIMELINE",
+   "scope": "timeline",
+   "stock_code": "001570",
+   "corp_code": "00106119",
+   "corp_name": "금양",
+   "as_of": "2025-03-21",
+   "window": {
+    "from": "2024-03-21",
+    "to": "2025-03-21"
+   },
+   "expected_final_stage": "YELLOW",
+   "expected_alert": true,
+   "expectation_source": "R1 결정 (2026-10-23): 감사의견 거절(20250321802001) = 🟡 재무 경보. 이전 시나리오 A의 Critical은 폐기",
+   "window_disclosure_count": 105,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20240321800791",
+     "title": "기타경영사항(자율공시)              (감사보고서 제출 지연)",
+     "filed_at": "2024-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240321800791",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2023)",
+      "bsns_year": 2023
+     }
+    },
+    {
+     "rcept_no": "20240327001225",
+     "title": "사업보고서 (2023.12)",
+     "filed_at": "2024-03-27",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240327001225",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 29025018500,
+       "total_equity": 246535275351
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 533.9578667948473,
+       "short_term_debt": 300628635695,
+       "cash": 56301939608,
+       "components": [
+        "사채",
+        "전환사채",
+        "유동성장기부채",
+        "단기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채, 전환사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 14930707843,
+       "previous": 45999421322
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": -1.0811014361789741,
+       "operating_income": -14608343494,
+       "finance_costs": 13512463313,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2023,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240327801380",
+     "title": "감사보고서제출",
+     "filed_at": "2024-03-27",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240327801380",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2023)",
+      "bsns_year": 2023
+     }
+    },
+    {
+     "rcept_no": "20240417000287",
+     "title": "[기재정정]사업보고서 (2023.12)",
+     "filed_at": "2024-04-17",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240417000287",
+     "is_correction": true,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 29025018500,
+       "total_equity": 246535275351
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 533.9578667948473,
+       "short_term_debt": 300628635695,
+       "cash": 56301939608,
+       "components": [
+        "사채",
+        "전환사채",
+        "유동성장기부채",
+        "단기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채, 전환사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 14930707843,
+       "previous": 45999421322
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": -1.0811014361789741,
+       "operating_income": -14608343494,
+       "finance_costs": 13512463313,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2023,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240425000409",
+     "title": "[기재정정]주요사항보고서(유형자산양수결정)",
+     "filed_at": "2024-04-25",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240425000409",
+     "is_correction": true,
+     "disclosure_type": "ASSET_TRANSFER"
+    },
+    {
+     "rcept_no": "20240516001709",
+     "title": "분기보고서 (2024.03)",
+     "filed_at": "2024-05-16",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240516001709",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 29025018500,
+       "total_equity": 229930780693
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 1688.1951738428945,
+       "short_term_debt": 296368910272,
+       "cash": 17555370070,
+       "components": [
+        "사채",
+        "유동성장기부채",
+        "단기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20240814004361",
+     "title": "반기보고서 (2024.06)",
+     "filed_at": "2024-08-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240814004361",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 29025018500,
+       "total_equity": 195610302197
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 2249.219041839393,
+       "short_term_debt": 584846143278,
+       "cash": 26002187088,
+       "components": [
+        "사채",
+        "유동성장기부채",
+        "단기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20240927000916",
+     "title": "주요사항보고서(유상증자결정)",
+     "filed_at": "2024-09-27",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240927000916",
+     "is_correction": false,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241018000341",
+     "title": "[기재정정]주요사항보고서(유상증자결정)",
+     "filed_at": "2024-10-18",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241018000341",
+     "is_correction": true,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241028800775",
+     "title": "매매거래정지및정지해제(불성실공시)",
+     "filed_at": "2024-10-28",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241028800775",
+     "is_correction": false,
+     "disclosure_type": "TRADING_HALT"
+    },
+    {
+     "rcept_no": "20241031000530",
+     "title": "주요사항보고서(유상증자결정)",
+     "filed_at": "2024-10-31",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241031000530",
+     "is_correction": false,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": {
+      "nstk_ostk_cnt": "5,917,159",
+      "nstk_estk_cnt": "-",
+      "fv_ps": "500",
+      "bfic_tisstk_ostk": "58,050,037",
+      "bfic_tisstk_estk": "-",
+      "fdpp_fclt": "-",
+      "fdpp_bsninh": "-",
+      "fdpp_op": "-",
+      "fdpp_dtrp": "-",
+      "fdpp_ocsa": "-",
+      "fdpp_etc": "299,999,961,300",
+      "ic_mthn": "제3자배정증자",
+      "ssl_at": "N",
+      "ssl_bgd": "-",
+      "ssl_edd": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "piicDecsn",
+      "rcept_no": "20241031000530"
+     }
+    },
+    {
+     "rcept_no": "20241108000484",
+     "title": "[기재정정]주요사항보고서(유상증자결정)",
+     "filed_at": "2024-11-08",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241108000484",
+     "is_correction": true,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241114002857",
+     "title": "분기보고서 (2024.09)",
+     "filed_at": "2024-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241114002857",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 29025018500,
+       "total_equity": 88593232688
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 3800.018049275939,
+       "short_term_debt": 643790356551,
+       "cash": 16941771018,
+       "components": [
+        "사채",
+        "유동성장기부채",
+        "단기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20241129001572",
+     "title": "[기재정정]주요사항보고서(유형자산양수결정)",
+     "filed_at": "2024-11-29",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241129001572",
+     "is_correction": true,
+     "disclosure_type": "ASSET_TRANSFER"
+    },
+    {
+     "rcept_no": "20241202000422",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-12-02",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241202000422",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "3",
+      "od_a_at_b": "-",
+      "adt_a_atn": "참석",
+      "cs_iv_bk": "메리츠증권 주식회사\n\n(MERITZ SECURITIES CO., LTD.)",
+      "aq_wtn_div_ostk": "123,475",
+      "aq_wtn_div_ostk_rt": "0.19",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "10,001,151",
+      "eaq_ostk_rt": "15.63",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "1,000,000",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "25,431",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "25,431,000,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 12월 03일",
+      "dpprpd_edd": "2025년 01월 02일",
+      "dp_pp": "이차전지 기장공장(부산드림팩토리2) 건설 및 설비자금 등 자금 조달",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "1,000,000",
+      "dp_m_otc": "-",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 12월 02일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20241202000422"
+     }
+    },
+    {
+     "rcept_no": "20241204000123",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-12-04",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241204000123",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241205000561",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-12-05",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241205000561",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "3",
+      "od_a_at_b": "-",
+      "adt_a_atn": "참석",
+      "cs_iv_bk": "메리츠증권 주식회사\n(MERITZ SECURITIES CO., LTD.)",
+      "aq_wtn_div_ostk": "123,475",
+      "aq_wtn_div_ostk_rt": "0.19",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "9,001,151",
+      "eaq_ostk_rt": "14.07",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "1,100,000",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "22,187",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "24,405,700,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 12월 06일",
+      "dpprpd_edd": "2025년 01월 05일",
+      "dp_pp": "이차전지 기장공장(부산드림팩토리2) 건설 및 설비자금 등 자금 조달",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "1,100,000",
+      "dp_m_otc": "-",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 12월 05일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20241205000561"
+     }
+    },
+    {
+     "rcept_no": "20241209000027",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-12-09",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241209000027",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241209000396",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-12-09",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241209000396",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "3",
+      "od_a_at_b": "-",
+      "adt_a_atn": "참석",
+      "cs_iv_bk": "메리츠증권 주식회사\n(MERITZ SECURITIES CO., LTD.)",
+      "aq_wtn_div_ostk": "123,475",
+      "aq_wtn_div_ostk_rt": "0.19",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "7,901,151",
+      "eaq_ostk_rt": "12.35",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "7,900,000",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "22,350",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "176,565,000,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 12월 10일",
+      "dpprpd_edd": "2025년 03월 07일",
+      "dp_pp": "이차전지 기장공장(부산드림팩토리2) 건설 및 설비자금 등 자금 조달",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "7,900,000",
+      "dp_m_otc": "-",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 12월 09일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20241209000396"
+     }
+    },
+    {
+     "rcept_no": "20250115000122",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2025-01-15",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250115000122",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250117000380",
+     "title": "[기재정정]주요사항보고서(유상증자결정)",
+     "filed_at": "2025-01-17",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250117000380",
+     "is_correction": true,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": {
+      "nstk_ostk_cnt": "-",
+      "nstk_estk_cnt": "-",
+      "fv_ps": "-",
+      "bfic_tisstk_ostk": "-",
+      "bfic_tisstk_estk": "-",
+      "fdpp_fclt": "-",
+      "fdpp_bsninh": "-",
+      "fdpp_op": "-",
+      "fdpp_dtrp": "-",
+      "fdpp_ocsa": "-",
+      "fdpp_etc": "-",
+      "ic_mthn": "주주배정후 실권주 일반공모",
+      "ssl_at": "N",
+      "ssl_bgd": "-",
+      "ssl_edd": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "piicDecsn",
+      "rcept_no": "20250117000380"
+     }
+    },
+    {
+     "rcept_no": "20250321001823",
+     "title": "사업보고서 (2024.12)",
+     "filed_at": "2025-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321001823",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 31983598000,
+       "total_equity": 494536343970
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 1361.5432428213212,
+       "short_term_debt": 271698036599,
+       "cash": 19955152951,
+       "components": [
+        "단기차입금",
+        "유동성장기차입금",
+        "사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 1,
+       "current": -20344818738,
+       "previous": 14930707843
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": -2.065531704140428,
+       "operating_income": -56002221720,
+       "finance_costs": 27112738869,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "의견거절"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2024,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20250321801675",
+     "title": "매매거래정지및정지해제(풍문등조회공시)",
+     "filed_at": "2025-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321801675",
+     "is_correction": false,
+     "disclosure_type": "TRADING_HALT"
+    },
+    {
+     "rcept_no": "20250321802001",
+     "title": "감사보고서제출",
+     "filed_at": "2025-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321802001",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "의견거절"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2024)",
+      "bsns_year": 2024
+     }
+    },
+    {
+     "rcept_no": "20250321802062",
+     "title": "투자유의안내              (상장폐지 기준 해당)",
+     "filed_at": "2025-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250321802062",
+     "is_correction": false,
+     "disclosure_type": "DELISTING"
+    }
+   ],
+   "notes": "이전 프로젝트의 주인공 사례. 사건일보다 앞서 경보가 울렸는지(조기경보)는 정답이 아니라 측정값으로 본다."
+  },
+  {
+   "case_id": "r5-timeline-002",
+   "title": "CJ CGV 대규모 유상증자까지 12개월 (2022-06-20 ~ 2023-06-20)",
+   "group": "TIMELINE",
+   "scope": "timeline",
+   "stock_code": "079160",
+   "corp_code": "00303873",
+   "corp_name": "CJ CGV",
+   "as_of": "2023-06-20",
+   "window": {
+    "from": "2022-06-20",
+    "to": "2023-06-20"
+   },
+   "expected_final_stage": null,
+   "expected_alert": null,
+   "expectation_source": "이전 프로젝트: '유상증자 공시 1건으로는 경보 없음'(옛 등급 기준). 새 규칙 기준은 R1 확인 필요",
+   "ambiguity": "새 규칙은 유상증자 기본 2점 + 발행 비율 50% 이상 2점이다. 신주 74,700,000주 ÷ 증자 전 47,730,920주(약 156%)면 4점으로 🟠 기준(4점)에 닿는다. 옛 정답과 다를 수 있어 R1이 정해야 한다.",
+   "window_disclosure_count": 77,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20220708000007",
+     "title": "[기재정정]주요사항보고서(전환사채권발행결정)",
+     "filed_at": "2022-07-08",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20220708000007",
+     "is_correction": true,
+     "disclosure_type": "CB_BW",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20220708000429",
+     "title": "주요사항보고서(유상증자결정)",
+     "filed_at": "2022-07-08",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20220708000429",
+     "is_correction": false,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": {
+      "nstk_ostk_cnt": "6,818,182",
+      "nstk_estk_cnt": "-",
+      "fv_ps": "500",
+      "bfic_tisstk_ostk": "40,870,337",
+      "bfic_tisstk_estk": "-",
+      "fdpp_fclt": "-",
+      "fdpp_bsninh": "-",
+      "fdpp_op": "-",
+      "fdpp_dtrp": "150,000,004,000",
+      "fdpp_ocsa": "-",
+      "fdpp_etc": "-",
+      "ic_mthn": "제3자배정증자",
+      "ssl_at": "N",
+      "ssl_bgd": "-",
+      "ssl_edd": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "piicDecsn",
+      "rcept_no": "20220708000429"
+     }
+    },
+    {
+     "rcept_no": "20220816001691",
+     "title": "반기보고서 (2022.06)",
+     "filed_at": "2022-08-16",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20220816001691",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 20435078000,
+       "total_equity": 89629093234
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 242.5077943979305,
+       "short_term_debt": 695456642780,
+       "cash": 286777026902,
+       "components": [
+        "단기차입금",
+        "유동성사채",
+        "유동성장기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2022,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20221021800350",
+     "title": "감자결정(종속회사의주요경영사항)",
+     "filed_at": "2022-10-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20221021800350",
+     "is_correction": false,
+     "disclosure_type": "CAPITAL_REDUCTION",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20221114001548",
+     "title": "분기보고서 (2022.09)",
+     "filed_at": "2022-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20221114001548",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 23855466500,
+       "total_equity": 430545501595
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 101.97899624610463,
+       "short_term_debt": 519636567827,
+       "cash": 509552542146,
+       "components": [
+        "단기차입금",
+        "유동성사채",
+        "유동성장기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2022,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20230320001054",
+     "title": "사업보고서 (2022.12)",
+     "filed_at": "2023-03-20",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20230320001054",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 23860889000,
+       "total_equity": 393089340695
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 181.24941274624376,
+       "short_term_debt": 715905832769,
+       "cash": 394983808180,
+       "components": [
+        "단기차입금",
+        "유동성사채",
+        "유동성장기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 107641702022,
+       "previous": -171876627587
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": -0.3296257731048462,
+       "operating_income": -76765794985,
+       "finance_costs": 232887720708,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2022,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20230320800863",
+     "title": "감사보고서제출",
+     "filed_at": "2023-03-20",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20230320800863",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2022)",
+      "bsns_year": 2022
+     }
+    },
+    {
+     "rcept_no": "20230321801048",
+     "title": "[첨부정정]감사보고서제출",
+     "filed_at": "2023-03-21",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20230321801048",
+     "is_correction": true,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2022)",
+      "bsns_year": 2022
+     }
+    },
+    {
+     "rcept_no": "20230515001685",
+     "title": "분기보고서 (2023.03)",
+     "filed_at": "2023-05-15",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20230515001685",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 23863184000,
+       "total_equity": 356643425171
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 197.50381371743376,
+       "short_term_debt": 724727080090,
+       "cash": 366943334637,
+       "components": [
+        "단기차입금",
+        "유동성사채",
+        "유동성장기차입금"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2023,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20230620000238",
+     "title": "주요사항보고서(유상증자결정)",
+     "filed_at": "2023-06-20",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20230620000238",
+     "is_correction": false,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    }
+   ],
+   "notes": "옛 프로젝트의 '신호 하나로는 경보가 없어야 하는' 비교 사례."
+  },
+  {
+   "case_id": "r5-timeline-003",
+   "title": "SK 12개월 (2025-04-02 ~ 2026-03-31)",
+   "group": "TIMELINE",
+   "scope": "timeline",
+   "stock_code": "034730",
+   "corp_code": "00181712",
+   "corp_name": "SK",
+   "as_of": "2026-03-31",
+   "window": {
+    "from": "2025-04-02",
+    "to": "2026-03-31"
+   },
+   "expected_final_stage": null,
+   "expected_alert": false,
+   "expectation_source": "이전 프로젝트: SK는 정상(Low) 사례. 설계서 STEP 06: 정상 사례는 경보가 울리지 않아야 한다",
+   "window_disclosure_count": 190,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20250402002980",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2025-04-02",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250402002980",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250425800010",
+     "title": "주요사항보고서(자기주식처분결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-04-25",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250425800010",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250430800158",
+     "title": "해외증권거래소등에신고한사업보고서등의국내신고(자회사의 주요경영사항)",
+     "filed_at": "2025-04-30",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250430800158",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": null,
+     "facts_meta": {
+      "status": "SKIPPED",
+      "reason": "12월 결산 정기보고서 제목이 아님"
+     }
+    },
+    {
+     "rcept_no": "20250502800171",
+     "title": "주요사항보고서(자기주식처분결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-05-02",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250502800171",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250513000001",
+     "title": "특수관계인에대한영업양도",
+     "filed_at": "2025-05-13",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250513000001",
+     "is_correction": false,
+     "disclosure_type": "ASSET_TRANSFER"
+    },
+    {
+     "rcept_no": "20250515001229",
+     "title": "분기보고서 (2025.03)",
+     "filed_at": "2025-05-15",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250515001229",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16143000000,
+       "total_equity": 79829130000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 130.17600007058005,
+       "short_term_debt": 33641385000000,
+       "cash": 25843001000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2025,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20250625800592",
+     "title": "주요사항보고서(교환사채권발행결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-06-25",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250625800592",
+     "is_correction": false,
+     "disclosure_type": "CB_BW",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250625800598",
+     "title": "주요사항보고서(자기주식처분결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-06-25",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250625800598",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250730800381",
+     "title": "주요사항보고서(유상증자결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-07-30",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250730800381",
+     "is_correction": false,
+     "disclosure_type": "RIGHTS_OFFERING",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250730800406",
+     "title": "회사합병결정(종속회사의주요경영사항)",
+     "filed_at": "2025-07-30",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250730800406",
+     "is_correction": false,
+     "disclosure_type": "MERGER",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250814003843",
+     "title": "반기보고서 (2025.06)",
+     "filed_at": "2025-08-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250814003843",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16143000000,
+       "total_equity": 77962553000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 151.7216189471735,
+       "short_term_debt": 32612122000000,
+       "cash": 21494710000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2025,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20251022800441",
+     "title": "주요사항보고서(전환사채권발행결정)(자회사의 주요경영사항)",
+     "filed_at": "2025-10-22",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251022800441",
+     "is_correction": false,
+     "disclosure_type": "CB_BW",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20251022800554",
+     "title": "영업정지(종속회사의주요경영사항)",
+     "filed_at": "2025-10-22",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251022800554",
+     "is_correction": false,
+     "disclosure_type": "BUSINESS_SUSPENSION"
+    },
+    {
+     "rcept_no": "20251114001549",
+     "title": "분기보고서 (2025.09)",
+     "filed_at": "2025-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251114001549",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16143000000,
+       "total_equity": 85911105000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 129.2607201386093,
+       "short_term_debt": 29653738000000,
+       "cash": 22941028000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2025,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20251126800739",
+     "title": "[기재정정]영업정지(종속회사의주요경영사항)",
+     "filed_at": "2025-11-26",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251126800739",
+     "is_correction": true,
+     "disclosure_type": "BUSINESS_SUSPENSION"
+    },
+    {
+     "rcept_no": "20251217800357",
+     "title": "감자결정(종속회사의주요경영사항)",
+     "filed_at": "2025-12-17",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251217800357",
+     "is_correction": false,
+     "disclosure_type": "CAPITAL_REDUCTION",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20251224800620",
+     "title": "[기재정정]감자결정(종속회사의주요경영사항)",
+     "filed_at": "2025-12-24",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20251224800620",
+     "is_correction": true,
+     "disclosure_type": "CAPITAL_REDUCTION",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20260128800865",
+     "title": "주요사항보고서(자기주식처분결정)(자회사의 주요경영사항)",
+     "filed_at": "2026-01-28",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260128800865",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20260204800808",
+     "title": "주요사항보고서(자기주식처분결정)(자회사의 주요경영사항)",
+     "filed_at": "2026-02-04",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260204800808",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20260309801533",
+     "title": "감사보고서제출(자회사의 주요경영사항)",
+     "filed_at": "2026-03-09",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260309801533",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260309801568",
+     "title": "감사보고서제출(자회사의 주요경영사항)",
+     "filed_at": "2026-03-09",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260309801568",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260309801589",
+     "title": "감사보고서제출(자회사의 주요경영사항)",
+     "filed_at": "2026-03-09",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260309801589",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260310801471",
+     "title": "감사보고서제출(자회사의 주요경영사항)",
+     "filed_at": "2026-03-10",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260310801471",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260310801519",
+     "title": "매매거래정지및정지해제(중요내용공시)",
+     "filed_at": "2026-03-10",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260310801519",
+     "is_correction": false,
+     "disclosure_type": "TRADING_HALT"
+    },
+    {
+     "rcept_no": "20260311800584",
+     "title": "[첨부정정]감사보고서제출(자회사의 주요경영사항)",
+     "filed_at": "2026-03-11",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260311800584",
+     "is_correction": true,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260311801996",
+     "title": "감사보고서제출",
+     "filed_at": "2026-03-11",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260311801996",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2025)",
+      "bsns_year": 2025
+     }
+    },
+    {
+     "rcept_no": "20260318001157",
+     "title": "사업보고서 (2025.12)",
+     "filed_at": "2026-03-18",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001157",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16143000000,
+       "total_equity": 85691335000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 105.71351811753821,
+       "short_term_debt": 26654746000000,
+       "cash": 25214132000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 6098798000000,
+       "previous": 8319587000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 0.17829695870495774,
+       "operating_income": 1818476000000,
+       "finance_costs": 10199142000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2025,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20260326001465",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2026-03-26",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260326001465",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "4",
+      "od_a_at_b": "1",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "SK증권 (SK Securities Co., LTD.)",
+      "aq_wtn_div_ostk": "7,000,583",
+      "aq_wtn_div_ostk_rt": "9.6",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "10,980,116",
+      "eaq_ostk_rt": "15.0",
+      "eaq_estk": "1,787",
+      "eaq_estk_rt": "0.0",
+      "dppln_stk_ostk": "1,903",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "346,000",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "658,438,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2026년 04월 02일",
+      "dpprpd_edd": "2026년 04월 09일",
+      "dp_pp": "사외이사 보수 지급용\nStock Grant 부여를 위한 자기주식 처분",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "-",
+      "dp_m_etc": "1,903",
+      "dp_dd": "2026년 03월 26일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20260326001465"
+     }
+    },
+    {
+     "rcept_no": "20260326802016",
+     "title": "주요사항보고서(주식교환ㆍ이전결정)(자회사의 주요경영사항)",
+     "filed_at": "2026-03-26",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260326802016",
+     "is_correction": false,
+     "disclosure_type": "MERGER",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20260327800195",
+     "title": "[첨부정정]주요사항보고서(주식교환ㆍ이전결정)(자회사의 주요경영사항)",
+     "filed_at": "2026-03-27",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260327800195",
+     "is_correction": true,
+     "disclosure_type": "MERGER",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20260331802976",
+     "title": "[기재정정]감자결정(종속회사의주요경영사항)",
+     "filed_at": "2026-03-31",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260331802976",
+     "is_correction": true,
+     "disclosure_type": "CAPITAL_REDUCTION",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    }
+   ],
+   "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH)."
+  },
+  {
+   "case_id": "r5-normal-001",
+   "title": "현대자동차 — 2024 사업보고서까지 12개월, 위험 공시 없음 확인",
+   "group": "NORMAL",
+   "scope": "company_year",
+   "stock_code": "005380",
+   "corp_code": "00164742",
+   "corp_name": "현대자동차",
+   "as_of": "2025-03-12",
+   "window": {
+    "from": "2024-03-12",
+    "to": "2025-03-12"
+   },
+   "expected_final_stage": null,
+   "expected_alert": false,
+   "expectation_source": "설계서 STEP 06 (정상: 경보가 안 울려야 함)",
+   "window_disclosure_count": 192,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20240313001451",
+     "title": "사업보고서 (2023.12)",
+     "filed_at": "2024-03-13",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240313001451",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 101809440000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 178.14673521709804,
+       "short_term_debt": 34144706000000,
+       "cash": 19166619000000,
+       "components": [
+        "유동성장기부채",
+        "단기차입금"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 1,
+       "current": -2518760000000,
+       "previous": 10627311000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 15.583497476048212,
+       "operating_income": 15126901000000,
+       "finance_costs": 970700000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2023,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240314001466",
+     "title": "[기재정정]사업보고서 (2021.12)",
+     "filed_at": "2024-03-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240314001466",
+     "is_correction": true,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 82615789000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 263.1127812050967,
+       "short_term_debt": 33666738000000,
+       "cash": 12795554000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 2,
+       "current": -1176416000000,
+       "previous": -409807000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 12.178751299210445,
+       "operating_income": 6678949000000,
+       "finance_costs": 548410000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2021,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240314001531",
+     "title": "[기재정정]사업보고서 (2022.12)",
+     "filed_at": "2024-03-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240314001531",
+     "is_correction": true,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 90896545000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 177.0468498762921,
+       "short_term_debt": 36940611000000,
+       "cash": 20864879000000,
+       "components": [
+        "단기차입금",
+        "유동성장기부채"
+       ],
+       "notes": [
+        "세지 않은 후보 계정(유동 여부 불명): 사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 10627311000000,
+       "previous": -1176416000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 9.31465394582576,
+       "operating_income": 9819769000000,
+       "finance_costs": 1054228000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2022,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240425000482",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-04-25",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240425000482",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "7",
+      "od_a_at_b": "-",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "현대차증권",
+      "aq_wtn_div_ostk": "5,585,310",
+      "aq_wtn_div_ostk_rt": "2.7",
+      "aq_wtn_div_estk": "2,962,756",
+      "aq_wtn_div_estk_rt": "4.8",
+      "eaq_ostk": "-",
+      "eaq_ostk_rt": "-",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "5,000",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "252,500",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "1,262,500,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 05월 02일",
+      "dpprpd_edd": "2024년 05월 31일",
+      "dp_pp": "임원 인센티브 지급",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "5,000",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 04월 25일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20240425000482"
+     }
+    },
+    {
+     "rcept_no": "20240503000057",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-05-03",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240503000057",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20240516001860",
+     "title": "분기보고서 (2024.03)",
+     "filed_at": "2024-05-16",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240516001860",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 104906338000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 154.98897249614092,
+       "short_term_debt": 30484082000000,
+       "cash": 19668549000000,
+       "components": [
+        "유동성장기부채",
+        "단기차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20240814004199",
+     "title": "반기보고서 (2024.06)",
+     "filed_at": "2024-08-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240814004199",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 109809053000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 174.2821208066962,
+       "short_term_debt": 31624479000000,
+       "cash": 18145567000000,
+       "components": [
+        "유동성장기부채",
+        "단기차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20240822000381",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-08-22",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240822000381",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "7",
+      "od_a_at_b": "-",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "현대차증권",
+      "aq_wtn_div_ostk": "5,580,310",
+      "aq_wtn_div_ostk_rt": "2.7",
+      "aq_wtn_div_estk": "2,962,756",
+      "aq_wtn_div_estk_rt": "4.8",
+      "eaq_ostk": "-",
+      "eaq_ostk_rt": "-",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "2,074,380",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "252,500",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "523,780,950,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 09월 30일",
+      "dpprpd_edd": "2024년 09월 30일",
+      "dp_pp": "2024년 단체교섭에 따른 회사주식 지급",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "2,074,380",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 08월 22일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20240822000381"
+     }
+    },
+    {
+     "rcept_no": "20240930000619",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-09-30",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240930000619",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20241024000243",
+     "title": "주요사항보고서(해외증권시장주권등상장폐지결정)",
+     "filed_at": "2024-10-24",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241024000243",
+     "is_correction": false,
+     "disclosure_type": "OVERSEAS_DELISTING"
+    },
+    {
+     "rcept_no": "20241114002593",
+     "title": "분기보고서 (2024.09)",
+     "filed_at": "2024-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241114002593",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 111514026000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 186.08537364644297,
+       "short_term_debt": 27897882000000,
+       "cash": 14991980000000,
+       "components": [
+        "유동성장기부채",
+        "단기차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20241220000228",
+     "title": "주요사항보고서(해외증권시장주권등상장폐지)",
+     "filed_at": "2024-12-20",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241220000228",
+     "is_correction": false,
+     "disclosure_type": "OVERSEAS_DELISTING"
+    },
+    {
+     "rcept_no": "20250305801167",
+     "title": "감사보고서제출",
+     "filed_at": "2025-03-05",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250305801167",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2024)",
+      "bsns_year": 2024
+     }
+    },
+    {
+     "rcept_no": "20250312001148",
+     "title": "사업보고서 (2024.12)",
+     "filed_at": "2025-03-12",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250312001148",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 1488993000000,
+       "total_equity": 120275933000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 189.6894989540858,
+       "short_term_debt": 36069352000000,
+       "cash": 19014944000000,
+       "components": [
+        "유동성장기부채",
+        "단기차입금"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 2,
+       "current": -5661641000000,
+       "previous": -2518760000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 15.847283014542302,
+       "operating_income": 14239592000000,
+       "finance_costs": 898551000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2024,
+      "reprt_code": "11011"
+     }
+    }
+   ],
+   "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다."
+  },
+  {
+   "case_id": "r5-normal-002",
+   "title": "NAVER — 2024 사업보고서까지 12개월, 위험 공시 없음 확인",
+   "group": "NORMAL",
+   "scope": "company_year",
+   "stock_code": "035420",
+   "corp_code": "00266961",
+   "corp_name": "NAVER",
+   "as_of": "2025-03-18",
+   "window": {
+    "from": "2024-03-18",
+    "to": "2025-03-18"
+   },
+   "expected_final_stage": null,
+   "expected_alert": false,
+   "expectation_source": "설계서 STEP 06 (정상: 경보가 안 울려야 함)",
+   "window_disclosure_count": 252,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20240318000844",
+     "title": "사업보고서 (2023.12)",
+     "filed_at": "2024-03-18",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000844",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16481339500,
+       "total_equity": 24237998815553
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 21.695422114154965,
+       "short_term_debt": 775927341635,
+       "cash": 3576456533329,
+       "components": [
+        "단기차입금",
+        "유동성장기차입금",
+        "유동성사채"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 2002233273518,
+       "previous": 1453390444990
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 2.1805669439845965,
+       "operating_income": 1488820269608,
+       "finance_costs": 682767513153,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2023,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240326000771",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-03-26",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240326000771",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "4",
+      "od_a_at_b": "0",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "-",
+      "aq_wtn_div_ostk": "11,597,611",
+      "aq_wtn_div_ostk_rt": "7.14",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "5",
+      "eaq_ostk_rt": "0.00",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "171,370",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "188,000",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "32,217,560,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 03월 26일",
+      "dpprpd_edd": "2024년 04월 26일",
+      "dp_pp": "보상 경쟁력 강화를 위한\n임직원 대상 자기주식 지급",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "-",
+      "dp_m_etc": "171,370",
+      "dp_dd": "2024년 03월 26일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20240326000771"
+     }
+    },
+    {
+     "rcept_no": "20240403002437",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-04-03",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240403002437",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20240516001974",
+     "title": "분기보고서 (2024.03)",
+     "filed_at": "2024-05-16",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240516001974",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16481339500,
+       "total_equity": 24542785742125
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "MISSING",
+       "notes": [
+        "단기채무 계정 중 금액을 읽지 못한 것이 있음"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20240701000614",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2024-07-01",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240701000614",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "4",
+      "od_a_at_b": "0",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "삼성증권",
+      "aq_wtn_div_ostk": "11,412,157",
+      "aq_wtn_div_ostk_rt": "7.03",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "5",
+      "eaq_ostk_rt": "0.00",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "246,620",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "162,900",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "40,174,398,000",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2024년 07월 01일",
+      "dpprpd_edd": "2024년 07월 31일",
+      "dp_pp": "보상 경쟁력 강화를 위한 \n직원 대상 자기주식 지급",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "246,620",
+      "dp_m_etc": "-",
+      "dp_dd": "2024년 07월 01일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20240701000614"
+     }
+    },
+    {
+     "rcept_no": "20240705000304",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2024-07-05",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240705000304",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20240814002406",
+     "title": "반기보고서 (2024.06)",
+     "filed_at": "2024-08-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240814002406",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16481339500,
+       "total_equity": 25044751026124
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 10.393845821406815,
+       "short_term_debt": 392321884977,
+       "cash": 3774559404845,
+       "components": [
+        "단기차입금",
+        "유동성장기차입금",
+        "유동성사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20241114001252",
+     "title": "분기보고서 (2024.09)",
+     "filed_at": "2024-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241114001252",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16481339500,
+       "total_equity": 26155222833651
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 7.113026287340417,
+       "short_term_debt": 329950924072,
+       "cash": 4638685571277,
+       "components": [
+        "단기차입금",
+        "유동성장기차입금",
+        "유동성사채"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20250102000373",
+     "title": "주요사항보고서(자기주식처분결정)",
+     "filed_at": "2025-01-02",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250102000373",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": {
+      "od_a_at_t": "4",
+      "od_a_at_b": "0",
+      "adt_a_atn": "-",
+      "cs_iv_bk": "삼성증권",
+      "aq_wtn_div_ostk": "9,507,708",
+      "aq_wtn_div_ostk_rt": "6.00",
+      "aq_wtn_div_estk": "-",
+      "aq_wtn_div_estk_rt": "-",
+      "eaq_ostk": "5",
+      "eaq_ostk_rt": "0.00",
+      "eaq_estk": "-",
+      "eaq_estk_rt": "-",
+      "dppln_stk_ostk": "108,354",
+      "dppln_stk_estk": "-",
+      "dpstk_prc_ostk": "193,800",
+      "dpstk_prc_estk": "-",
+      "dppln_prc_ostk": "20,999,005,200",
+      "dppln_prc_estk": "-",
+      "dpprpd_bgd": "2025년 01월 02일",
+      "dpprpd_edd": "2025년 01월 31일",
+      "dp_pp": "보상 경쟁력 강화를 위한 직원 \n대상 기보유 자기주식 지급",
+      "dp_m_mkt": "-",
+      "dp_m_ovtm": "-",
+      "dp_m_otc": "-",
+      "dp_m_etc": "108,354",
+      "dp_dd": "2025년 01월 02일",
+      "d1_slodlm_ostk": "-",
+      "d1_slodlm_estk": "-"
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "api": "tsstkDpDecsn",
+      "rcept_no": "20250102000373"
+     }
+    },
+    {
+     "rcept_no": "20250107000350",
+     "title": "자기주식처분결과보고서",
+     "filed_at": "2025-01-07",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250107000350",
+     "is_correction": false,
+     "disclosure_type": "TREASURY_DISPOSAL",
+     "facts": null,
+     "facts_meta": {
+      "status": "MISSING",
+      "reason": "항목 API에서 같은 접수번호를 찾지 못함 (정정본만 주거나 항목 API가 없는 종류)"
+     }
+    },
+    {
+     "rcept_no": "20250311801946",
+     "title": "감사보고서제출",
+     "filed_at": "2025-03-11",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250311801946",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2024)",
+      "bsns_year": 2024
+     }
+    },
+    {
+     "rcept_no": "20250318000645",
+     "title": "사업보고서 (2024.12)",
+     "filed_at": "2025-03-18",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250318000645",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 16481339500,
+       "total_equity": 27000911848337
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 7.993992138508592,
+       "short_term_debt": 335389909719,
+       "cash": 4195524637851,
+       "components": [
+        "유동성장기차입금",
+        "유동성사채",
+        "단기차입금"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 2589874337746,
+       "previous": 2002233273518
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 3.4192079432197655,
+       "operating_income": 1979263438827,
+       "finance_costs": 578866062461,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2024,
+      "reprt_code": "11011"
+     }
+    }
+   ],
+   "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다."
+  },
+  {
+   "case_id": "r5-normal-003",
+   "title": "LG전자 — 2024 사업보고서까지 12개월, 위험 공시 없음 확인",
+   "group": "NORMAL",
+   "scope": "company_year",
+   "stock_code": "066570",
+   "corp_code": "00401731",
+   "corp_name": "LG전자",
+   "as_of": "2025-03-17",
+   "window": {
+    "from": "2024-03-17",
+    "to": "2025-03-17"
+   },
+   "expected_final_stage": null,
+   "expected_alert": false,
+   "expectation_source": "설계서 STEP 06 (정상: 경보가 안 울려야 함)",
+   "window_disclosure_count": 81,
+   "list_source": "OpenDART list.json",
+   "steps": [
+    {
+     "rcept_no": "20240318000755",
+     "title": "사업보고서 (2023.12)",
+     "filed_at": "2024-03-18",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240318000755",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 904169000000,
+       "total_equity": 23498536000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 30.652332124073776,
+       "short_term_debt": 2601636000000,
+       "cash": 8487563000000,
+       "components": [
+        "차입금"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 5913596000000,
+       "previous": 3107839000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 2.4897395964867974,
+       "operating_income": 3549074000000,
+       "finance_costs": 1425480000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "MISSING",
+       "notes": [
+        "당기 감사의견 행을 찾지 못함"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2023,
+      "reprt_code": "11011"
+     }
+    },
+    {
+     "rcept_no": "20240516000752",
+     "title": "분기보고서 (2024.03)",
+     "filed_at": "2024-05-16",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240516000752",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 904169000000,
+       "total_equity": 24459405000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 36.978492887171114,
+       "short_term_debt": 2592040000000,
+       "cash": 7009588000000,
+       "components": [
+        "차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11013"
+     }
+    },
+    {
+     "rcept_no": "20240814001890",
+     "title": "반기보고서 (2024.06)",
+     "filed_at": "2024-08-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20240814001890",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 904169000000,
+       "total_equity": 25245369000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 28.64854059778854,
+       "short_term_debt": 2450748000000,
+       "cash": 8554530000000,
+       "components": [
+        "차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11012"
+     }
+    },
+    {
+     "rcept_no": "20241114001247",
+     "title": "분기보고서 (2024.09)",
+     "filed_at": "2024-11-14",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20241114001247",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 904169000000,
+       "total_equity": 24419324000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 38.157366185468476,
+       "short_term_debt": 2935189000000,
+       "cash": 7692326000000,
+       "components": [
+        "차입금"
+       ]
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)",
+      "bsns_year": 2024,
+      "reprt_code": "11014"
+     }
+    },
+    {
+     "rcept_no": "20250312801558",
+     "title": "감사보고서제출",
+     "filed_at": "2025-03-12",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250312801558",
+     "is_correction": false,
+     "disclosure_type": "AUDIT_REPORT",
+     "facts": {
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "OpenDART accnutAdtorNmNdAdtOpinion (사업연도 2024)",
+      "bsns_year": 2024
+     }
+    },
+    {
+     "rcept_no": "20250317001029",
+     "title": "사업보고서 (2024.12)",
+     "filed_at": "2025-03-17",
+     "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20250317001029",
+     "is_correction": false,
+     "disclosure_type": "PERIODIC_REPORT",
+     "facts": {
+      "CAPITAL_IMPAIRMENT": {
+       "status": "OK",
+       "impairment_pct": 0.0,
+       "paid_in_capital": 904169000000,
+       "total_equity": 25211664000000
+      },
+      "SHORT_TERM_DEBT": {
+       "status": "OK",
+       "debt_to_cash_pct": 38.15193800742529,
+       "short_term_debt": 2889260000000,
+       "cash": 7573036000000,
+       "components": [
+        "차입금"
+       ]
+      },
+      "OPERATING_CASH_FLOW": {
+       "status": "OK",
+       "negative_years": 0,
+       "current": 3842661000000,
+       "previous": 5913596000000
+      },
+      "INTEREST_BURDEN": {
+       "status": "OK",
+       "interest_coverage": 3.0193246312012403,
+       "operating_income": 3419675000000,
+       "finance_costs": 1132596000000,
+       "notes": [
+        "금융비용은 이자 외 손익을 포함하므로 이자보상배율이 실제 이자 부담보다 낮게 나올 수 있다"
+       ]
+      },
+      "AUDIT_OPINION": {
+       "status": "OK",
+       "opinion": "적정"
+      }
+     },
+     "facts_meta": {
+      "status": "PRESENT",
+      "source": "collector.indicators on OpenDART fnlttSinglAcntAll(CFS)·accnutAdtorNmNdAdtOpinion",
+      "bsns_year": 2024,
+      "reprt_code": "11011"
+     }
+    }
+   ],
+   "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다."
+  }
+ ]
+}
