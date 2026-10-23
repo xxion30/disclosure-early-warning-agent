@@ -1,78 +1,134 @@
-# Agent 계약 — R2 평가 반영 구현안
+# Agent 계약 — R2 구현·통합 기준
 
-기준: 최종 PM ZIP의 CLAUDE.md와 10/22 오후 회의. R3/R4 연동 승인 전의 R2 구현 계약안이다.
-이전의 연락 기능 삭제안은 적용하지 않는다. 연락 대상은 보유 고객 전원이며 직접 발송과 영향도/P1~P3는 없다.
+작성일: 2026-10-23 · 담당: R2 윤찬웅 · 검토: R3·R4
 
-## 책임과 실행 경계
+> R2 측에서 채택한 구현 기준이다. 타 역할에 해당하는 변경은 담당자가 검토·반영한다. 문서 작성은 코드 구현·통합 검증 완료를 뜻하지 않는다. 기존 CLAUDE.md·업무 카드·R1 정책을 유지한다.
 
-R2는 Graph·모델·검증·승인 중단과 재개를 담당한다. 점수·임계값·단계 계산은 R4, 원문·재무 지표는 R3다.
-Dependencies.phase1에 Phase1Bindings를 주입하면 새 그래프를 선택한다. None이면 기존 그래프를 유지한다.
-R4 소유 adapters/assembly.py, API, DB, risk_engine와 의존성은 수정하지 않는다.
-새 흐름은 주입된 분류표와 async 함수만 사용하며 R2가 계산 규칙을 복사하지 않는다.
+## 1. 목적과 범위
 
-기존 make_classifier()/KnownSignalsModel()의 무인자 호출은 기존 조립 호환용으로 설정된 YAML을 읽는다.
-risk_engine Python import는 제거했지만 이 파일 읽기 호환 경로는 남는다.
-신규 조립에서는 make_classifier(document=...), KnownSignalsModel(..., catalog=...)에 R4 카탈로그를 주입한다.
-기존 R4 조립의 무인자 호출 교체는 인계 사항이다. 이 제한을 숨겨 완전한 의존성 분리가 끝났다고 주장하지 않는다.
+공시에서 위험 조건을 추출하고, 코드가 계산한 위험 단계와 검증된 근거를 설명해 PB의 판단을 지원한다. 내부 점수는 계산·정렬에 사용하지만 PB용 응답과 설명·안내문 모델에는 전달하지 않는다.
 
-## 새 그래프
+- RED / ORANGE / YELLOW / COMPOSITE: 설명·저장 후 담당 고객 전원에 대한 초안·검사·PB 승인·연락 업무로 연결한다.
+- WATCH / NONE: 설명·저장 후 종료한다. WATCH는 새 위험 경보로 발송하지 않는다.
+- MANUAL_CHECK: 위험 단계가 아니라 분석 처리 상태다. 정보 부족을 NONE이나 0점으로 바꾸지 않는다.
+- 직접 발송, 매수·매도 권유, 고객 영향도 P1~P3, 뉴스·SNS 수집은 이번 범위에 포함하지 않는다.
 
-receive → classify → mark_red → extract_flags → score_orange → compute_indicators
-→ score_yellow → judge_stage → explain_risk → save_state.
-관련 없는 갈래는 계산 없이 통과한다.
-RED/ORANGE/YELLOW/COMPOSITE만 고객 조회 → 초안 → 검사 → PB 승인 interrupt → 승인된 연락 업무 생성.
-WATCH/NONE은 저장하고 종료한다. MANUAL_CHECK는 위험 단계가 아닌 처리 상태다.
+## 2. 책임과 의존 방향
 
-## 주입할 도구
+| 담당 | 책임 |
+| --- | --- |
+| R3 | DART 원천 사실, 재무 지표 계산, 출처·버전, 원문 검색·메모리 색인 |
+| R2 | Graph, 텍스트 조건 추출, AI 출력·인용 검증, 설명·안내문, 승인 중단·재개 |
+| R4 adapter | MCP 연결, 합의된 사실·조건의 계산 입력 변환, 저장, 실행 context·체크포인터 주입 |
+| R4 규칙 엔진 | 점수·임계값·최종 단계·사건 상태 계산 |
 
-Phase1Bindings.classify(title)는 bucket/item/text_flags 경로 배열을 반환한다.
-async mark_red, score_orange, financial_snapshot, score_yellow, judge_stage는 dict를 주고받는다.
-모두 실행 시간·동일 입력 한도·도구 오류 복구를 적용한다.
-financial_snapshot은 R3가 계산·저장한 지표와 출처를 R4가 제공한다. 누락을 0이나 정상으로 대체하지 않는다.
+agent는 risk_engine·collector·api를 직접 import하지 않는다. R4가 카탈로그·읽기 도구·계산·저장 인터페이스를 주입한다. 체크포인터 생성과 종료는 R4가 담당하고 R2 런타임은 주입받은 객체를 사용한다. R2는 agent/adapters/·shared/·api/·의존성 파일을 수정하지 않는다.
 
-judge_stage 응답:
-- stage: RED | ORANGE | YELLOW | COMPOSITE | WATCH | NONE
-- orange_score/yellow_score/combined_ratio: 유한한 음수 아닌 내부 수치
-- breakdown: item/evidence, 선택적으로 검증 가능한 source_chunks
-- evidence: source/quote/rcept_no/location
-- needs_manual_check: true면 수동 확인 종료
+## 3. 처리 흐름과 계산 도구
 
-R2는 점수를 그대로 보존한다. 새 단계 MCP·저장·API는 R4가 연결해야 한다.
-기존 ToolAssessmentStore에 새 StageResult를 그대로 연결하면 안 된다.
+1. 접수번호와 신뢰된 실행 context를 받는다.
+2. 공시 메타데이터·구조화 사실·유효 재무 지표를 조회한다.
+3. 카탈로그에 따라 관련 항목을 분류하고 필요한 원문만 검색한다.
+4. AI가 허용된 텍스트 조건을 추출하고 R2가 근거를 검증한다.
+5. R4 adapter가 입력을 변환해 calculate_risk_score를 호출한다.
+6. 검증된 계산 결과로 설명을 생성·검사하고 공개 분석 결과를 저장한다.
+7. 경보이면 조직별 고객 조회·초안·검사·PB 승인·연락 업무를 진행한다.
 
-## 내부 상태와 공개 데이터
+**외부 계산 도구는 calculate_risk_score를 유지한다.** 기존 R2의 mark_red / score_orange / score_yellow / judge_stage 이름은 내부 노드·레거시 연결 이름일 수 있으며, 각각 새 MCP 도구를 만들라는 요구가 아니다. R2 Phase1Bindings와 결과 DTO는 실제 R4 도구 계약에 맞게 수정한다.
 
-score_result와 점수 필드는 내부 전용이다. 설명·안내문 모델 입력은 public_risk_context의 허용 필드만 전달한다.
-기존 score_result 입력 키는 유지하되 값은 단계·항목·인용만 있는 공개용 투영이다.
-points/weight/note/source_chunks와 내부 점수를 모델 입력에 넣지 않는다.
-설명·초안·PB 수정·업무 생성 직전 문안을 검사한다. 금액·날짜·재무 비율을 일괄 삭제하지 않는다.
-get_state/start/resume은 서버 내부 반환이다. get_review는 점수 없는 뷰와 PB 소유 고객만 반환한다.
-HTTP/SSE가 이 경계를 사용하고 원시 interrupt를 노출하지 않도록 하는 수정은 R4 담당이다.
-위험 단계(stage), 처리 상태(status), PB 결정(decisions)은 분리한다.
-인용의 실제 위치·연속 부분 문자열 검증은 해석의 재무적 타당성까지 보증하지 않는다.
+- AI 출력에는 점수·최종 단계·임의 event_id를 받지 않는다.
+- R3가 계산한 재무 지표를 AI가 재계산하거나 누락을 추정하지 않는다.
+- R4의 expected_state_version·corp_code·as_of 등 신뢰된 제어 메타데이터를 DTO 변환 중 버리지 않는다. 모델이 생성한 값으로 대체하지 않는다.
+- 도구의 공통 ok/data/error 형식을 유지한다. 상세 입력·응답의 정본은 mcp_business.md다.
+- 주입 미완료로 기존 Graph가 선택된 경우 새 Graph 검증 완료로 기록하지 않는다.
 
-## 승인·영속성
+## 4. 구조화 사실과 충돌
 
-PBContext는 인증 API가 DB 소유권으로 만든다. 클라이언트 값을 복사하지 않는다.
-부분 승인·반려·재작성, 재시작 후 재개, 승인 전 업무 금지, 동일 결정 재전송을 유지한다.
-thread_id는 rcept_no. 정책별 재분석·tenant 키·분산 잠금은 R4와 별도 계약이 필요하다.
-SQLite는 개발용. Postgres DSN은 AsyncPostgresSaver를 사용하고 의존성 누락 시 명시적으로 실패한다.
-Postgres 패키지·실접속·DB 유일 제약은 R4가 준비한다.
+별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 이 도구·컬럼의 실제 구현 여부는 별도 확인한다.
 
-## 인계와 평가
+| 상태 | 의미 | 처리 |
+| --- | --- | --- |
+| PRESENT | 정제·검증된 값 존재 | 근거·단위·기간 확인 후 사용 |
+| MISSING | 조회 성공, 필요한 행·값 없음 | 필요한 경우 원문 검색으로 보완 |
+| NOT_APPLICABLE | 해당 항목이 적용되지 않음 | 제외 사유 보존, 0으로 변환 금지 |
+| NEEDS_CHECK | 정제 실패·모순·식별 불확실 | 해당 조건을 확정 계산에 사용하지 않음 |
 
-- R4: 새 도구/저장/공개 API·SSE, 카탈로그 주입, Postgres, 평가 실행기 등록.
-- R3: 실제 수집·지표·원문, 수집 이후 분석 호출 연결, 검색 품질 측정.
-- R5: PB 화면의 점수 비노출·승인 동선 실제 확인.
-- R1: README/설계서의 오래된 연락 삭제 문구와 CODEOWNERS 정리.
-- tests/agent/test_phase1.py: ZIP의 실제 DART 원문 + 가짜 규칙 응답으로 제어 흐름 검증.
-- tests/agent/test_reviewed.py: 점수 노출·출처·예산·PB 수정·승인 회귀 검증.
-- eval/experiments/{model,guardrail,context}.py, eval/capture_signals.py: 주입된 동일 사례 비교.
+수집 실패는 structured_facts=NULL과 collect_runs.error로 구분한다. NULL만 보고 정상 빈 결과·위험 없음으로 판단하지 않는다. 재무 지표의 기존 OK/MISSING 어휘는 별도 계약이며 이 상태와 혼용하지 않는다.
 
-테스트는 AI의 실제 금융 예측력이나 실제 모델/API/DB 성능을 입증하지 않는다.
+구조화 값에는 스키마 버전, 고정 항목 코드, 원천 API·필드·행 식별자, 값·단위·기간·재무 기준, 수집 시각·자료 버전을 포함한다. 세부 JSON 키는 collector.md와 R4 공통 스키마를 따른다.
 
-```bash
-uv sync --locked
-uv run --locked pytest tests/agent -q
-uv run --locked pytest -q
-```
+API 값과 AI 추출값이 다르면 동일 사건·기간·단위·정정 버전인지 먼저 확인한다. 실제 충돌은 양쪽 값·출처를 기록하고 NEEDS_CHECK로 둔다. 다른 독립 항목은 계속 처리하되, 누락·충돌이 결론을 바꿀 수 있거나 필수 근거이면 판정을 수동 확인으로 남긴다.
+
+## 5. 검색과 근거 검증
+
+- 검색 후보 수와 모델 입력 수를 구분한다. 모델 입력 한 번에 전달하는 공시 조각은 모든 검색 호출을 합쳐 최대 5개다. 참고 문서도 전체 토큰 예산 안에서 전달한다.
+- 같은 공시·자료 버전·위치의 중복 조각은 제거한다. 부족하면 무관한 문서로 수량을 채우지 않는다.
+- 문서 근거: source, rcept_no, location, quote와 원문 content_sha256·정규화 버전을 연결한다. 인용문은 해당 정규화 원문의 검색 조각과 일치해야 한다.
+- API 근거: API·필드·행 식별자·실제 값·단위·기간·OFS/CFS·데이터 버전으로 검증한다. API 값을 가짜 문서 인용으로 만들지 않는다.
+- R2가 검증된 근거 묶음을 만들고 R4는 계산·저장 경계에서 필수 정보와 버전 일치를 확인한다. 단순히 AI가 verified=true라고 낸 값은 신뢰하지 않는다.
+- 과거 근거 재검색은 R2/R4 중 한 경로에서만 수행한다. R4 EvidenceTools를 걷어낼 때 검증 없이 우회하지 말고 동등한 검사와 테스트를 먼저 연결한다.
+- 과거 평가는 기준 시점까지 공개된 자료·정정본만 사용한다. 공개 시점을 확인할 수 없는 이후 조회 값은 과거 평가 근거로 사용하지 않는다.
+- 해시·문자열 일치는 문서 식별·인용 일치 검사이며 재무적 해석의 타당성까지 보장하지 않는다.
+
+## 6. 사건·정정·후속과 초안
+
+R3가 원본 후보와 연결 근거를 제공하고 R4가 event_id를 확정한다. 기업이 같거나 제목·날짜가 비슷하다는 이유만으로 자동 연결하지 않는다. 후보가 없거나 여러 개이면 원본 관계를 확정하지 않는다.
+
+R1 정책에 따라 신규 위험 사건만 새 RED로 취급한다. 후속은 기존 사건 타임라인을 갱신하며 금액·상태·해소 변화는 반영한다. 정정은 자동 해소가 아니다. 확인된 철회 등 해소 근거를 규칙에 반영한다.
+
+판정·근거가 바뀌면 이전 승인 대기 초안을 차단한다. 위험이 유지되면 새 판정 기준으로 재작성·재승인하고, 해소되면 해당 승인 대기를 종료한다. 과거 승인·반려·연락 업무 이력은 삭제하지 않는다. 이미 생성된 미완료 업무의 변경은 R4 업무 정책으로 명시적으로 처리하고 조용히 삭제하지 않는다.
+
+## 7. 공개 분석·조직별 실행·버전
+
+tenant는 공시 발행 기업이 아닌 서비스 이용 증권사 등 조직이다.
+
+| 식별자 | 의미 |
+| --- | --- |
+| assessment_id / 판정 버전 | 종목, 입력 공시·정정본·재무 버전, 규칙 버전, 평가 기준 시점으로 식별되는 판정 |
+| 실행 ID / 시도 횟수 | 동일 판정 작업의 실행과 실패 재시도 |
+| 조직별 검토 ID | tenant_id와 판정 ID에 연결된 고객·초안·승인 흐름 |
+| 알림 버전 | 실제 위험 변화로 PB에게 새로 알릴 때의 버전 |
+
+이 이름은 논리적 의미다. 실제 DB/API 필드는 R4 계약으로 매핑한다. 판정 버전과 알림 버전을 같은 것으로 가정하지 않는다.
+
+- 공시·구조화 사실과 공개 위험 분석은 조직 간 공유한다. 고객·보유 정보·초안·결정·연락 업무는 조직별 접근을 적용한다.
+- 공개 분석이 완료돼도 다른 조직의 고객 업무까지 완료된 것으로 보지 않는다.
+- 동일 판정의 일시 실패는 같은 작업에 재연결한다. 새 입력·규칙·시간 감쇠 평가이면 새 판정으로 구분한다.
+- 공개 분석 thread와 조직별 검토 thread를 분리하고, 후자는 신뢰된 tenant와 판정 ID를 포함한다. 접수번호 단독 thread_id를 운영 기준으로 쓰지 않는다.
+- tenant·PB·판정 ID·허용 고객은 인증·DB·dispatcher에서 받는다. 사용자 입력이나 모델 출력으로 정하지 않는다.
+- 승인 시 tenant·담당 고객·현재 판정 버전을 R4에서 재검사한다.
+
+## 8. 실행·완료·재시도 연결
+
+Phase 1은 DB 미처리 작업을 R4 실행 관리가 원자적으로 선점하고 R2 Graph를 실행한다. R3 수집기가 agent를 직접 호출하지 않는다. 수집 커서·수집 lease는 분석 잠금과 다르다.
+
+논리적 상태는 PENDING → RUNNING → DONE / RETRY_WAIT / MANUAL_CHECK / FAILED다. 실제 열거형은 R4 DB 계약에 매핑하며 승인 대기 상태와 구분한다.
+
+- 공개 분석 DONE은 판정·설명·재현 입력·필수 근거가 저장된 시점이다. 고객 초안 실패가 이미 성공한 공개 분석을 실패로 되돌리지 않는다.
+- processed_at은 공개 분석 성공 완료 시각이다. MANUAL_CHECK에는 성공 시각을 새로 찍지 않고 별도 종료 상태·시각을 남긴다.
+- 수동 확인은 자동 미처리 조회에서 제외한다. 명시적 재분석 요청으로만 다시 처리한다.
+- 작업 전체 최대 3회(최초 포함), 일시 오류만 재시도한다. 세부 예산·복구는 harness.md를 따른다.
+- 원자적 선점·잠금·만료·갱신·늦은 결과 차단·중복 저장은 R4 책임이다.
+
+## 9. 근거·원문 수명과 공개 출력
+
+정규화·해시는 collector.dart_client.normalize_document 한 곳을 사용하고 R2는 직접 다른 해시를 만들지 않는다. 원문 해시와 구조화 입력 해시는 서로 다른 대상이다.
+
+검색 원문은 모델 호출 구간의 일시 데이터로 처리한다. Graph 영속 State에는 원문 전문·불필요한 조각·전체 도구 응답을 넣지 않는다. 검증에 필요한 최소 인용·출처·해시·구조화 사실·판정 참조만 보존한다. 점수는 내부 보존하되 불필요한 원문이 score_result의 source_chunks에 포함되지 않게 투영한다.
+
+마지막 원문 검증과 결과 저장 뒤 색인을 해제한다. 설명 재작성·승인 재개는 저장된 근거를 사용한다. 부족하면 원문을 재확보하는 명시적 재분석으로 전환한다. 해시가 달라지면 과거 체크포인트에 새 원문을 조용히 혼합하지 않는다.
+
+설명·안내문 모델에는 public_risk_context의 허용 필드만 전달한다. get_state/start/resume과 원시 interrupt는 서버 내부용이며, PB용 get_review/API/SSE는 점수 없는 투영과 tenant·PB 필터를 적용한다.
+
+## 10. 구현 상태와 통합 완료 조건
+
+이 문서는 목표 규약이다. 기존 R2 코드의 Phase1Bindings 분리 계산 인터페이스, 접수번호 단독 thread, 최대 8개 검색 조각, 원문 조각이 포함된 State는 변경·검증 대상이다. R4의 새 Graph 주입·실제 도구·조직 context 연결도 완료 여부를 확인해야 한다.
+
+- [ ] 실제 calculate_risk_score를 사용하는 새 Graph가 선택된다.
+- [ ] 정상·RED·조건부·정정·결측 사례에서 계산 입력과 결과가 검증된다.
+- [ ] 실패 재시도·재시작·승인 재개가 중복 결과나 업무를 만들지 않는다.
+- [ ] 조직 간 조회·승인·체크포인트가 섞이지 않는다.
+- [ ] 모델 입력·PB API·SSE·체크포인트·trace에서 비공개 경계를 검사한다.
+- [ ] 같은 실제 사례로 개선 전후를 측정한다. 오프라인 테스트와 실제 모델 평가를 구분한다.
+
+상세: [Harness](harness.md), [수집기](collector.md), [RAG](mcp_rag.md), [업무 도구](mcp_business.md), [DB](db.md), [API](api.md), [위험 규칙](risk_rules.md).
