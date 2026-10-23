@@ -89,6 +89,7 @@ def search_disclosure_text(rcept_no: str, query: str, k: int = 5, holder: str | 
     Returns:
         chunks: [{source, text, rcept_no, location, score}] — text는 조각 전문이므로 인용은 text 안의 연속된 문장에서 한다.
         content_sha256, truncated: (운영 모드) 원문 해시, 조각 수 상한 때문에 뒷부분을 색인하지 못했는지.
+        normalization_version: (운영 모드) 원문 정규화 방식의 버전. 버전이 다르면 해시·location을 서로 비교하지 않는다.
     """
     if not isinstance(rcept_no, str) or not rcept_no.isdigit():
         raise ToolFail(ErrorCode.INVALID_INPUT, "rcept_no는 숫자로 된 접수번호여야 합니다.")

@@ -24,7 +24,7 @@ from collector import repo
 from collector.backfill import backfill_start
 from collector.cursor import incremental_start, now_kst
 from collector.dart_client import DartBadRequest, DartClient
-from collector.facts import build_payload, item_for, parse_original_date, split_title
+from collector.facts import build_ambiguous_payload, build_payload, item_for, parse_original_date, split_title
 from collector.indicators import compute_audit_opinion, compute_financial_indicators
 from collector.reports import PeriodicReport, parse_periodic_title
 from collector.watchlist import CorpCodeBook, Target, build_watchlist, resolve
@@ -138,10 +138,17 @@ async def _resolve_facts(client: DartClient, target: Target, rows: list[dict], p
     for rcept, anchor in anchors.items():
         by_group.setdefault((item_for(next(x["report_nm"] for x in rows if x["rcept_no"] == rcept))[1], anchor), []).append(rcept)
     for (api, anchor), rcepts in by_group.items():
-        api_rows = {x.get("rcept_no"): x for x in await client.major_report(api, target.corp_code, _compact(anchor), _compact(anchor))}
+        api_rows: dict[str, list[dict]] = {}
+        for x in await client.major_report(api, target.corp_code, _compact(anchor), _compact(anchor)):
+            api_rows.setdefault(x.get("rcept_no"), []).append(x)
         for rcept in rcepts:
             if rcept in api_rows:
-                payloads[rcept] = build_payload(api, api_rows[rcept], rcept_no=rcept, corp_code=target.corp_code, fetched_at=fetched_at)
+                matched = api_rows[rcept]
+                if len(matched) == 1:
+                    payloads[rcept] = build_payload(api, matched[0], rcept_no=rcept, corp_code=target.corp_code, fetched_at=fetched_at)
+                else:  # 같은 접수번호의 행이 여럿이면 첫 행을 고르지 않는다 (collector.md 4-5)
+                    payloads[rcept] = build_ambiguous_payload(api, len(matched), rcept_no=rcept, corp_code=target.corp_code, fetched_at=fetched_at)
+                    problems.append(f"{rcept}: 항목 API({api})가 같은 접수번호에 행 {len(matched)}개를 줘 사실을 NEEDS_CHECK로 두었다")
             elif api_rows:  # 같은 체인의 더 나중 정정본이 최신이라 이 공시의 행은 없다 (정상: 그쪽에 사실이 붙는다)
                 pass
             else:

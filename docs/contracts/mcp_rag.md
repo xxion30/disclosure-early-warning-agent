@@ -44,7 +44,7 @@ FastMCP는 **동기 도구를 이벤트 루프 스레드에서 그대로 실행�
 | **R2** | 분석 실행 ID를 `holder`로 `search_disclosure_text`·`release_disclosure_index`에 넘기면 같은 공시를 동시에 분석하는 다른 실행이 색인을 지우지 못한다. 도구 응답의 `content_sha256`로 원문이 바뀌었는지 비교할 수 있다. |
 
 ### R2 반영안 (2026-10-23) — 수명·해시·마지막 검색 시점
-기존 `search_disclosure_text(rcept_no, query, k=5)`, `search_reference`, `release_disclosure_index` 계약은 유지한다. 구조화 사실 조회 `get_disclosure_facts`는 business MCP(R4) 책임이다. 아래 중 **`normalization_version`은 아직 코드에 없다**(`collector/dart_client.py`에 버전 값이 없음), 나머지 수명 규칙은 위 "구현됨"과 같다.
+기존 `search_disclosure_text(rcept_no, query, k=5)`, `search_reference`, `release_disclosure_index` 계약은 유지한다. 구조화 사실 조회 `get_disclosure_facts`는 business MCP(R4) 책임이다. `normalization_version`은 `collector/dart_client.py`의 `NORMALIZATION_VERSION`(현재 `"1"`)이고 `search_disclosure_text` 응답 `data`에 추가 필드로 나온다(**구현됨**). 나머지 수명 규칙은 위 "구현됨"과 같다.
 
 **정규화·해시**
 - 정규화·해시의 정본은 `collector.dart_client.normalize_document`(+`content_sha256`) 한 곳이다. ZIP 파일 순서, 태그 제거, 공백 정리, 문자 디코딩을 거기서만 하고 **`normalization_version`을 기록**한다. 정규화 방식을 바꾸면 버전을 올리고 과거 인용과 섞지 않는다.
