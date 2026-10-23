@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
+import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { formatTime } from '../labels'
 
@@ -95,7 +95,7 @@ async function change(task, status) {
         <div class="task-corp">
           <span class="corp-mark" aria-hidden="true">{{ (t.corp_name || '-').slice(0, 1) }}</span>
           <strong>{{ t.corp_name || '-' }}</strong>
-          <LevelBadge v-if="t.status !== '연락완료'" :level="t.level" />
+          <StageBadge v-if="t.status !== '연락완료'" :stage="t.stage" :stages="t.stages" :level="t.level" />
           <RouterLink :to="{ name: 'alert-detail', params: { assessmentId: t.assessment_id } }">경보 #{{ t.assessment_id }}</RouterLink>
         </div>
         <div class="task-status"><StatusBadge :status="t.status" /><span class="sub">{{ formatTime(t.updated_at || t.created_at) }}</span></div>

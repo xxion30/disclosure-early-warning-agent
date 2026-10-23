@@ -1,12 +1,16 @@
 <script setup>
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
+import { mockMode } from './api/mock'
 import BrandLogo from './components/BrandLogo.vue'
 import { useAuthStore } from './stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+// 가짜 데이터 모드 표시 (화면을 옮길 때마다 다시 확인)
+const isMock = computed(() => route.fullPath && mockMode())
 
 const initial = computed(() => auth.pb?.name?.slice(0, 1) || 'P')
 
@@ -27,6 +31,7 @@ function logout() {
         <RouterLink to="/customers">고객 현황</RouterLink>
         <RouterLink to="/tasks">연락 업무</RouterLink>
       </nav>
+      <span v-if="isMock" class="mock-pill" role="status">가짜 데이터 보는 중 <a href="?mock=off">끄기</a></span>
       <div v-if="auth.pb" class="who">
         <span class="avatar" aria-hidden="true">{{ initial }}</span>
         <span class="who-text">

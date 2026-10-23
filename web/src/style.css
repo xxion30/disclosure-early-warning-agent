@@ -175,6 +175,41 @@ button.block { width: 100%; }
 .level-high { background: var(--warn-soft); color: var(--warn); }
 .level-medium { background: var(--caution-soft); color: var(--caution); }
 .level-low, .level-none { background: var(--neutral-soft); color: var(--muted); }
+
+/* 새 위험 단계 배지 (색 점 + 의미 이름). 글자색은 옅은 배경 위에서 4.5:1 이상 */
+.stage-group { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.badge.stage { gap: 6px; }
+.stage-dot { width: 8px; height: 8px; border-radius: var(--pill); background: currentColor; flex: none; }
+.stage-red { background: var(--critical); color: #fff; }
+.stage-orange { background: var(--warn-soft); color: var(--warn); }
+.stage-orange .stage-dot { background: var(--warn-dot); }
+.stage-yellow { background: var(--caution-soft); color: var(--caution); }
+.stage-yellow .stage-dot { background: var(--caution-dot); }
+.stage-composite { background: var(--surface); color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn-dot); }
+.stage-composite .stage-dot { background: var(--warn-dot); }
+.stage-watch { background: var(--neutral-soft); color: var(--muted); }
+.stage-watch .stage-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+.stage-none { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.stage-none .stage-dot { display: none; }
+.stage-more { background: var(--neutral-soft); color: var(--muted); padding: 5px 9px; }
+.new-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: var(--pill); background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+/* 단계 칩 (여러 개 선택) */
+.stage-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.stage-chips button { min-height: 36px; padding: 0 14px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); font-size: 13px; font-weight: 500; gap: 6px; }
+.stage-chips button:hover:not(:disabled) { background: var(--surface-2); }
+.stage-chips button[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; font-weight: 700; }
+.stage-chips .chip-dot { width: 8px; height: 8px; border-radius: var(--pill); flex: none; }
+.chip-dot.red { background: var(--critical); }
+.chip-dot.orange { background: var(--warn-dot); }
+.chip-dot.yellow { background: var(--caution-dot); }
+.chip-dot.composite { background: var(--surface); box-shadow: inset 0 0 0 2px var(--warn-dot); }
+.chip-dot.watch { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
+.chip-dot.none { background: var(--border-strong); }
+
+/* 가짜 데이터 모드 표시 */
+.mock-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--pill); background: var(--caution-soft); color: var(--caution); font-size: 12px; font-weight: 700; }
+.mock-pill a { color: inherit; text-decoration: underline; font-weight: 500; }
 .tone-ok { background: var(--ok-soft); color: var(--ok); }
 .tone-warn { background: var(--warn-soft); color: var(--warn); }
 .tone-bad { background: var(--bad-soft); color: var(--bad); }

@@ -3,13 +3,15 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
+import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
-import { formatTime, formatWon } from '../labels'
+import { formatTime, formatWon, STAGES, stagesOf } from '../labels'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
-const customerTabs = { all: '전체', exposed: '경보 종목 보유', critical: 'Critical 노출' }
+// 새 단계가 들어오면 '즉시 경보 노출', 아직 예전 등급이면 'Critical 노출'
+const stageReady = computed(() => data.value.customers.some((c) => c.exposure.top_stage))
+const customerTabs = computed(() => ({ all: '전체', exposed: '경보 종목 보유', critical: stageReady.value ? '즉시 경보 노출' : 'Critical 노출' }))
 const historyTone = (status) => ({ 연락완료: 'ok', 승인: 'ok', 보류: 'warn', 반려: 'bad' }[status] || '')
 
 const data = ref({ summary: { customers: 0, exposed: 0, critical: 0, high: 0, tasks: {} }, customers: [] })
@@ -36,7 +38,8 @@ const rows = computed(() => {
   const q = query.value.trim().toLowerCase()
   return data.value.customers.filter((c) => {
     if (filter.value === 'exposed' && !c.exposure.alert_count) return false
-    if (filter.value === 'critical' && c.exposure.top_level !== 'Critical') return false
+    const topRed = c.exposure.top_stage ? c.exposure.top_stage === 'RED' : c.exposure.top_level === 'Critical'
+    if (filter.value === 'critical' && !topRed) return false
     return !q || c.name.toLowerCase().includes(q) || c.customer_id.toLowerCase().includes(q)
   })
 })
@@ -47,7 +50,8 @@ const taskDone = computed(() => {
 })
 
 // 종목명 비중% · 경보 등급 (공백을 명시해 "KODEX 20037.5%"처럼 붙지 않게 한다)
-const chipText = (h) => [h.stock_name, h.ratio_pct != null ? `${h.ratio_pct}%` : '', h.alert ? `· ${h.alert.level}` : ''].filter(Boolean).join(' ')
+const alertName = (a) => (stagesOf(a)[0] ? STAGES[stagesOf(a)[0]].label : a.level)
+const chipText = (h) => [h.stock_name, h.ratio_pct != null ? `${h.ratio_pct}%` : '', h.alert ? `· ${alertName(h.alert)}` : ''].filter(Boolean).join(' ')
 const alertedHoldings = (c) => c.holdings.filter((h) => h.alert)
 const toggle = (id) => (open[id] = !open[id])
 </script>
@@ -122,7 +126,7 @@ const toggle = (id) => (open[id] = !open[id])
           <template v-for="c in rows" :key="c.customer_id">
             <tr class="clickable" :class="{ expanded: open[c.customer_id] }" @click="toggle(c.customer_id)">
               <td>
-                <LevelBadge v-if="c.exposure.top_level" :level="c.exposure.top_level" />
+                <StageBadge v-if="c.exposure.top_stage || c.exposure.top_level" :stage="c.exposure.top_stage" :level="c.exposure.top_level" />
                 <span v-else class="muted">-</span>
               </td>
               <td>
@@ -170,7 +174,7 @@ const toggle = (id) => (open[id] = !open[id])
                         </div>
                         <div class="holding-alert">
                           <template v-if="h.alert">
-                            <LevelBadge :level="h.alert.level" />
+                            <StageBadge :stage="h.alert.stage" :stages="h.alert.stages" :level="h.alert.level" />
                             <RouterLink :to="{ name: 'alert-detail', params: { assessmentId: String(h.alert.assessment_id) } }" @click.stop>경보 보기</RouterLink>
                           </template>
                           <span v-else class="muted">경보 없음</span>

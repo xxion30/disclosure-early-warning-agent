@@ -2,13 +2,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
 import AlertSummary from '../components/AlertSummary.vue'
+import StageBadge from '../components/StageBadge.vue'
 import RunProgress from '../components/RunProgress.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { formatTime, isUnscored, MAIN_PATH, STATUS_GUIDE } from '../labels'
+import { formatTime, isUnscored, MAIN_PATH, STAGES, STATUS_GUIDE, stagesOf } from '../labels'
 import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
@@ -77,6 +77,8 @@ const progressNote = computed(() => ({
 // 실패·수동 확인·처리 중이면 맨 위에 안내를 띄운다. 이유(error)는 API가 주면 함께 보여준다
 const guide = computed(() => STATUS_GUIDE[alert.value?.status] || null)
 const unscored = computed(() => isUnscored(alert.value))
+// 새 단계가 있으면 가장 심한 단계 이름, 없으면 예전 등급
+const topStage = computed(() => stagesOf(alert.value)[0] || null)
 // 고객 영향도는 High·Critical 경보에서만 계산한다
 const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].includes(alert.value?.level))
 </script>
@@ -110,7 +112,8 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
             <div class="hero-title">
               <h1>{{ alert.company.name || alert.disclosure.title }}</h1>
               <span v-if="unscored" class="unscored">등급 미계산</span>
-              <LevelBadge v-else :level="alert.level" />
+              <!-- 종목 상세에서는 함께 난 단계를 모두 보여준다 -->
+              <StageBadge v-else all :stage="alert.stage" :stages="alert.stages" :level="alert.level" />
               <StatusBadge :status="alert.status" />
             </div>
             <p class="hero-meta muted">
@@ -139,6 +142,11 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
           <div class="mini-stat-value level-value"><strong class="muted">미계산</strong></div>
           <span class="mini-stat-note">점수 계산 전에 멈췄어요</span>
         </div>
+        <div v-else-if="topStage" class="mini-stat" :class="{ bad: topStage === 'RED' }">
+          <span class="mini-stat-label">단계 결정</span>
+          <div class="mini-stat-value level-value"><strong>{{ STAGES[topStage].label }}</strong></div>
+          <span class="mini-stat-note">{{ STAGES[topStage].hint || '규칙으로 정한 단계' }}</span>
+        </div>
         <div v-else class="mini-stat" :class="{ bad: fixedReason }">
           <span class="mini-stat-label">등급 결정</span>
           <div class="mini-stat-value level-value"><strong>{{ fixedReason ? `${fixedReason.fixed_level} 고정` : alert.level || '-' }}</strong></div>
@@ -158,7 +166,7 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
     </section>
 
     <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
-    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" />
+    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" :stage="alert.stage" :stages="alert.stages" />
 
     <section v-if="hasRunHistory" class="card" aria-label="진행 단계">
       <div class="card-head">
