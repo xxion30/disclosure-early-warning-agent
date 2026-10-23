@@ -2,13 +2,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
 import AlertSummary from '../components/AlertSummary.vue'
 import RunProgress from '../components/RunProgress.vue'
+import StageBadge from '../components/StageBadge.vue'
 import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
-import { formatTime, isUnscored, MAIN_PATH, STATUS_GUIDE } from '../labels'
+import { formatTime, isAlertRow, isUnscored, MAIN_PATH, stageText, STATUS_GUIDE } from '../labels'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
 
@@ -71,11 +71,12 @@ const evidence = computed(() => {
 
 const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
 const customers = computed(() => alert.value?.customers || [])
-const keyReason = computed(() => alert.value?.summary?.headline || alert.value?.reasons?.[0]?.item || '핵심 사유를 확인할 수 없어요. 공시 원문을 확인해 주세요.')
+// 서버 문장에 단계 코드(RED 등)가 들어 있으면 한국어 이름으로 바꿔 보여 준다
+const keyReason = computed(() => stageText(alert.value?.summary?.headline) || alert.value?.reasons?.[0]?.item || '핵심 사유를 확인할 수 없어요. 공시 원문을 확인해 주세요.')
 const primaryEvidence = computed(() => evidence.value[0])
 const dartUrl = (rcept) => `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(rcept)}`
 const evidenceUrl = (e) => e?.rcept_no ? dartUrl(e.rcept_no) : alert.value?.disclosure?.url
-const disclosureUrl = computed(() => alert.value?.disclosure?.url || (alert.value?.rcept_no ? dartUrl(alert.value.rcept_no) : ''))
+const disclosureUrl = computed(() => alert.value?.disclosure?.url || (alert.value?.rcept_no && !alert.value?.mock ? dartUrl(alert.value.rcept_no) : ''))
 // 인용이 다른(과거) 공시에서 왔으면 링크 이름으로 알려 준다
 const evidenceLinkLabel = (e) => (e?.rcept_no && e.rcept_no !== alert.value?.rcept_no ? '인용한 공시 원문' : 'DART 원문 확인')
 const progressNote = computed(() => ({
@@ -88,8 +89,8 @@ const progressNote = computed(() => ({
 // 실패·수동 확인·처리 중이면 맨 위에 안내를 띄운다. 이유(error)는 API가 주면 함께 보여준다
 const guide = computed(() => STATUS_GUIDE[alert.value?.status] || null)
 const unscored = computed(() => isUnscored(alert.value))
-// 고객 영향도는 High·Critical 경보에서만 계산한다
-const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].includes(alert.value?.level))
+// 안내문 대상 고객은 경보(관찰 중·경보 없음 제외)에서만 정해진다
+const impactSkipped = computed(() => unscored.value || !isAlertRow(alert.value))
 const customerState = computed(() => {
   if (impactSkipped.value) return '조회 대상 아님'
   if (alert.value?.graph_error || !alert.value?.graph_state_available) return '확인 불가'
@@ -126,7 +127,8 @@ const customerState = computed(() => {
             <div class="hero-title">
               <h1>{{ alert.company.name || alert.disclosure.title }}</h1>
               <span v-if="unscored" class="unscored">등급 미계산</span>
-              <LevelBadge v-else :level="alert.level" />
+              <!-- 상세에서는 함께 난 단계를 모두 보여 준다 -->
+              <StageBadge v-else all :stage="alert.stage" :stages="alert.stages" :level="alert.level" />
               <StatusBadge :status="alert.status" />
             </div>
             <p class="hero-meta muted">
@@ -160,7 +162,7 @@ const customerState = computed(() => {
     <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
     <details v-if="alert.summary && !unscored" class="card">
       <summary>이번 공시의 영향 더 보기</summary>
-      <AlertSummary :summary="alert.summary" :level="alert.level" />
+      <AlertSummary :summary="alert.summary" :level="alert.level" :stage="alert.stage" :stages="alert.stages" />
     </details>
 
     <details v-if="hasRunHistory" class="card" :open="alert.status !== 'DONE'">
@@ -199,7 +201,7 @@ const customerState = computed(() => {
         <span class="muted section-note">다른 PB의 고객은 이름을 가려요</span>
       </div>
       <p v-if="impactSkipped" class="muted impact-skipped">
-        안내문 대상 고객은 High·Critical 경보에서만 정해져요.<template v-if="unscored"> 이 공시는 위험 평가 전에 멈췄어요.</template>
+        안내문 대상 고객은 경보 단계에서만 정해져요.<template v-if="unscored"> 이 공시는 위험 평가 전에 멈췄어요.</template>
       </p>
       <p v-else-if="alert.graph_error" class="notice">
         고객 정보를 불러오지 못했어요. 위험 항목은 볼 수 있어요. 잠시 뒤 다시 확인해 주세요.

@@ -104,7 +104,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
       </tr>
     </tfoot>
   </table>
-  <p v-else class="muted">위험 항목이 없습니다.</p>
+  <p v-else class="muted empty-note">위험 항목이 없습니다.</p>
 </template>
 
 <style scoped>
@@ -135,5 +135,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 .evidence .quote blockquote { font-size: 15px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
 .evidence summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .evidence details blockquote { margin-top: 6px; }
+.empty-note { margin: 0; padding: 0 24px 16px; }
+@media (max-width: 640px) { .empty-note { padding: 0 16px 16px; } }
 tfoot td { border-top: 2px solid var(--border); }
 </style>
