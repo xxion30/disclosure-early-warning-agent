@@ -96,7 +96,7 @@
 - 필드: `rcept_no reprt_code bsns_year corp_code sj_div sj_nm account_id account_nm account_detail thstrm_amount frmtrm_amount bfefrmtrm_amount thstrm_nm frmtrm_nm bfefrmtrm_nm ord currency`. `sj_div`: `BS CF CIS SCE`. **행마다 `rcept_no`가 있어** 지표의 출처 접수번호를 그대로 남길 수 있다.
 - 계정 식별: 표준 계정은 `account_id`가 있다(`ifrs-full_Equity`, `ifrs-full_IssuedCapital`, `ifrs-full_CashAndCashEquivalents`, `ifrs-full_CashFlowsFromUsedInOperatingActivities`, `dart_OperatingIncomeLoss`). `단기차입금`은 `-표준계정코드 미사용-`이라 `account_nm`으로 찾아야 한다. **`account_id` 우선, 없으면 `account_nm` 일치**로 한다.
 - 자본총계는 `SCE`(자본변동표)에도 여러 행으로 나온다. 지표는 `sj_div="BS"` 행만 쓴다.
-- **이자비용(이자보상배율)**: 5개 회사(금양·삼성전자·SK하이닉스·CJ CGV·SK) 2024 사업보고서 연결재무제표 손익계산서에 `이자비용` 계정은 **없었다.** 후보는 (A) `금융비용`/`금융원가`(`ifrs-full_FinanceCosts`, 5곳 모두 있음, 이자 외 손익이 섞여 분모가 커짐)와 (B) 현금흐름표 `이자의 지급`(`ifrs-full_InterestPaidClassifiedAsOperatingActivities`, 5곳 모두 있음, 재무활동 분류 회사는 미확인)이다. **R1이 고를 때까지 `INTEREST_BURDEN`은 `MISSING`(산정 불가)** 이다 — R1 결정: 못 찾으면 0점이 아니라 점수에 안 넣음. 자세한 내용은 `collector.md` 5-2.
+- **이자비용(이자보상배율)**: 5개 회사(금양·삼성전자·SK하이닉스·CJ CGV·SK) 2024 사업보고서 연결재무제표 손익계산서에 `이자비용` 계정은 **없었다.** 후보는 (A) `금융비용`/`금융원가`(`ifrs-full_FinanceCosts`, 5곳 모두 있음, 이자 외 손익이 섞여 분모가 커짐)와 (B) 현금흐름표 `이자의 지급`(`ifrs-full_InterestPaidClassifiedAsOperatingActivities`, 5곳 모두 있음, 재무활동 분류 회사는 미확인)이다. **R1 결정(2026-10-23): (A) `금융비용`/`금융원가`를 쓴다.** 계정을 못 찾으면 0점이 아니라 "산정 불가"로 점수에 안 넣는다. 이자 외 손익이 섞여 이자보상배율이 낮게 나오는 한계가 있다. 자세한 내용은 `collector.md` 5-2.
 - **R1 결정 반영**: 자본잠식률 = (자본금−자기자본)÷자본금×100, 자기자본 ≤ 0이면 전액(100). 개별(OFS)·연결(CFS) 둘 다 저장. 단기채무 범위는 `collector.md` 5-1.
 - 기준일 직전 사업보고서를 찾는 방법: 옛 `compute_base_score.py`의 `reference_year()`는 3/31 기준 추정이다. 새 수집기는 `list.json`의 `사업보고서 (YYYY.MM)` 접수번호로 찾는다.
 
