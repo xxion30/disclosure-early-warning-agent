@@ -50,7 +50,7 @@ function inTab(r, key) {
 }
 function passes(r) {
   if (statusFilter.value && r.status !== statusFilter.value) return false
-  if (pendingOnly.value && !(r.my_pending_count > 0)) return false
+  if (pendingOnly.value && (r.status === 'DONE' || !(r.my_pending_count > 0))) return false
   return true
 }
 const rows = computed(() => allRows.value.filter((r) => inTab(r, tab.value) && passes(r) && (tab.value !== 'all' || !levelFilter.value || r.level === levelFilter.value)))
@@ -61,8 +61,6 @@ const attention = computed(() => ({
   MANUAL_CHECK: allRows.value.filter((r) => r.status === 'MANUAL_CHECK').length,
   FAILED: allRows.value.filter((r) => r.status === 'FAILED').length,
 }))
-// 메인 대시보드 알림 = 경보 등급 + 처리 실패가 아닌 것. 서버가 이미 우선순위로 정렬해 준다
-const notifications = computed(() => allRows.value.filter((r) => ['High', 'Critical'].includes(r.level) && r.status !== 'FAILED').slice(0, 8))
 const showAttention = computed(() => !statusFilter.value && (attention.value.MANUAL_CHECK || attention.value.FAILED))
 function showStatus(status) {
   tab.value = 'all'
@@ -79,8 +77,8 @@ const today = computed(() => new Date().toLocaleDateString('ko-KR', {
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
 }))
 const stats = computed(() => ({
-  pending: allRows.value.reduce((sum, r) => sum + Number(r.my_pending_count || 0), 0),
-  pendingAlerts: allRows.value.filter((r) => r.my_pending_count > 0).length,
+  pending: allRows.value.reduce((sum, r) => sum + (r.status === 'DONE' ? 0 : Number(r.my_pending_count || 0)), 0),
+  pendingAlerts: allRows.value.filter((r) => r.status !== 'DONE' && r.my_pending_count > 0).length,
   critical: allRows.value.filter((r) => r.level === 'Critical').length,
   high: allRows.value.filter((r) => r.level === 'High').length,
 }))
@@ -124,11 +122,6 @@ async function startRun() {
       <p class="eyebrow">{{ today }}</p>
       <h1>경보 목록</h1>
     </div>
-    <form class="row run-start" @submit.prevent="startRun">
-      <label for="rcept" class="sr-only">접수번호</label>
-      <input id="rcept" v-model="rceptNo" placeholder="접수번호 14자리" pattern="\d{14}" required />
-      <button type="submit">공시 처리 시작</button>
-    </form>
   </div>
 
   <button type="button" class="shortcut-line pending-shortcut" :class="{ on: pendingOnly }" :disabled="!stats.pending && !pendingOnly" :aria-pressed="pendingOnly" @click="togglePending">
@@ -171,7 +164,7 @@ async function startRun() {
         <template v-if="attention.MANUAL_CHECK">수동 확인 {{ attention.MANUAL_CHECK }}건</template>
         <template v-if="attention.MANUAL_CHECK && attention.FAILED"> · </template>
         <template v-if="attention.FAILED">실패 {{ attention.FAILED }}건</template>
-        — 점수 계산 전에 멈춘 공시는 경보 탭에 나오지 않아요.
+        · 위험 평가 전에 멈춘 공시는 경보 탭에 나오지 않아요.
       </span>
     </span>
     <span class="banner-action">
@@ -179,22 +172,6 @@ async function startRun() {
       <button v-if="attention.FAILED" type="button" class="ghost small" @click="showStatus('FAILED')">실패 보기</button>
     </span>
   </div>
-
-  <!-- 메인 대시보드 알림: 경보 등급(High·Critical)을 우선순위(등급 → 점수 순)로. 점수 숫자는 보여 주지 않는다 -->
-  <section v-if="notifications.length" class="card notifications" aria-label="새 경보 알림">
-    <div class="card-head">
-      <h2>경보 알림 <small>{{ notifications.length }}건 · 우선순위순</small></h2>
-    </div>
-    <ol class="notice-list">
-      <li v-for="(r, n) in notifications" :key="r.assessment_id" class="clickable" @click="openAlert(r)">
-        <span class="rank">{{ n + 1 }}</span>
-        <LevelBadge :level="r.level" />
-        <strong>{{ r.corp_name || '-' }}</strong>
-        <span class="sub">{{ r.title || r.rcept_no }}</span>
-        <span class="notice-meta">보유 고객 {{ r.affected_count }}명<template v-if="r.my_pending_count > 0"> · 내 승인 대기 {{ r.my_pending_count }}명</template></span>
-      </li>
-    </ol>
-  </section>
 
   <section class="card flush alert-list" aria-label="경보 목록">
     <div class="card-head">
@@ -242,12 +219,12 @@ async function startRun() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.assessment_id" class="clickable" @click="openAlert(r)">
+          <tr v-for="r in rows" :key="r.assessment_id" class="clickable" :class="{ completed: r.status === 'DONE' }" @click="openAlert(r)">
             <td>
               <div class="corp">
                 <span class="corp-mark" aria-hidden="true">{{ (r.corp_name || '-').slice(0, 1) }}</span>
                 <div class="corp-text">
-                  <strong>{{ r.corp_name || '-' }} <small v-if="r.stock_code" class="code">{{ r.stock_code }}</small></strong>
+                  <strong><RouterLink :to="{ name: 'alert-detail', params: { assessmentId: r.assessment_id } }" @click.stop>{{ r.corp_name || '-' }}</RouterLink> <small v-if="r.stock_code" class="code">{{ r.stock_code }}</small></strong>
                   <span class="disclosure-title">{{ r.title || r.rcept_no }}</span>
                   <span class="sub">공시 {{ r.filed_at || '-' }} · 처리 {{ formatTime(r.created_at) }}</span>
                 </div>
@@ -258,13 +235,14 @@ async function startRun() {
                 <span v-if="isUnscored(r)" class="unscored" title="점수 계산 전에 멈췄어요">미계산</span>
                 <LevelBadge v-else :level="r.level" />
                 <StatusBadge :status="r.status" />
+                <span v-if="r.status === 'DONE'" class="sub">처리 완료 기록</span>
                 <span v-if="r.combo_upgraded" class="sub">조합 상향</span>
               </div>
             </td>
             <td class="num">
               <div class="customer-cell">
                 <span>보유 {{ r.affected_count ?? '-' }}명</span>
-                <span v-if="r.my_pending_count > 0" class="count-pill" :title="`내 승인 대기 ${r.my_pending_count}명`">내 대기 {{ r.my_pending_count }}</span>
+                <span v-if="r.status !== 'DONE' && r.my_pending_count > 0" class="count-pill" :title="`내 승인 대기 ${r.my_pending_count}명`">내 대기 {{ r.my_pending_count }}</span>
               </div>
             </td>
           </tr>
@@ -275,10 +253,18 @@ async function startRun() {
       </table>
     </div>
   </section>
+  <details class="card">
+    <summary>공시 직접 처리</summary>
+    <form class="row run-start" @submit.prevent="startRun">
+      <label for="rcept" class="sr-only">접수번호</label>
+      <input id="rcept" v-model="rceptNo" placeholder="접수번호 14자리" pattern="\d{14}" required />
+      <button type="submit">공시 처리 시작</button>
+    </form>
+  </details>
 </template>
 
 <style scoped>
-.run-start { padding: 8px; border: 1px solid var(--border); border-radius: var(--pill); background: var(--surface); box-shadow: var(--shadow-sm); }
+.run-start { margin-top: 16px; }
 .run-start input { width: 200px; min-width: 0; padding: 0 18px; border: none; border-radius: var(--pill); background: var(--bg); }
 .run-start button { white-space: nowrap; padding: 0 22px; }
 .run-number { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
@@ -294,8 +280,8 @@ async function startRun() {
 .corp-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; min-width: 0; }
 .corp-text .code { font-size: 12px; font-weight: 500; color: var(--muted); }
 .disclosure-title { font-weight: 500; overflow-wrap: anywhere; }
-.level-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.customer-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; white-space: nowrap; }
+.level-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.customer-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; white-space: nowrap; }
 .pending-shortcut.on { box-shadow: 0 0 0 2px var(--blue) inset; }
 .alert-list th:nth-child(2), .alert-list th:nth-child(3) { width: 1%; }
 @media (max-width: 640px) {
@@ -307,9 +293,6 @@ async function startRun() {
   .run-start input { flex: 1 1 160px; }
   .run-start button { flex: 1 1 auto; }
 }
-.notice-list { list-style: none; margin: 0; padding: 0 24px 16px; display: flex; flex-direction: column; gap: 8px; }
-.notice-list li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); flex-wrap: wrap; }
-.notice-list li:hover { background: var(--bg); }
-.notice-list .rank { width: 24px; height: 24px; border-radius: 50%; background: var(--neutral-soft); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
-.notice-meta { margin-left: auto; font-size: 13px; color: var(--muted); }
+.completed { background: var(--surface-2); }
+.completed .corp-text a { color: var(--muted); }
 </style>

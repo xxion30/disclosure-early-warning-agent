@@ -9,10 +9,8 @@ import ScoreBreakdown from '../components/ScoreBreakdown.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
 import { formatTime, isUnscored, MAIN_PATH, STATUS_GUIDE } from '../labels'
-import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({ assessmentId: { type: String, required: true } })
-const auth = useAuthStore()
 
 const alert = ref(null)
 const error = ref('')
@@ -53,10 +51,17 @@ async function loadProgress() {
 onMounted(load)
 watch(() => props.assessmentId, load)
 
+// 대표 인용 순서: 등급을 고정한 확정 악재 → 이번 공시에서 뽑은 인용 → 이번 공시 항목 → 과거 신호.
+// 서버는 항목을 점수 순으로 주므로 그대로 쓰면 과거 신호의 문장이 대표로 올라올 수 있다.
+const reasonRank = (r) => (r.fixed_level ? 0 : r.rcept_no === alert.value?.rcept_no && !r.from_history ? 2 : 3)
 // 같은 인용이 사실 추출·설명 단계에서 두 번 들어올 수 있어 출처+문장 기준으로 한 번만 보여준다
 const evidence = computed(() => {
   const seen = new Set()
-  return (alert.value?.evidence || []).filter((e) => {
+  const fromReasons = (alert.value?.reasons || []).flatMap((r) => (r.evidence || []).map((e) => ({ ...e, rcept_no: e.rcept_no || r.rcept_no, rank: reasonRank(r) })))
+  const fromDisclosure = (alert.value?.evidence || []).map((e) => ({ ...e, rcept_no: e.rcept_no || alert.value?.rcept_no, rank: 1 }))
+  const quotes = [...fromReasons, ...fromDisclosure].sort((a, b) => a.rank - b.rank) // 같은 순위 안에서는 서버 순서 유지
+  return quotes.filter((e) => {
+    if (!e.quote) return false
     const key = `${e.source}|${e.rcept_no}|${e.quote}`
     if (seen.has(key)) return false
     seen.add(key)
@@ -66,7 +71,13 @@ const evidence = computed(() => {
 
 const myPending = computed(() => (alert.value?.customers || []).filter((c) => c.mine && c.decision === '승인대기'))
 const customers = computed(() => alert.value?.customers || [])
-const fixedReason = computed(() => alert.value?.reasons?.find((r) => r.fixed_level))
+const keyReason = computed(() => alert.value?.summary?.headline || alert.value?.reasons?.[0]?.item || '핵심 사유를 확인할 수 없어요. 공시 원문을 확인해 주세요.')
+const primaryEvidence = computed(() => evidence.value[0])
+const dartUrl = (rcept) => `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(rcept)}`
+const evidenceUrl = (e) => e?.rcept_no ? dartUrl(e.rcept_no) : alert.value?.disclosure?.url
+const disclosureUrl = computed(() => alert.value?.disclosure?.url || (alert.value?.rcept_no ? dartUrl(alert.value.rcept_no) : ''))
+// 인용이 다른(과거) 공시에서 왔으면 링크 이름으로 알려 준다
+const evidenceLinkLabel = (e) => (e?.rcept_no && e.rcept_no !== alert.value?.rcept_no ? '인용한 공시 원문' : 'DART 원문 확인')
 const progressNote = computed(() => ({
   WAITING_APPROVAL: 'PB 승인에서 멈춰 있어요',
   DONE: '처리가 끝났어요',
@@ -79,6 +90,11 @@ const guide = computed(() => STATUS_GUIDE[alert.value?.status] || null)
 const unscored = computed(() => isUnscored(alert.value))
 // 고객 영향도는 High·Critical 경보에서만 계산한다
 const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].includes(alert.value?.level))
+const customerState = computed(() => {
+  if (impactSkipped.value) return '조회 대상 아님'
+  if (alert.value?.graph_error || !alert.value?.graph_state_available) return '확인 불가'
+  return `${customers.value.length}명`
+})
 </script>
 
 <template>
@@ -97,7 +113,7 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
       </span>
       <span class="banner-text">
         <strong>{{ guide.title }}</strong>
-        <span>{{ guide.text }}<template v-if="unscored"> 점수 계산 전에 멈춰서 등급과 총점이 없어요.</template></span>
+        <span>{{ guide.text }}<template v-if="unscored"> 위험 평가를 완료하지 못했어요.</template></span>
         <span v-if="alert.error" class="status-reason">이유: {{ alert.error }}</span>
       </span>
     </div>
@@ -117,56 +133,40 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
               <strong>{{ alert.disclosure.title }}</strong>
               <span>접수번호 {{ alert.rcept_no }}</span>
               <span v-if="alert.disclosure.filed_at">공시일 {{ alert.disclosure.filed_at }}</span>
-              <a v-if="alert.disclosure.url" :href="alert.disclosure.url" target="_blank" rel="noopener">
-                DART 원문
+              <a v-if="disclosureUrl" :href="disclosureUrl" target="_blank" rel="noopener">
+                이번 공시 DART 원문
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8" /></svg>
               </a>
             </p>
           </div>
         </div>
-        <RouterLink
-          v-if="myPending.length"
-          :to="{ name: 'draft-review', params: { assessmentId } }"
-          class="review-link"
-        >
-          안내문 검토 <span class="count-pill">{{ myPending.length }}명</span>
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-        </RouterLink>
       </div>
-      <div class="mini-stats">
-        <div v-if="unscored" class="mini-stat">
-          <span class="mini-stat-label">등급 결정</span>
-          <div class="mini-stat-value level-value"><strong class="muted">미계산</strong></div>
-          <span class="mini-stat-note">점수 계산 전에 멈췄어요</span>
-        </div>
-        <div v-else class="mini-stat" :class="{ bad: fixedReason }">
-          <span class="mini-stat-label">등급 결정</span>
-          <div class="mini-stat-value level-value"><strong>{{ fixedReason ? `${fixedReason.fixed_level} 고정` : alert.level || '-' }}</strong></div>
-          <span class="mini-stat-note">{{ fixedReason ? `확정 악재: ${fixedReason.item}` : `규칙으로 정한 등급${alert.combo_upgraded ? ' · 조합 상향' : ''}` }}</span>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat-label">보유 고객</span>
-          <div class="mini-stat-value"><strong>{{ customers.length }}</strong><span>명</span></div>
-          <span class="mini-stat-note">{{ customers.length ? '보유 평가금액 큰 순' : '보유 고객 없음' }}</span>
-        </div>
-        <div class="mini-stat dark">
-          <span class="mini-stat-label">내 승인 대기</span>
-          <div class="mini-stat-value"><strong>{{ myPending.length }}</strong><span>명</span></div>
-          <span class="mini-stat-note">{{ auth.pb?.pb_id || '-' }} 담당 고객</span>
-        </div>
-      </div>
+      <p class="explanation"><strong>핵심 사유</strong><br />{{ unscored ? '위험 평가를 완료하지 못했어요.' : keyReason }}</p>
+      <figure v-if="primaryEvidence" class="quote">
+        <blockquote>“{{ primaryEvidence.quote }}”</blockquote>
+        <figcaption>
+          <span v-if="primaryEvidence.source" class="chip strong">{{ primaryEvidence.source }}</span>
+          <a v-if="evidenceUrl(primaryEvidence)" :href="evidenceUrl(primaryEvidence)" target="_blank" rel="noopener">{{ evidenceLinkLabel(primaryEvidence) }}</a>
+        </figcaption>
+      </figure>
+      <p v-else class="notice warn">원문 인용을 확인할 수 없어요. 위의 "이번 공시 DART 원문"에서 직접 확인해 주세요.</p>
+      <RouterLink
+        v-if="myPending.length && !impactSkipped && !alert.graph_error && alert.graph_state_available"
+        :to="{ name: 'draft-review', params: { assessmentId } }"
+        class="review-link"
+      >내 고객 안내문 검토 · {{ myPending.length }}명 승인 대기</RouterLink>
     </section>
 
     <!-- 점수 계산 전에 멈춘 경보는 "추가된 신호 없음"으로 잘못 읽히므로 요약을 숨긴다 -->
-    <AlertSummary v-if="alert.summary && !unscored" :summary="alert.summary" :level="alert.level" />
+    <details v-if="alert.summary && !unscored" class="card">
+      <summary>이번 공시의 영향 더 보기</summary>
+      <AlertSummary :summary="alert.summary" :level="alert.level" />
+    </details>
 
-    <section v-if="hasRunHistory" class="card" aria-label="진행 단계">
-      <div class="card-head">
-        <h2>진행 단계</h2>
-        <span v-if="progressNote" class="muted section-note">{{ progressNote }}</span>
-      </div>
+    <details v-if="hasRunHistory" class="card" :open="alert.status !== 'DONE'">
+      <summary>진행 단계<template v-if="progressNote"> · {{ progressNote }}</template></summary>
       <RunProgress :state="runState" />
-    </section>
+    </details>
 
     <section class="card flush" aria-label="위험 항목">
       <div class="card-head">
@@ -178,38 +178,34 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
       </div>
     </section>
 
-    <section class="card" aria-label="AI 설명과 원문 근거">
-      <div class="card-head explanation-head">
-        <h2>AI 설명과 원문 근거</h2>
-        <span class="chip soft">AI가 쓴 설명 · 등급에는 영향 없음</span>
-      </div>
+    <details class="card">
+      <summary>AI 설명과 추가 인용<template v-if="evidence.length > 1"> · {{ evidence.length - 1 }}개</template></summary>
       <p class="explanation">{{ alert.ai_explanation || '설명이 없습니다.' }}</p>
-      <div v-if="evidence.length" class="quote-grid">
-        <figure v-for="(e, i) in evidence" :key="i" class="quote">
+      <p class="muted section-note">AI가 쓴 설명은 등급에 영향을 주지 않아요.</p>
+      <div v-if="evidence.length > 1" class="quote-grid">
+        <figure v-for="(e, i) in evidence.slice(1)" :key="i" class="quote">
           <blockquote>“{{ e.quote }}”</blockquote>
           <figcaption>
-            <span class="chip strong">{{ e.source }}</span>
-            <span v-if="e.rcept_no" class="chip">{{ e.rcept_no }}</span>
+            <span v-if="e.source" class="chip strong">{{ e.source }}</span>
+            <a v-if="evidenceUrl(e)" :href="evidenceUrl(e)" target="_blank" rel="noopener">{{ evidenceLinkLabel(e) }}</a>
           </figcaption>
         </figure>
       </div>
-      <p v-if="!evidence.length && alert.status === 'FAILED'" class="notice">처리가 중간에 멈춰 원문 인용이 없어요. 공시 원문을 직접 확인해 주세요.</p>
-      <p v-else-if="!evidence.length" class="notice">원문 인용이 없어요. 추측하지 않고 수동 확인으로 남겼어요.</p>
-    </section>
+    </details>
 
     <section class="card flush customers" aria-label="영향 고객">
       <div class="card-head">
-        <h2>보유 고객 <small>{{ customers.length }}명 · 보유 평가금액 큰 순</small></h2>
+        <h2>보유 고객 <small>{{ customerState }}<template v-if="customerState.endsWith('명') && customers.length"> · 보유 평가금액 큰 순</template></small></h2>
         <span class="muted section-note">다른 PB의 고객은 이름을 가려요</span>
       </div>
-      <p v-if="impactSkipped && !customers.length" class="muted impact-skipped">
-        안내문 대상 고객은 High·Critical 경보에서만 정해져요.<template v-if="unscored"> 이 공시는 점수 계산 전에 멈췄어요.</template>
+      <p v-if="impactSkipped" class="muted impact-skipped">
+        안내문 대상 고객은 High·Critical 경보에서만 정해져요.<template v-if="unscored"> 이 공시는 위험 평가 전에 멈췄어요.</template>
       </p>
       <p v-else-if="alert.graph_error" class="notice">
-        {{ alert.graph_error }} 위험 항목은 그대로 볼 수 있고, 보유 고객·안내문은 연결되면 다시 보입니다.
+        고객 정보를 불러오지 못했어요. 위험 항목은 볼 수 있어요. 잠시 뒤 다시 확인해 주세요.
       </p>
       <p v-else-if="!alert.graph_state_available" class="notice">
-        Graph 상태를 찾을 수 없어 보유 고객을 표시할 수 없습니다. (서버 재시작 후 가짜 Graph 사용 중일 수 있음)
+        이 경보의 고객 조회 기록을 확인할 수 없어요. 담당 운영자에게 확인을 요청해 주세요.
       </p>
       <div v-else class="table-wrap">
         <table class="stack-table">
@@ -221,6 +217,7 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
             </tr>
           </thead>
           <tbody>
+            <tr v-if="!customers.length"><td colspan="3" class="empty">보유 고객이 없습니다.</td></tr>
             <tr v-for="c in customers" :key="c.customer_id">
               <td>
                 <div class="customer">
@@ -241,31 +238,31 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
 
 <style scoped>
 .back-link { min-height: 44px; }
-.detail-error { margin: 0 0 20px; }
-.status-banner { margin-bottom: 20px; }
+.detail-error { margin: 0 0 24px; }
+.status-banner { margin-bottom: 24px; }
 .status-reason { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
 .impact-skipped { margin: 0 24px 16px; font-size: 14px; }
-.hero { border-radius: 28px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
-.hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
+.hero { border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+.hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
 .hero-company { display: flex; align-items: flex-start; gap: 16px; flex: 1 1 560px; min-width: 0; }
-.hero .corp-mark { width: 56px; height: 56px; border-radius: 18px; font-size: 22px; }
+.hero .corp-mark { width: 56px; height: 56px; border-radius: var(--radius-md); font-size: 22px; }
 .hero-copy { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.hero-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hero-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .hero-title h1 { margin: 0; overflow-wrap: anywhere; }
-.hero-meta { display: flex; gap: 6px 12px; flex-wrap: wrap; margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.hero-meta { display: flex; gap: 8px 12px; flex-wrap: wrap; margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .hero-meta strong { color: var(--text); font-weight: 600; }
-.hero-meta a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-weight: 600; }
 .hero-meta > span, .hero-meta > strong { align-self: center; }
-.review-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 24px; border-radius: var(--pill); background: var(--blue); color: var(--surface); font-size: 16px; font-weight: 700; white-space: nowrap; }
+.hero-meta a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-weight: 600; }
+.review-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 24px; border-radius: var(--pill); background: var(--blue-strong); color: var(--surface); font-size: 16px; font-weight: 700; text-align: center; align-self: flex-start; max-width: 100%; }
 .review-link:hover { background: var(--blue-strong); text-decoration: none; }
-.review-link:focus-visible, .back-link:focus-visible, .hero-meta a:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
-.review-link .count-pill { background: color-mix(in srgb, var(--surface) 22%, transparent); font-size: 14px; }
-.level-value strong { font-size: 20px; }
-.mini-stat-note { overflow-wrap: anywhere; }
 .section-note { font-size: 13px; }
-.explanation-head { justify-content: flex-start; gap: 10px; }
-.explanation { margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.75; color: #2a3554; }
+.explanation { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.75; color: #2a3554; }
 .quote { overflow-wrap: anywhere; }
+.quote .chip { white-space: normal; overflow-wrap: anywhere; }
+.quote a { display: inline-flex; align-items: center; min-height: 44px; }
+details > summary { margin-bottom: 16px; }
+details:not([open]) > summary { margin-bottom: 0; }
+details > .summary { margin: 0; padding: 16px; box-shadow: none; }
 .customers h2 small { margin-left: 6px; font-size: 14px; font-weight: 500; }
 .customers > .notice { margin: 0 24px 16px; }
 .customers th:not(:first-child) { width: 1%; white-space: nowrap; }
@@ -274,14 +271,13 @@ const impactSkipped = computed(() => unscored.value || !['High', 'Critical'].inc
   .customers td:first-child { flex: 1 1 100%; }
 }
 .customers td { font-size: 14px; }
-.customer { display: flex; align-items: center; gap: 10px; }
+.customer { display: flex; align-items: center; gap: 12px; }
 .customer-text { display: flex; flex-direction: column; line-height: 1.35; }
 .chip.mine { background: var(--blue-soft); }
 .created-at { margin: 8px 0; padding: 0 24px; }
 @media (max-width: 540px) {
   .hero-company { flex-basis: 100%; }
   .hero-title h1 { font-size: 26px; }
-  .hero .mini-stats { grid-template-columns: minmax(0, 1fr); }
   .review-link { width: 100%; }
 }
 </style>

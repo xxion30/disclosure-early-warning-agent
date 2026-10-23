@@ -12,7 +12,7 @@ const props = defineProps({
 })
 
 const GROUPS = {
-  BASE: { label: '기본 점수', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
+  BASE: { label: '재무 상태', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
   A: { label: '확정 악재', hint: '점수와 상관없이 등급 고정', cls: 'g-a' },
   B: { label: '숨은 신호', hint: '공시에서 찾은 위험 신호', cls: 'g-b' },
 }
@@ -122,17 +122,17 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 .calc.warn { color: var(--warn); font-weight: 600; }
 .fixed-note { color: var(--bad); font-weight: 600; }
 .item-cell { display: flex; flex-direction: column; gap: 4px; }
-.item-cell .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+.item-cell .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
 .item-cell .calc { margin-top: 2px; overflow-wrap: anywhere; }
 .evidence { width: 48%; }
-.evidence figcaption { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.evidence figcaption { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 @media (max-width: 640px) {
   .evidence { width: auto; }
   .score-table td.evidence { padding-top: 8px !important; }
 }
 .evidence .src { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .evidence .chip { white-space: normal; overflow-wrap: anywhere; }
-.evidence .quote blockquote { font-size: 13px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
+.evidence .quote blockquote { font-size: 15px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
 .evidence summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .evidence details blockquote { margin-top: 6px; }
 tfoot td { border-top: 2px solid var(--border); }

@@ -8,7 +8,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import { formatTime, formatWon } from '../labels'
 
 const customerTabs = { all: '전체', exposed: '경보 종목 보유', critical: 'Critical 노출' }
-const historyTone = (status) => ({ 연락완료: 'ok', 승인: 'ok', 보류: 'warn', 반려: 'bad' }[status] || '')
+const historyTone = (status) => ({ 연락완료: 'ok', 승인: 'ok', 보류: 'muted', 반려: 'outline' }[status] || '')
 
 const data = ref({ summary: { customers: 0, exposed: 0, critical: 0, high: 0, tasks: {} }, customers: [] })
 const error = ref('')
@@ -82,7 +82,7 @@ const toggle = (id) => (open[id] = !open[id])
     <span class="shortcut-icon" aria-hidden="true">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></svg>
     </span>
-    <span><strong>진행 중인 연락 업무 {{ taskDone.open }}건</strong><span class="shortcut-sub"> · 완료 {{ taskDone.done }} · 반려 {{ taskDone.rejected }}</span></span>
+    <span><strong>전체 연락 업무 · 진행 중 {{ taskDone.open }}건</strong><span class="shortcut-sub"> · 완료 {{ taskDone.done }}건</span></span>
     <span class="shortcut-go">연락 업무 보기
       <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
     </span>
@@ -95,8 +95,10 @@ const toggle = (id) => (open[id] = !open[id])
           {{ label }}<span class="count" :class="{ dim: filter !== value }">{{ tabCounts[value] }}</span>
         </button>
       </div>
+      <span v-if="query.trim()" class="chip soft" role="status">검색 결과 기준</span>
       <span class="muted list-hint">줄을 누르면 보유 종목과 연락 이력이 펼쳐져요</span>
     </div>
+    <p v-if="taskDone.rejected" class="muted review-history">전체 검토 이력 · 반려 {{ taskDone.rejected }}건 (연락 업무 없음)</p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <div class="table-wrap">
       <table class="stack-table">
@@ -217,10 +219,11 @@ const toggle = (id) => (open[id] = !open[id])
 .customer-list .tabs { margin-bottom: 0; }
 .customer-list .tabs button { min-height: 44px; }
 .list-hint { font-size: 13px; }
+.review-history { margin: 0 24px 16px; font-size: 14px; }
 .customer-list > .error { margin: 0 24px 16px; }
 .customer-list td { font-size: 14px; }
 .customer-list th:last-child { width: 60px; }
-.customer-cell { display: flex; align-items: center; gap: 10px; }
+.customer-cell { display: flex; align-items: center; gap: 12px; }
 .customer-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.35; min-width: 0; }
 .customer-text .code { font-size: 12px; font-weight: 500; color: var(--muted); }
 .exposure-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -229,7 +232,7 @@ const toggle = (id) => (open[id] = !open[id])
 .last-contact { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .exposure-amount { color: var(--bad); }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0 0 16px; }
-.facts > div { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 14px; min-width: 0; }
+.facts > div { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; min-width: 0; }
 .facts dt { font-size: 12px; color: var(--muted); font-weight: 600; }
 .facts dd { margin: 2px 0 0; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .facts dd.bad { color: var(--bad); }
@@ -246,11 +249,11 @@ const toggle = (id) => (open[id] = !open[id])
 .customer-list .expanded > td { background: #f8faff; }
 .customer-list .detail > td { padding: 0 24px 20px; border-top: none; }
 .detail-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
-.detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .detail-panel h3 { margin: 0; font-size: 15px; font-weight: 700; }
 .detail-panel p { margin: 0; }
 .holding-list { display: flex; flex-direction: column; gap: 8px; }
-.holding { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface-2); border-radius: var(--radius-md); padding: 12px 14px; }
+.holding { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface-2); border-radius: var(--radius-md); padding: 12px 16px; }
 .holding.alerted { background: #fdf3f3; }
 .holding .corp-mark { width: 36px; height: 36px; border-radius: 12px; background: var(--surface); font-size: 14px; }
 .holding-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; overflow-wrap: anywhere; }
@@ -258,11 +261,10 @@ const toggle = (id) => (open[id] = !open[id])
 .holding-alert { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; font-size: 13px; }
 .holding-alert a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; white-space: nowrap; }
 .rule-note { font-size: 12px; }
-.history-head { gap: 6px; }
+.history-head { gap: 8px; }
 .history-note { border-radius: 12px; background: var(--surface-2); padding: 8px 12px; font-size: 13px; color: #2a3554; white-space: pre-wrap; overflow-wrap: anywhere; }
 .timeline-body { flex: 1; }
 .timeline summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--blue-strong); font-size: 13px; font-weight: 600; }
-.timeline summary:focus-visible, .holding-alert a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
 .timeline .message { font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 800px) { .detail-grid { grid-template-columns: 1fr; } }
 </style>
