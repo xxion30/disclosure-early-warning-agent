@@ -3,11 +3,15 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
+import StageBadge from '../components/StageBadge.vue'
 import StatusBadge from '../components/StatusBadge.vue'
-import { formatTime, formatWon } from '../labels'
+import { formatTime, formatWon, STAGES, stagesOf } from '../labels'
 
-const customerTabs = { all: '전체', exposed: '경보 종목 보유', critical: 'Critical 노출' }
+// 고객별 가장 심한 단계: API가 top_stage를 주면 그 값, 없으면 경보 종목들의 단계 중 가장 심한 것 (목록 순서는 바꾸지 않는다)
+const topStage = (c) => c.exposure.top_stage || stagesOf({ stages: c.holdings.map((h) => h.alert?.stage).filter(Boolean) })[0] || null
+const stageReady = computed(() => data.value.customers.some((c) => topStage(c)))
+// 단계 값이 들어오면 '즉시 경보 노출', 예전 등급만 있으면 'Critical 노출'
+const customerTabs = computed(() => ({ all: '전체', exposed: '경보 종목 보유', critical: stageReady.value ? `${STAGES.RED.label} 노출` : 'Critical 노출' }))
 const historyTone = (status) => ({ 연락완료: 'ok', 승인: 'ok', 보류: 'muted', 반려: 'outline' }[status] || '')
 
 const data = ref({ summary: { customers: 0, exposed: 0, critical: 0, high: 0, tasks: {} }, customers: [] })
@@ -34,12 +38,12 @@ onMounted(load)
 function matches(c, tab) {
   const q = query.value.trim().toLowerCase()
   if (tab === 'exposed' && !c.exposure.alert_count) return false
-  if (tab === 'critical' && c.exposure.top_level !== 'Critical') return false
+  if (tab === 'critical' && !(topStage(c) ? topStage(c) === 'RED' : c.exposure.top_level === 'Critical')) return false
   return !q || c.name.toLowerCase().includes(q) || c.customer_id.toLowerCase().includes(q)
 }
 const rows = computed(() => data.value.customers.filter((c) => matches(c, filter.value)))
 const tabCounts = computed(() =>
-  Object.fromEntries(Object.keys(customerTabs).map((tab) => [tab, data.value.customers.filter((c) => matches(c, tab)).length])),
+  Object.fromEntries(Object.keys(customerTabs.value).map((tab) => [tab, data.value.customers.filter((c) => matches(c, tab)).length])),
 )
 
 const taskDone = computed(() => {
@@ -47,8 +51,6 @@ const taskDone = computed(() => {
   return { open: (t['승인'] || 0) + (t['보류'] || 0), done: t['연락완료'] || 0, rejected: t['반려'] || 0 }
 })
 
-// 종목명 비중% · 경보 등급 (공백을 명시해 "KODEX 20037.5%"처럼 붙지 않게 한다)
-const chipText = (h) => [h.stock_name, h.ratio_pct != null ? `${h.ratio_pct}%` : '', h.alert ? `· ${h.alert.level}` : ''].filter(Boolean).join(' ')
 const alertedHoldings = (c) => c.holdings.filter((h) => h.alert)
 // 목록 칸에는 경보 종목만 2개까지 보여 주고, 나머지는 "외 N개"로 줄인다. 전체는 펼치면 보인다
 const SHOWN_ALERTS = 2
@@ -124,8 +126,8 @@ const toggle = (id) => (open[id] = !open[id])
               </td>
               <td>
                 <div class="exposure-cell">
-                  <template v-if="c.exposure.top_level">
-                    <LevelBadge :level="c.exposure.top_level" />
+                  <template v-if="topStage(c) || c.exposure.top_level">
+                    <StageBadge :stage="topStage(c)" :level="c.exposure.top_level" />
                     <strong v-if="c.exposure.amount" class="exposure-amount">{{ formatWon(c.exposure.amount) }}</strong>
                   </template>
                   <span v-else class="muted">경보 종목 없음</span>
@@ -171,7 +173,7 @@ const toggle = (id) => (open[id] = !open[id])
                         </div>
                         <div class="holding-alert">
                           <template v-if="h.alert">
-                            <LevelBadge :level="h.alert.level" />
+                            <StageBadge :stage="h.alert.stage" :stages="h.alert.stages" :level="h.alert.level" />
                             <RouterLink :to="{ name: 'alert-detail', params: { assessmentId: String(h.alert.assessment_id) } }" @click.stop>경보 보기</RouterLink>
                           </template>
                           <span v-else class="muted">경보 없음</span>

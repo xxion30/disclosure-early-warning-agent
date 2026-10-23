@@ -3,7 +3,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { api, errorMessage } from '../api/client'
-import LevelBadge from '../components/LevelBadge.vue'
+import StageBadge from '../components/StageBadge.vue'
 import RunProgress from '../components/RunProgress.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useRunEvents } from '../composables/useRunEvents'
@@ -151,7 +151,7 @@ async function submit() {
       <h1>안내문 검토</h1>
       <div class="review-meta">
         <strong v-if="alertInfo?.company?.name">{{ alertInfo.company.name }}</strong>
-        <LevelBadge v-if="alertInfo?.level" :level="alertInfo.level" />
+        <StageBadge v-if="alertInfo?.stage || alertInfo?.stages?.length || alertInfo?.level" :stage="alertInfo.stage" :stages="alertInfo.stages" :level="alertInfo.level" />
         <span class="muted"><template v-if="alertInfo?.disclosure?.title">{{ alertInfo.disclosure.title }} · </template>내 담당 고객 {{ data?.drafts.length ?? 0 }}명 · 승인 대기 {{ pending.length }}명</span>
       </div>
     </div>

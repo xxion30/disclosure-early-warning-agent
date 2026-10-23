@@ -1,6 +1,8 @@
 // FastAPI 호출. Vite 프록시가 /api → http://localhost:8000 으로 넘긴다.
 import axios from 'axios'
 
+import { mockApi, mockMode } from './mock'
+
 export const API_BASE = '/api'
 const TOKEN_KEY = 'pb_token'
 
@@ -49,8 +51,9 @@ export const api = {
   startRun: (rceptNo) => http.post('/runs', { rcept_no: rceptNo }).then((r) => r.data),
   getRun: (rceptNo) => http.get(`/runs/${rceptNo}`).then((r) => r.data),
 
-  listAlerts: (params) => http.get('/alerts', { params }).then((r) => r.data),
-  getAlert: (id) => http.get(`/alerts/${id}`).then((r) => r.data),
+  // ?mock=stages면 화면 확인용 가짜 데이터(api/mock.js)를 쓴다. 실제 서버는 부르지 않는다
+  listAlerts: (params) => (mockMode() ? mockApi.listAlerts(params) : http.get('/alerts', { params }).then((r) => r.data)),
+  getAlert: (id) => (mockMode() && mockApi.isMockId(id) ? mockApi.getAlert(id) : http.get(`/alerts/${id}`).then((r) => r.data)),
   getDrafts: (id) => http.get(`/alerts/${id}/drafts`).then((r) => r.data),
   decide: (id, decisions) => http.post(`/alerts/${id}/decision`, { decisions }).then((r) => r.data),
 

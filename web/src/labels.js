@@ -37,6 +37,40 @@ export const ASSESSMENT_STATUS = {
 
 export const LEVELS = ['Critical', 'High', 'Medium', 'Low']
 
+// ---- 새 위험 단계 (DARTCH, docs/contracts/db.md: RED/ORANGE/YELLOW/COMPOSITE/WATCH/NONE) ----
+// API가 stage(또는 stages)를 주면 이걸로 배지를 그리고, 아직 level(Low~Critical)만 오면 예전 등급 배지를 그대로 쓴다.
+// 점수 숫자는 어디에도 보이지 않는다. 설명에도 기준 숫자를 넣지 않는다.
+export const STAGES = {
+  RED: { label: '즉시 경보', order: 0, alert: true, hint: '확정 악재가 한 가지라도 있어요' },
+  ORANGE: { label: '사건 경보', order: 1, alert: true, hint: '소송·증자·사채 발행 같은 사건성 공시가 기준을 넘었어요' },
+  COMPOSITE: { label: '복합 위험', order: 1, alert: true, hint: '사건·재무 신호가 각각은 기준 아래지만 합치면 기준을 넘었어요' },
+  YELLOW: { label: '재무 경보', order: 2, alert: true, hint: '감사의견·자본잠식·현금흐름 같은 재무 지표가 기준을 넘었어요' },
+  WATCH: { label: '관찰 중', order: 3, alert: false, hint: '기준에 가까워 지켜보는 중이에요. 알림은 보내지 않아요' },
+  NONE: { label: '경보 없음', order: 4, alert: false, hint: '' },
+}
+export const ALERT_STAGES = ['RED', 'ORANGE', 'YELLOW', 'COMPOSITE']
+
+/** 행(경보·종목·업무)의 단계 목록. 심한 순으로 정렬. 단계 정보가 없으면 빈 배열 */
+export function stagesOf(row) {
+  if (!row) return []
+  const list = Array.isArray(row.stages) && row.stages.length ? row.stages : row.stage ? [row.stage] : []
+  return [...new Set(list.filter((s) => STAGES[s]))].sort((a, b) => STAGES[a].order - STAGES[b].order)
+}
+export const hasStage = (row) => stagesOf(row).length > 0
+
+/** 서버 문장 속 단계 코드(RED 등)를 한국어 이름으로 바꾼다. 예: "현재 단계는 RED입니다" → "현재 단계는 즉시 경보입니다" */
+export function stageText(text) {
+  if (!text) return text
+  return text.replace(/\b(RED|ORANGE|YELLOW|COMPOSITE|WATCH|NONE)\b/g, (code) => STAGES[code].label)
+}
+
+/** 경보(알림 대상)인가. 단계가 있으면 단계로, 없으면 예전 등급(High·Critical)으로 판단 */
+export function isAlertRow(row) {
+  const stages = stagesOf(row)
+  if (stages.length) return stages.some((s) => ALERT_STAGES.includes(s))
+  return ['High', 'Critical'].includes(row?.level)
+}
+
 // 점수 계산 전에 멈춘 평가는 저장 기본값(총점 0 · Low)이 들어 있어 "안전한 Low"처럼 보인다.
 // API가 scored 값을 주면 그것을 따르고, 없으면 상태·점수·점수 내역으로 판단한다.
 const STOPPED_STATUSES = ['RUNNING', 'FAILED', 'MANUAL_CHECK']
@@ -45,6 +79,8 @@ export function isUnscored(a) {
   if (typeof a.scored === 'boolean') return !a.scored
   if (!STOPPED_STATUSES.includes(a.status)) return false
   const noReasons = !Array.isArray(a.reasons) || a.reasons.length === 0
+  // 새 단계에서는 저장 기본값이 NONE, 예전 등급에서는 Low·총점 0
+  if (hasStage(a)) return stagesOf(a)[0] === 'NONE' && noReasons
   return !a.total_score && a.level === 'Low' && noReasons
 }
 
