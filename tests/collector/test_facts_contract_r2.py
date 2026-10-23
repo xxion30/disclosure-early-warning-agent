@@ -1,8 +1,9 @@
 """R3가 저장한 사실이 R4 도구(get_disclosure_facts)를 거쳐 R2 검증기(agent.structured_facts.validate_facts)에 닿는지 본다.
 
 R3 payload → R4 store_facts → R4 get_disclosure_facts → R2 validate_facts.
-R4 응답 투영으로 연결을 수정했다. 저장용 number는 유지하고 조회의 최상위 facts에는 decimal을 제공한다.
-이 시험은 저장용 호환 필드를 수동으로 풀지 않고 실제 R2 입력인 ToolResponse.data를 검증한다.
+2026-10-23 R4(#52)가 응답에 최상위 facts(decimal 투영)를 더했고, R2(#53)는 그것을 쓰지 않고 structured_facts의 number를 그대로 받아들인다.
+이 시험은 실제 R2 입력인 ToolResponse.data를 검증한다: R3가 만든 값(number 포함)이 R2 State까지 바뀌지 않고 닿는지, 버전은 facts_hash인지.
+(R4 tests/wiring의 decimal 기대와 R2의 number 유지가 서로 맞지 않는 것은 R2·R4가 정할 일이다.)
 """
 import copy
 
@@ -38,13 +39,16 @@ def test_r2_validator_accepts_the_tool_response_shape(tool_data):
 
 
 def test_r2_validator_accepts_the_number_dtype(tool_data):
+    """R2(#53)는 number를 decimal로 바꾸지 않고 그대로 받는다. 값·출처는 R4가 저장한 그대로 R2 State에 들어간다."""
     facts = validate_facts(tool_data, {"rcept_no": RCEPT, "corp_code": tool_data["corp_code"]})
     numbers = [f for f in tool_data["structured_facts"]["facts"] if f["dtype"] == "number"]
+    assert numbers
     for stored in numbers:
-        converted = next(f for f in facts["facts"] if f["name"] == stored["name"] and f["source"] == stored["source"])
-        assert converted == {**stored, "dtype": "decimal"}
+        kept = next(f for f in facts["facts"] if f["name"] == stored["name"] and f["source"] == stored["source"])
+        assert kept == stored
 
 
 def test_tool_response_reaches_r2_with_a_version_it_can_compare(tool_data):
+    """receive.py가 context.facts_version과 비교하는 값은 R4의 facts_hash이다."""
     facts = validate_facts(tool_data, {"rcept_no": RCEPT, "corp_code": tool_data["corp_code"]})
-    assert facts["data_version"] == tool_data["facts_hash"]
+    assert facts["facts_hash"] == tool_data["facts_hash"]
