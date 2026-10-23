@@ -120,6 +120,21 @@ class AgentState(TypedDict, total=False):
     no_signal: bool
     last_node: str
     failure_recording_error: str
+    # Phase 1: internal rule outputs; not a public API response.
+    phase1: bool
+    risk_routes: list[dict[str, Any]]
+    flags: list[dict[str, Any]]
+    red_result: dict[str, Any]
+    orange_result: dict[str, Any]
+    yellow_result: dict[str, Any]
+    financial_snapshot: dict[str, Any]
+    stage: str
+    orange_score: float
+    yellow_score: float
+    combined_ratio: float
+    flag_attempts: int
+    explanation_attempts: int
+    explanation_errors: list[str]
 
 
 def initial_state(rcept_no: str, trace_id: str) -> AgentState:

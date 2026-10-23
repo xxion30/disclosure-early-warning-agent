@@ -13,6 +13,8 @@ from agent.execution import Execution, current_execution
 from agent.graph import build_graph
 from agent.nodes.pb_approval import validate_batch
 from agent.state import ApprovalBatch, PBContext, initial_state
+from agent.public_risk import customer_context, disclosure_context, public_risk_context
+from harness.guardrails import check_explanation, check_message
 
 
 class AgentRuntime:
@@ -40,14 +42,25 @@ class AgentRuntime:
         if not state:
             raise KeyError(rcept_no)
         allowed = pb.allowed_customer_ids
+        safe_drafts = {cid: text if not check_message(text) else ""
+                       for cid, text in state["drafts"].items() if cid in allowed}
+        explanation = state.get("ai_explanation") or ""
+        # Fail closed for old checkpoints produced before output validation.
+        if check_explanation(explanation):
+            explanation = "설명문 확인이 필요합니다."
         return {
             "assessment_id": state.get("assessment_id"), "status": state["status"],
-            "disclosure": state["disclosure"], "score_result": state.get("score_result"),
-            "ai_explanation": state.get("ai_explanation"),
-            "affected_customers": [c for c in state["affected_customers"] if c["customer_id"] in allowed],
-            "drafts": {c: text for c, text in state["drafts"].items() if c in allowed},
-            "decisions": {c: d for c, d in state["decisions"].items() if c in allowed},
-            "manual_drafts": [c for c in state.get("manual_drafts", []) if c in allowed],
+            "stage": state.get("stage"),
+            "risk_level": state.get("risk_level"),
+            "disclosure": disclosure_context(state["disclosure"]),
+            "risk_summary": public_risk_context(state.get("score_result") or {}),
+            "ai_explanation": explanation,
+            "affected_customers": customer_context([c for c in state["affected_customers"] if c["customer_id"] in allowed]),
+            "drafts": safe_drafts,
+            "decisions": {c: {k: d[k] for k in ("status", "pb_id", "decided_at") if k in d}
+                          for c, d in state["decisions"].items() if c in allowed},
+            "manual_drafts": sorted({c for c in state.get("manual_drafts", []) if c in allowed}
+                                    | {c for c, text in safe_drafts.items() if not text}),
             "guardrail_flags": [flag for flag in state.get("guardrail_flags", [])
                                 if flag.partition(":")[0] in allowed],
             "customer_tasks": {c: task_id for c, task_id in state["customer_tasks"].items()
@@ -72,7 +85,7 @@ class AgentRuntime:
                 await self.graph.ainvoke(value, config=config)
                 state = await self.get_state(rcept_no)
                 run.add_metadata({"corp_name": state["disclosure"].get("corp_name"),
-                                  "risk_level": state.get("risk_level")})
+                                  "risk_level": state.get("risk_level"), "stage": state.get("stage")})
                 run.end(outputs={"status": state["status"], "task_ids": state["task_ids"]})
                 return state
         finally:
@@ -151,6 +164,15 @@ async def open_runtime(deps, checkpoint_db=None):
     if checkpoint_db is None:
         from shared.config import get_settings
         checkpoint_db = get_settings().CHECKPOINT_DB
+    if str(checkpoint_db).startswith(("postgresql://", "postgres://")):
+        try:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        except ImportError as exc:
+            raise RuntimeError("PostgreSQL 체크포인터 의존성이 필요합니다. R4에게 langgraph-checkpoint-postgres 추가를 요청하세요") from exc
+        async with AsyncPostgresSaver.from_conn_string(str(checkpoint_db)) as saver:
+            await saver.setup()
+            yield AgentRuntime(deps, saver)
+        return
     path = Path(checkpoint_db)
     path.parent.mkdir(parents=True, exist_ok=True)
     async with AsyncSqliteSaver.from_conn_string(str(path)) as saver:
