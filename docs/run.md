@@ -291,7 +291,7 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 
 - `uv run alembic upgrade head`: 기존 01/02는 유지하고 03(구조화 사실/준비 표시), 04(분석 작업/불변 판정/조직 검토)를 추가한다. 사용자 데이터 자동 삭제·원문 자동 이관은 하지 않는다.
 - 구조화 사실은 `schema_version: "1"`, 상태는 PRESENT/MISSING/NOT_APPLICABLE/NEEDS_CHECK다. 재무 indicators의 OK/MISSING과 혼용하지 않는다.
-- R3는 `store_facts`와 `mark_ready`를 수집 완료 트랜잭션에 연결해야 한다. 현재 collector/jobs.py를 R4가 대신 수정하지 않았다.
+- R3의 #49에서 `store_facts`와 `mark_ready`를 수집 완료 트랜잭션에 연결했다. R4는 수집기 코드를 대신 수정하지 않는다.
 - 수동 수집은 `COLLECT_DISPATCH_ENABLED=true`일 때 R3 dispatcher를 연결한다. 기본 false이며 DART 실호출 없이 오프라인 검증한다. Compose integration의 collector는 `python -m collector --schedule`로 실행한다.
 - R3 현 구현에는 httpx만 필요하다. 이를 운영 의존성으로 옮겼으며 미사용 tenacity/APScheduler는 추가하지 않았다. COLLECT_TIME(09:05 KST), COLLECT_BACKFILL_MONTHS, DART_TIMEOUT_SECONDS, DART_RETRY_MAX, DART_MAX_RPS, DART_MAX_CONCURRENCY를 설정한다. DART_RETRY_MAX는 R3 구현상 **재시도 횟수**(최초 별도)이며 R4 작업 전체 최대 3회와 다르다. MAX_RPS 기본 4는 공식 한도 보장이 아니다.
 - 체크포인터는 R4 `open_checkpointer`가 생성·종료하며 R2에는 객체를 주입한다. 구형 R2 open_runtime 편의 함수는 호환용으로 보존했다.
@@ -300,6 +300,16 @@ uv run pytest tests/mcp_servers tests/agent tests/api tests/harness -q
 - `processed_at`은 새 공개 판정 저장 성공 시각이다. 승인 완료·색인 해제 시각이 아니다. MANUAL_CHECK는 성공 시각을 기록하지 않으며 명시적 재분석 요청으로만 재실행한다.
 - 기존 purge_disclosure_text와 release_disclosure_index는 구형 호출자 때문에 보존했다. 새 공개 저장은 purge를 호출하지 않는다. R2 원문 수명 전환·R3 메모리 동시 사용 정책 확인 후 기존 호출 제거/도구 정리를 진행한다.
 - 기존 refresh_states는 구형 상태 재계산 경로다. 새 불변 공개 판정의 일일 재계산은 새 기준일로 분석 작업을 등록하는 경로에 연결해야 한다. 스케줄러에서 이 인계를 연결하기 전 자동 갱신 완료로 판단하지 않는다.
+
+### 통합 전 R4 확인 (2026-10-23)
+
+- `get_disclosure_facts`는 R2 입력용 최상위 `facts`/`data_version`을 제공하고, 저장용 `number`를 응답에서만 `decimal`로 투영한다. 기존 R3 소비자의 중첩 필드는 전환용으로 유지한다. 저장 스키마·값은 바꾸지 않는다.
+- 공개 worker의 `context.execution_context`는 R2 `runtime.start(context.rcept_no, context=context.execution_context)`에 전달할 매핑이다. `facts_version`은 작업 input_manifest의 해당 공시에서 계산하며 전체 input_version 또는 원문 해시와 다르다. 실제 운영 factory와 unified bindings 연결은 R2·R4 통합 검토 대상이다.
+- `COLLECT_DISPATCH_ENABLED=false` 기본값을 유지한다. 수동 수집을 운영에서 사용하려면 해당 실행 환경에 true를 설정하고 API를 재시작한다. 관리자로 `POST /collect/run`을 호출하면 R3 dispatch_collection으로 전달한다. 분석 실행 활성화는 PHASE1_RUNTIME_FACTORY 설정이 별도로 필요하다.
+- 활성화 경로는 R3의 실제 dispatcher와 가짜 수집 실행으로 검증한다. 테스트가 DART를 호출하거나 운영 수집 설정을 변경하지는 않는다.
+- 모든 신규 공시의 mark_ready 인계를 유지한다. enqueue_ready 선별 기준은 R1과 합의 전이며, structured_facts가 NULL이라는 이유만으로 제외하지 않는다.
+- 자본잠식은 최신 기간 OFS만 사용한다. 같은 기간 OFS가 없으면 CFS/이전 OFS로 대체하지 않고 수동 확인한다. INTEREST_BURDEN은 R1 경계값 확정 전까지 enabled=false다.
+- 체크포인터는 open_executors가 생성·초기화한 객체를 factory(deps, saver)에 주입하고 종료한다. SQLite에서 실제 AgentRuntime.graph에 동일 객체가 전달되고 종료 뒤 연결이 닫히는 것을 테스트한다. PostgreSQL 검증은 별도 테스트 DB 설정이 필요하다.
 
 ## R5 상태 요약 필드 (2026-10-23)
 
