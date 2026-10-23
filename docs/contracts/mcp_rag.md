@@ -1,9 +1,51 @@
 # rag-mcp 도구 계약
 
-> 담당: **R3** · 상태: **DARTCH 변경안(아래 첫 절)은 R2·R4가 방향에 동의했고, 단계별 상세는 합의 중**이다(PR #31 코멘트 반영 절 참고). 그 아래 본문은 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. 충돌하면 첫 절이 우선한다(합의된 뒤).
+> 담당: **R3** · 상태: **운영 모드(`RAG_INDEX_MODE=ephemeral`)의 메모리 색인은 구현됨**(아래 "구현됨" 절). 데모·평가용 `persistent`(Chroma)는 마지막 정리 PR까지 옛 방식 그대로다. 그 아래 "DARTCH 변경안"은 합의 과정의 기록이고, 맨 끝 본문은 이전 프로젝트(Capstone) 계약을 옮긴 것이다. 충돌하면 "구현됨" 절이 우선한다.
 > DARTCH Phase 1에서 바뀌는 부분은 [설계서](../dartch_phase1_mvp.md)와 [파일 구성 계획](../dartch_file_plan.md)을 따르고, 바뀔 때 이 문서를 먼저 고친다.
 
-## DARTCH 변경안 (R3 제안, 2026-10-23) — 합의 후 이 절이 아래 본문보다 우선한다
+## 구현됨 (2026-10-23) — 운영 모드(`RAG_INDEX_MODE=ephemeral`)
+
+| 파일 | 역할 |
+| --- | --- |
+| `mcp_servers/rag/memory.py` | 공시 색인 레지스트리(메모리). 키별 잠금, 사용 중 보호(lease·holder), TTL·LRU, 멱등 release |
+| `mcp_servers/rag/filing.py` | DART에서만 원문을 받아(`collector.dart_client`) 조각·벡터를 만들고 검색·해제 |
+| `mcp_servers/rag/reference.py` | `rag_docs/reference/`를 메모리에 올림 (서버 시작 때 warm, 임베딩 설정이 바뀌면 다시 만듦) |
+| `mcp_servers/rag/server.py` | 도구를 `asyncio.to_thread`로 감싸 등록 |
+| `tools.py` | `ephemeral`이면 위 경로, 아니면 옛 Chroma 경로(`persistent`) |
+
+### 동작 (도구 3개, 기존 호출은 그대로 동작한다)
+- **`search_disclosure_text(rcept_no, query, k=5, holder=None)`**: 색인이 없으면 DART에서 받아 만든다(`DB body_text`·`rag_docs/companies`는 읽지 않는다. 출처 이름 `금양 사업보고서 (2024.12) (2025-03-21)`을 만들려고 제목·접수일·회사명만 DB에서 읽고, 없으면 `DART <접수번호>`). 응답 `data`에 **`content_sha256`(원문 해시)과 `truncated`(조각 상한 때문에 뒷부분을 색인하지 못함)가 추가**됐다(기존 필드는 그대로).
+- **`release_disclosure_index(rcept_no, holder=None)`**: 응답 `{rcept_no, released_chunks, content_sha256, mode: "memory", deferred}`. 멱등. 쓰는 쪽이 남아 있으면 지우지 않고 `deferred: true`, `released_chunks: 0`(실제 제거 수). 이미 없으면 `released_chunks: 0, content_sha256: null`.
+- **`search_reference`**: 그대로. 처음 쓸 때(또는 서버 시작 때) 메모리에 올린다.
+- `holder`(선택, ≤128자): 이 공시를 쓰는 **실행의 식별자**(예: 분석 실행 ID). 주면 그 실행이 `release`하기 전까지 **다른 실행의 release가 색인을 지우지 못한다**(R2의 "사용권" 요구, harness.md 5장). 안 주면 옛 방식처럼 동작하되, 이름 있는 holder가 쓰는 공시는 holder 없는 release도 지우지 못한다.
+
+### 사용 중 보호와 수명 (잠정값, 부하를 재 보기 전 `TODO(확인 필요)`)
+| 항목 | 값 | 규칙 |
+| --- | --- | --- |
+| 진행 중 검색(lease) | — | 검색하는 동안은 TTL·LRU·release 모두 지우지 못한다. 끝나면 보류된 해제가 이뤄진다 |
+| holder 사용권 | `HOLDER_TTL` 15분 | 마지막으로 쓴 뒤 15분 동안 갱신이 없으면 죽은 실행으로 보고 무시한다 |
+| 유휴 TTL | `INDEX_TTL` 30분 | 사용 중이 아닌 색인을 마지막 사용 30분 뒤 지운다 |
+| 최대 개수 | `MAX_ENTRIES` 20 | 넘으면 가장 오래 안 쓴 **사용 중이 아닌** 색인부터 지운다. 전부 사용 중이면 넘어도 지우지 않는다 |
+| 조각 상한 | `MAX_CHUNKS` 300(≈24만 자) | 넘으면 앞부분만 색인하고 `truncated: true` |
+- 같은 `rcept_no` 동시 요청은 **한 번만 받고 한 번만 색인**한다(키별 잠금, 8개 스레드 시험).
+- 서버가 다시 뜨면 색인은 비어 있고, 다음 검색이 DART에서 다시 받는다. 같은 원문이면 **같은 조각·같은 `location`** 이 나온다(시험함). 해시가 다르면 원문이 바뀐 것이다.
+- 디스크·Chroma·DB에 원문을 쓰지 않는다(시험: Chroma 폴더가 생기지 않고 `store.get_client`를 열면 테스트가 실패).
+
+### 오류 (구현)
+`INVALID_INPUT`(rcept_no·query·k·holder 오류, **네트워크를 쓰기 전에** 검사) / `NOT_FOUND`(DART에 없음·원문이 비어 있음·키가 비어 있음. 실제 DART는 없는 접수번호에 `013 접수번호 오류`를 준다) / `TIMEOUT`(한도 초과 `020`·5xx·시간 초과, 재시도 소진 뒤). `UPSTREAM_ERROR`는 R4가 추가하면 `TIMEOUT` 대신 쓴다.
+
+### 서버가 막히지 않게
+FastMCP는 **동기 도구를 이벤트 루프 스레드에서 그대로 실행한다**(fastmcp 2.14 확인). 다운로드·임베딩이 서버 전체를 막으므로 도구 함수는 동기로 두고(다른 코드·테스트가 직접 부른다) 서버에 등록할 때만 스레드로 넘긴다. 0.3초 다운로드 동안 이벤트 루프가 계속 도는 것을 시험했다.
+
+### 다른 담당에게
+| 담당 | 내용 |
+| --- | --- |
+| **R4** | ① `agent/adapters/phase1.py`가 과거 인용을 재검증하려고 `search_disclosure_text`를 다시 부른다. 색인이 해제된 뒤면 **DART에서 원문을 다시 받고 다시 임베딩한다**(성공하면 같은 `location`). DART가 막히면 재검증이 `TIMEOUT`이 된다. ② `store.py`의 `release_disclosure_index` 호출은 holder 없이도 동작한다. R2가 `holder`를 넘기면 사용 중인 실행을 지켜 준다. ③ `scripts/ops/run_stack.py`·`doctor.py`는 `data/chroma` 색인을 확인한다. **운영 모드에서는 이 색인이 필요 없다**(없어도 정상). ④ `docs/run.md`의 `ingest`·`RAG_INDEX_MODE` 설명 갱신. |
+| **R2** | 분석 실행 ID를 `holder`로 `search_disclosure_text`·`release_disclosure_index`에 넘기면 같은 공시를 동시에 분석하는 다른 실행이 색인을 지우지 못한다. 도구 응답의 `content_sha256`로 원문이 바뀌었는지 비교할 수 있다. |
+
+---
+
+## DARTCH 변경안 (R3 제안, 2026-10-23, 합의 과정의 기록) — 구현과 다른 부분은 위 "구현됨"이 우선한다
 
 ### 바뀌는 것 한 줄 요약
 공시 원문을 **DART에서 받아 프로세스 메모리에서만 색인**하고 디스크·DB에 남기지 않는다. 도구 이름과 입출력은 바꾸지 않아서 R2의 `agent/evidence.py`(`source/text/rcept_no/location` 검증)는 영향이 없다.
@@ -17,11 +59,11 @@
 
 ### 원문 취득·색인 규칙
 1. 원문 출처는 **DART `document.xml` 하나뿐**이다. 받은 압축 파일에서 태그를 지워 평문으로 만든다(기존 `strip_markup` 방식 유지, 설계서가 BeautifulSoup을 쓰지 않기로 함).
-2. 색인은 프로세스 메모리(`chromadb.EphemeralClient`, 안 쓰면 단순 코사인 검색으로 대체 가능). 서버를 다시 띄우면 비어 있다.
+2. 색인은 프로세스 메모리. **구현: Chroma를 쓰지 않고 직접 만든 코사인 검색**(공시 1건은 많아야 수백 조각이라 충분). 서버를 다시 띄우면 비어 있다.
 3. 조각 800자, 겹침 100자는 그대로(`location` 형식 `chunk-0 (0-800자)`도 그대로).
-4. **같은 `rcept_no`를 동시에 요청하면** 공시 단위 락으로 한 번만 받고 한 번만 색인한다. (지금 `ensure_indexed`는 "없으면 만든다" 사이에 락이 없다. 동시 호출이 실제로 겹치는지는 확인하지 못했다. `TODO(확인 필요)`)
-5. **수명**: `release_disclosure_index`가 불리면 즉시 지운다. 안 불리는 경우를 위해 TTL과 최대 보관 공시 수(LRU)를 둔다. 값은 부하를 재 본 뒤에 정한다 — `TODO(확인 필요)`.
-6. **크기 상한**: 정기보고서 같은 아주 큰 문서를 통째로 임베딩하면 시간·비용이 커진다. 상한(글자 수)과 초과 시 동작(앞부분만? 거절?)은 `TODO(확인 필요)`. 🟡 지표는 API 값을 쓰므로 정기보고서 원문 색인은 기본 대상이 아니라고 본다.
+4. **같은 `rcept_no`를 동시에 요청하면** 공시 단위 락으로 한 번만 받고 한 번만 색인한다 (구현됨, 시험함).
+5. **수명**: `release_disclosure_index`가 불리면 지운다(쓰는 쪽이 있으면 늦춘다). 안 불리는 경우를 위해 TTL과 최대 보관 공시 수(LRU)를 둔다 (구현됨, 값은 잠정).
+6. **크기 상한**: 정기보고서 같은 아주 큰 문서를 통째로 임베딩하면 시간·비용이 커진다. **구현: 300조각(≈24만 자)까지만 색인하고 `truncated: true`로 알린다.** 🟡 지표는 API 값을 쓰므로 정기보고서 원문 색인은 기본 대상이 아니라고 본다.
 7. 원문 해시(sha256)는 받을 때 계산해 보관하고 `release`가 돌려준다 (`content_sha256`).
 8. 키(`DART_API_KEY`)와 원문은 로그에 남기지 않는다.
 
@@ -88,7 +130,7 @@ R4·R2가 "방향에는 동의하지만 3단계 상세까지 승인한 것은 �
 - **마지막 별도 PR**(`docs/tasks/r3.md` 8번): 옛 데이터와 함께 `persistent`·`Chroma 영속 저장`·`RAG_INDEX_MODE`·`data/chroma/`를 제거한다. `.env.example`·`shared/config.py`는 R4가 같이 고친다.
 
 ### `ingest` 명령
-참고 문서만 적재한다. 디스크에 저장하지 않으므로 `--reset`·`--only companies`는 없어진다. `--dry-run`(조각 수 세기)은 유지한다. 서버 시작 때 자동으로 적재하므로 팀원이 따로 `ingest`를 돌릴 필요가 없어진다.
+**운영 모드에서는 필요 없다**(서버 시작 때 참고 문서를 메모리에 올린다). `ingest`(Chroma 적재)는 `persistent`(데모·평가)용으로 남아 있고 마지막 정리 PR에서 없어진다.
 
 ### 참고 문서 `category`
 `상장규정 · 공시해설 · 회계용어 · 안내문가이드` 4개는 그대로 둔다(바꾸면 R2 프롬프트·가드레일과 `RefCategory`가 같이 바뀐다). 새 위험 항목 해설은 `공시해설`·`회계용어`에 넣는다.
