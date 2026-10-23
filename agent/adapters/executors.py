@@ -13,6 +13,21 @@ class RuntimeExecutors:
     review: object
 
 
+def public_execution_context(context):
+    """Map a claimed R4 job to R2's public context without reading live inputs."""
+    from agent.integration import ExecutionContext
+    return ExecutionContext(
+        assessment_key=context.job_id,
+        as_of=context.as_of,
+        rules_version=context.rules_digest,
+        input_version=context.input_hash,
+        facts_version=context.facts_version,
+        run_id=context.job_id,
+        attempt=context.attempt,
+        kind='public',
+    )
+
+
 @asynccontextmanager
 async def open_executors(factory, deps, location):
     """R2 factory(deps, saver) supplies analyze_public(context), draft_review(context)."""

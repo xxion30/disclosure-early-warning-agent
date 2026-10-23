@@ -20,6 +20,14 @@ def get_disclosure_facts(rcept_no: str) -> dict:
             if parsed.rcept_no != row.rcept_no or parsed.corp_code != row.corp_code:
                 raise invalid('구조화 사실의 공시 식별자가 일치하지 않습니다.')
             data = parsed.model_dump(mode='json')
+        version = facts_hash(data) if data is not None else None
+        # R2 consumes the nested stored payload and verifies facts_hash.
+        # Flat fields are compatibility aliases; keep the same v1 dtypes.
+        facts = data['facts'] if data is not None else None
         return ok({'availability': 'AVAILABLE' if data is not None else 'UNAVAILABLE',
                    'rcept_no': row.rcept_no, 'corp_code': row.corp_code,
-                   'structured_facts': data, 'facts_hash': facts_hash(data) if data is not None else None})
+                   'schema_version': data['schema_version'] if data is not None else None,
+                   'collected_at': data['collected_at'] if data is not None else None,
+                   'facts': facts, 'data_version': version,
+                   # Canonical R2 input. data_version above is a legacy hash alias.
+                   'structured_facts': data, 'facts_hash': version})

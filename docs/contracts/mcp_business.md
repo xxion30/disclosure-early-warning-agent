@@ -131,7 +131,17 @@ disclosure_type(분류) 이름은 `rules.yaml`의 `classification`과 같다. `O
 
 ## Pre-merge R4 도구 계약 (2026-10-23)
 
-get_disclosure_facts(rcept_no)는 {ok,data:{availability:AVAILABLE|UNAVAILABLE,rcept_no,corp_code,structured_facts,facts_hash}}를 반환한다. 공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 실패 여부는 추측하지 않는다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
+get_disclosure_facts(rcept_no)의 정식 응답은 `{ok,data:{availability,rcept_no,corp_code,structured_facts,facts_hash}}`다. R2는 ToolResponse.data를 그대로 validate_facts에 전달한다. AVAILABLE일 때 R2가 읽는 목록은 `structured_facts.facts`이며 v1 dtype은 `string / number / integer / boolean`이다. number를 decimal로 변환하지 않는다. raw/value/unit/status/reason/source와 R3 저장 스키마·store_facts 입력을 유지한다.
+
+`facts_hash`는 StructuredFacts 검증·정규화된 저장 payload 전체의 SHA-256이며 store_facts 반환값과 같다. canonical JSON은 sort_keys=True, ensure_ascii=False, separators=(',', ':'), allow_nan=False다. 수집·조회 시각도 해시 대상이다. R2가 structured_facts의 해시를 검증하고 같은 이름을 내부 결과에 보존한다. 전체 응답을 해시하거나 원문 content_hash·전체 분석 input_version으로 대체하지 않는다.
+
+최상위 schema_version/collected_at/facts/data_version은 기존 호출자의 전환을 위한 **호환용 필드이며 R2는 사용하지 않는다.** facts도 저장본과 동일한 number를 사용하며 decimal 투영은 제거한다. data_version은 facts_hash와 값이 같은 호환 별칭일 뿐 정식 버전 이름은 facts_hash다. R3 테스트 등 기존 참조를 제거한 뒤 별도 변경으로 호환 필드를 제거한다.
+
+공시가 없으면 NOT_FOUND. NULL은 UNAVAILABLE이며 structured_facts/facts_hash 및 호환 필드는 null이다. 실패 여부를 추측하거나 facts=[]로 바꾸지 않는다. 저장된 정상 빈 목록은 AVAILABLE + structured_facts.facts=[]로 구분한다. v1 사실 항목은 name/dtype/raw/value/unit/status/reason/source이며 source는 api/field/rcept_no/fetched_at와 선택 row_key/period/basis를 보존한다. dtype와 값은 엄격 검증하고 결측을 0/false로 대체하지 않는다.
+
+R4 worker의 AnalysisContext.facts_version은 작업 input_manifest에서 이번 접수번호의 저장 payload를 같은 규칙으로 해시한 값이다. input_hash(전체 분석 입력) 및 원문 content_hash와 구분한다. R2 factory는 `context.execution_context`를 runtime.start(rcept_no, context=...)에 전달한다. 이 매핑은 R4 adapter가 만든 공개 ExecutionContext이며 facts_version을 명시한다. 최신 DB 값으로 스냅샷 버전을 덮어쓰지 않는다. UNAVAILABLE은 facts_version=null이며 R2에서 수동 확인/원문 분석 경로를 별도로 결정해야 한다.
+
+수집기의 전체 mark_ready 인계는 유지한다. enqueue_ready는 이번 변경에서 선별하지 않는다. 자동 분석 제외 기준은 R1과 합의 후 별도로 구현하며, structured_facts NULL만으로 제외하거나 미분석 건을 성공 처리하지 않는다.
 
 UPSTREAM_ERROR는 외부 서비스 실패이며 DB_ERROR/NOT_FOUND와 구별한다. get_disclosure_facts는 네트워크를 호출하지 않는다.
 
