@@ -28,6 +28,28 @@ class AnalysisContext:
     thread_id: str
     attempt: int
 
+    @property
+    def facts_version(self):
+        """Version of this receipt's pinned facts, never the current DB payload."""
+        from shared.facts import StructuredFacts, facts_hash
+        rows = [row for row in self.input_manifest['disclosures']
+                if row['rcept_no'] == self.rcept_no]
+        if len(rows) != 1:
+            raise ValueError('작업 스냅샷의 공시 식별자가 누락되었거나 중복됩니다.')
+        payload = rows[0]['structured_facts']
+        if payload is None:
+            return None
+        parsed = StructuredFacts.model_validate(payload)
+        if parsed.rcept_no != self.rcept_no or parsed.corp_code != self.corp_code:
+            raise ValueError('작업 스냅샷의 구조화 사실 식별자가 일치하지 않습니다.')
+        return facts_hash(parsed.model_dump(mode='json'))
+
+    @property
+    def execution_context(self):
+        """R2 factory passes this trusted mapping to runtime.start(context=...)."""
+        from agent.adapters.executors import public_execution_context
+        return public_execution_context(self).model_dump(mode='json')
+
 
 class AnalysisWorker:
     def __init__(self, executor, *, session_factory=get_session):

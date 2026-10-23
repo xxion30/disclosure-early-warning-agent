@@ -44,7 +44,7 @@ agent는 risk_engine·collector·api를 직접 import하지 않는다. R4가 카
 
 ## 4. 구조화 사실과 충돌
 
-별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 이 도구·컬럼의 실제 구현 여부는 별도 확인한다.
+별도 disclosure_facts 테이블 없이 disclosures.structured_facts JSON을 사용한다. 조회는 R4의 get_disclosure_facts(rcept_no)를 통한다. 도구·컬럼은 구현되어 있다. 조회의 ToolResponse.data에는 schema_version/rcept_no/corp_code/collected_at/facts/data_version이 평탄화되어 제공된다. 저장용 number는 응답에서만 decimal로 변환하며 값·단위·상태·출처는 보존한다. data_version은 변환 전 정규화된 저장 payload 전체(시각 포함)의 facts_hash이다. 원문 content_hash와 혼용하거나 응답 DTO를 다시 해시하지 않는다. 기존 structured_facts/facts_hash 필드는 호환용이며 신규 R2 입력에서는 사용하지 않는다. UNAVAILABLE은 facts=null이며 정상 빈 목록과 구분한다.
 
 | 상태 | 의미 | 처리 |
 | --- | --- | --- |
@@ -173,12 +173,13 @@ runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
 | `as_of` | 평가 기준일 YYYY-MM-DD |
 | `rules_version` | 계산 응답의 rules_digest와 일치하는 규칙 해시 |
 | `input_version` | 공시·정정·재무·이력까지 포함하는 분석 입력 manifest의 R4 버전 |
-| `facts_version` | 이번 공시의 R4 `get_disclosure_facts.data.facts_hash`. 새 통합 경로에서 필수. 전체 입력의 input_version 및 문서 원문 해시와 구분 |
+| `facts_version` | 작업 input_manifest에 고정된 이번 공시 structured_facts의 해시. 조회 data_version과 비교한다. R4 신규 실행은 명시적으로 전달하며 전체 input_version·원문 content_hash로 대체하지 않는다. NULL은 사실 미수집이다. 기존 R2 생략 호환 경로는 신규 실행에서 사용하지 않는다. |
 | `run_id`, `attempt` | R4 선점된 작업과 최초 포함 1~3 시도 |
 | `kind`, `tenant_id` | public 또는 review. review는 이용 조직 필수 |
 | `model_requests_used`, `active_seconds_used` | R4가 영속 예산 장부에서 복원한 누적 사용량 |
 
 - `await runtime.start(rcept_no, context=public_context)`는 공개 분석만 수행해 DONE으로 저장한다.
+- R4 worker가 주는 AnalysisContext의 `execution_context`가 위 public_context 매핑이다. R2 factory는 `runtime.start(context.rcept_no, context=context.execution_context)`로 연결한다. 이미 고정된 facts_version을 최신 DB 버전으로 바꾸면 안 된다. 전체 입력·사실 버전 차이를 검증하는 경로는 R4 wiring 테스트로 확인한다. 실제 factory의 운영 연결은 별도 통합 사항이다.
 - `await runtime.start_review(rcept_no, completed_public_state, context=review_context)`는 같은 판정·자료 버전의 경보에 대해 조직별 고객 검토를 시작한다. 공개 분석 State는 R4 내부 저장소에서 읽은 값이어야 한다.
 - `get_state/get_review/resume/retry_tasks`에도 같은 `context=`를 전달한다. 공개 분석과 조직별 검토의 thread는 분리된다.
 - 같은 판정의 일시 실패는 `error_retryable=True, status=FAILED`로 반환한다. 다음 `attempt`로 다시 `start`하면 소비 예산을 유지하고 재실행한다. MANUAL_CHECK는 자동 재시작하지 않는다.
@@ -194,7 +195,7 @@ runtime = AgentRuntime(deps, checkpointer)  # 생성·종료는 R4 소유
 
 ### R4·R3 후속 연결 (R2 외부 담당)
 
-1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마는 통합 브랜치에 구현되어 있다. R2는 12절의 중첩 응답을 수용하며, R4 dispatcher에서 facts_version에 facts_hash를 주입한다.
+1. R4 `structured_facts` 컬럼·조회 MCP·공통 스키마는 구현됐다. 조회는 최상위 facts/data_version 및 number→decimal 투영으로 R2 validator와 연결한다. 실제 운영 factory 연결과 UNAVAILABLE의 원문 분석 분기는 별도 통합 확인이 필요하다.
 2. R4 조립에서 새 bindings·카탈로그·모델·체크포인터를 주입한다. 현재 adapter가 자동으로 바뀐 것은 아니다.
 3. R4 dispatcher가 공개 분석 후 각 이용 조직의 review를 실행하고, 선점·lease·재시도·예산 장부를 관리한다.
 4. R4가 판정 최신성·업무 생성의 tenant·멱등성을 DB 트랜잭션으로 보장한다.
