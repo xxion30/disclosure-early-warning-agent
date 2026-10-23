@@ -25,6 +25,11 @@ def public_risk_context(result):
     citation and pretend it is verbatim. Original evidence remains in State.
     """
     public = {"breakdown": []}
+    if result.get('manual_check'):
+        from shared.display import missing_labels
+        public['manual_check'] = True
+        public['unassessed_items'] = [{'item': row.get('item') or row.get('signal_type'),
+            'missing': missing_labels(row.get('missing'))} for row in result.get('breakdown', []) if row.get('missing')]
     if result.get("stage") in STAGES:
         public["stage"] = result["stage"]
     if result.get("level") in LEVELS:

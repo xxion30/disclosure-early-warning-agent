@@ -121,4 +121,6 @@ async def ensure_current(payload):
 
 
 def bindings():
-    return UnifiedBindings(approved_routes, prepare_signals, ensure_current, record_budget)
+    from risk_engine.stages import financial_missing_only
+    return UnifiedBindings(approved_routes, prepare_signals, ensure_current, record_budget,
+                           can_publish_partial=financial_missing_only)

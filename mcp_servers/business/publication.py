@@ -24,7 +24,7 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
     if not isinstance(explanation,str) or not explanation.strip() or check_explanation(explanation):
         raise ValueError('공개 설명 검증이 필요합니다.')
     parsed=ScoreResult.model_validate(result)
-    if parsed.stage is None or parsed.manual_check:
+    if parsed.stage is None:
         raise ValueError('완료 가능한 단계 판정이 필요합니다.')
     if result.get('as_of')!=job.as_of or result.get('rules_digest')!=job.rules_digest:
         raise ValueError('판정과 실행의 기준일/규칙 버전이 다릅니다.')
@@ -40,12 +40,20 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
     canonical=calculate_risk_score(job.corp_code,result.get('signals',[]),job.as_of)
     if not canonical['ok'] or score_fingerprint(canonical['data'])!=score_fingerprint(result):
         raise ValueError('계산 도구 결과와 공개 판정이 일치하지 않습니다.')
+    if parsed.manual_check:
+        from risk_engine.stages import financial_missing_only
+        from shared.presentation import INCOMPLETE_FINANCIAL_NOTICE
+        if not financial_missing_only(canonical['data']):
+            raise ValueError('확인되지 않은 사건·조건은 공개 완료할 수 없습니다.')
+        if INCOMPLETE_FINANCIAL_NOTICE not in explanation:
+            explanation += '\n\n' + INCOMPLETE_FINANCIAL_NOTICE
     if any(row.get('active') and not row.get('evidence') for row in result.get('breakdown',[])):
         raise ValueError('활성 위험의 검증 가능한 근거가 필요합니다.')
     allowed={'as_of','rules_digest','stage','active_stages','orange_score','yellow_score','composite_ratio',
              'sort_value','manual_check','manual_reasons','breakdown','signals','level','total_score',
              'combo_upgraded','expected_state_version','corp_code'}
     safe=clean_public({key:value for key,value in result.items() if key in allowed})
+    safe['manual_reasons'] = clean_public(canonical['data']['manual_reasons'])
     # The active lease check, CAS, publication and completion are one transaction.
     disc=db.get(Disclosure,job.rcept_no)
     latest=max(d['filed_at'] for d in job.input_manifest['disclosures'])
@@ -62,7 +70,7 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
     legacy=RiskAssessment(corp_code=job.corp_code,rcept_no=job.rcept_no,stage=parsed.stage,
         risk_state_version=state_version,score_fingerprint=None,total_score=parsed.total_score,
         level=parsed.level,combo_upgraded=parsed.combo_upgraded,reasons=safe.get('breakdown',[]),
-        ai_explanation=explanation,status='DONE',created_at=now.isoformat())
+        ai_explanation=explanation,status='MANUAL_CHECK' if parsed.manual_check else 'DONE',created_at=now.isoformat())
     db.add(legacy);db.flush()
     assessment=PublicAssessment(assessment_id=job.job_key,job_id=job.job_id,corp_code=job.corp_code,
         rcept_no=job.rcept_no,as_of=job.as_of,input_hash=job.input_hash,rules_digest=job.rules_digest,
@@ -92,8 +100,11 @@ def complete_analysis(db, job_id, token, result, explanation, *, now=None):
         db.add(Signal(corp_code=job.corp_code,rcept_no=job.rcept_no,signal_type=sig['signal_type'],
             event_id=sig.get('event_id'),event_started_at=sig.get('event_started_at'),points=sig['points'],
             detail=clean_public(sig.get('detail',{})),filed_at=sig['filed_at']))
-    disc.processed=True;disc.processed_at=now.isoformat()
-    job.status='DONE';job.finished_at=now.isoformat();job.error_code=None
+    disc.processed=True
+    if not parsed.manual_check:
+        disc.processed_at=now.isoformat()
+    job.status='MANUAL_CHECK' if parsed.manual_check else 'DONE'
+    job.finished_at=now.isoformat();job.error_code='NEEDS_CHECK' if parsed.manual_check else None
     job.lease_token=job.lease_expires_at=None
     db.flush()
     if state and state.stage in ALERT_STAGES:

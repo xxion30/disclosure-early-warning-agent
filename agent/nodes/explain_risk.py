@@ -41,15 +41,18 @@ async def explain_risk(state, deps):
 
 async def explain_phase1(state, deps):
     """Bounded explanation retries; financial values and stages are rule outputs."""
-    breakdown = state["score_result"]["breakdown"]
+    from shared.presentation import INCOMPLETE_FINANCIAL_NOTICE
+    partial = bool(state['score_result'].get('manual_check'))
+    breakdown = [row for row in state["score_result"]["breakdown"]
+                 if not partial or (row.get('evidence') and (not row.get('missing') or row.get('active')))]
     if not breakdown:
-        return {"ai_explanation": "확인 가능한 위험 항목이 없습니다.", "explanation_errors": []}
+        return {"ai_explanation": INCOMPLETE_FINANCIAL_NOTICE if partial else "확인 가능한 위험 항목이 없습니다.", "explanation_errors": []}
     attempt = state.get("explanation_attempts", 0) + 1
     try:
         # No customer names or full disclosure body. Numerical scores stay internal.
         result = await generate(deps, "explain_risk", ExplanationOutput, {
             "disclosure": disclosure_context(state["disclosure"]),
-            "score_result": public_risk_context(state["score_result"]),
+            "score_result": public_risk_context({**state["score_result"], 'breakdown':breakdown}),
             "previous_errors": state.get("explanation_errors", []),
         })
         if sorted(i.breakdown_index for i in result.items) != list(range(len(breakdown))):
@@ -62,6 +65,8 @@ async def explain_phase1(state, deps):
                 raise ValueError(" / ".join(problems))
             lines.append(item.explanation + "\n" + "\n".join(
                 render_evidence(e.model_dump()) for e in item.evidence))
+        if partial:
+            lines.append(INCOMPLETE_FINANCIAL_NOTICE)
         return {"ai_explanation": "\n\n".join(lines), "explanation_attempts": attempt, "explanation_errors": []}
     except (ValueError, AgentError) as exc:
         if isinstance(exc, AgentError) and exc.status == "FAILED":

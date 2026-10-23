@@ -17,8 +17,13 @@ class StaleStateError(ValueError):
 def score_fingerprint(result):
     # Ignore compare-and-swap token and transport-only source chunks.
     fields = ('stage', 'active_stages', 'orange_score', 'yellow_score', 'composite_ratio',
-              'sort_value', 'manual_check', 'as_of', 'rules_digest')
+              'sort_value', 'manual_check', 'as_of', 'rules_digest', 'total_score', 'level', 'combo_upgraded')
     data = {k: result.get(k) for k in fields}
+    # Pydantic wire DTOs normalize 0 to 0.0. Those are the same calculation,
+    # particularly for RED/NONE where sort_value defaults to integer zero.
+    for key in ('orange_score','yellow_score','composite_ratio','sort_value','total_score'):
+        if data[key] is not None:
+            data[key] = number(data[key])
     data['items'] = [{k: v for k, v in row.items() if k not in ('source_chunks', 'from_history')}
                      for row in result.get('breakdown', [])]
     return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()

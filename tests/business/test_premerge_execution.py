@@ -94,6 +94,23 @@ def test_changed_input_cannot_publish(seeded_db):
         assert db.scalar(select(PublicAssessment)) is None
 
 
+def test_forged_financial_missing_reason_cannot_publish_an_unlinked_correction(seeded_db):
+    correction = '20241018000341'  # Existing actual DART correction metadata.
+    with db_module.get_session() as db:
+        disc = db.get(Disclosure, correction)
+        corp, day = disc.corp_code, disc.filed_at[:10]
+    result = calculate_risk_score(corp,[{'signal_type':'RIGHTS_OFFERING','rcept_no':correction,'detail':{}}],day)['data']
+    assert result['manual_check']
+    result['manual_reasons'] = [{'signal_type':'INTEREST_BURDEN','missing':['interest_coverage']}]
+    with db_module.get_session() as db:
+        mark_ready(db,correction)
+        job=enqueue(db,correction,day,result['rules_digest'])
+        claimed=claim(db)
+        with pytest.raises(ValueError):
+            complete_analysis(db,job.job_id,claimed.lease_token,result,'공시 확인이 필요합니다.')
+        assert db.scalar(select(PublicAssessment)) is None
+
+
 def test_daily_recalculation_keeps_equivalent_review_and_does_not_requeue_forever(seeded_db):
     from shared.analysis import enqueue_recalculations
     from mcp_servers.business.reviews import matching_review

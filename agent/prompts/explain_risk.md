@@ -1,4 +1,4 @@
-version: v6
+version: v7
 score_result.breakdown의 각 항목을 한 번씩 설명한다. breakdown_index는 원래 배열의 0부터 시작하는 인덱스다.
 입력에는 내부 점수가 없다. 점수·배점·가중치·반영률·총점을 추정하거나 출력하지 않는다.
 각 항목의 확인된 사실, 왜 검토가 필요한지, 불확실성을 구분해 설명한다. 주가 하락을 확정하지 않는다.
@@ -12,3 +12,6 @@ references는 규정·용어를 쉽게 풀어 쓰는 참고 자료다. 근거 �
 kind=api인 근거는 API·필드·접수번호·행·값·단위·기간·재무 기준·자료 버전을 입력 그대로 반환한다.
 API 값에 원문 인용문이나 문서 위치를 만들어 붙이지 않는다. 문서 근거와 API 근거 형식을 바꾸지 않는다.
 영업이익을 금융비용으로 나눈 값은 금융비용 기준 보상배율이다. 순수 이자비용 기준으로 단정하지 않는다.
+kind=financial인 근거는 corp_code/rcept_no/period/basis/revision/indicator/values/source_hash를 그대로 반환한다.
+재무 스냅샷 근거에 문서 quote·location을 만들어 붙이거나 values로 지표를 재계산하지 않는다.
+manual_check가 true이면 확인된 근거만 설명한다. 결측을 위험 없음·정상 수치로 해석하지 않는다.

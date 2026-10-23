@@ -141,6 +141,7 @@ class AgentState(TypedDict, total=False):
     risk_routes: list[dict[str, Any]]
     flags: list[dict[str, Any]]
     numeric_facts: list[dict[str, Any]]
+    flag_extraction_complete: bool
     red_result: dict[str, Any]
     orange_result: dict[str, Any]
     yellow_result: dict[str, Any]
@@ -164,7 +165,7 @@ def initial_state(rcept_no: str, trace_id: str) -> AgentState:
     return AgentState(
         disclosure={"rcept_no": rcept_no}, status="RUNNING", trace_id=trace_id,
         retry_count=0, tool_call_counts={}, fact_attempts=0, draft_attempts={},
-        signals=[], evidence=[], numeric_facts=[], affected_customers=[], drafts={}, guardrail_flags=[],
+        signals=[], evidence=[], numeric_facts=[], flag_extraction_complete=False, affected_customers=[], drafts={}, guardrail_flags=[],
         approval={}, decisions={}, customer_tasks={}, task_ids=[], manual_drafts=[],
         rewrite_customers=[], error=None,
     )

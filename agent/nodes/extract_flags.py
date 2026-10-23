@@ -16,7 +16,7 @@ async def extract_flags(state, deps):
     numeric_fields = load_catalog()['numeric_fields'] if deps.unified is not None else {}
     routes = [r for r in state.get('risk_routes', []) if r['text_flags'] or numeric_fields.get(r['item'])]
     if not routes:
-        return {"flags": [], "flag_attempts": 0}
+        return {"flags": [], "flag_attempts": 0, "flag_extraction_complete": True}
     attempt = state.get("flag_attempts", 0) + 1
     receipt = state["disclosure"]["rcept_no"]
     query = " ".join(r["item"] for r in routes) + " 사유 목적 조건 근거"
@@ -75,6 +75,7 @@ async def extract_flags(state, deps):
                    for c in chunks]
         return {"flags": result.model_dump()["flags"], "evidence": [*state["evidence"], *evidence],
                 "numeric_facts": result.model_dump()['numeric_facts'],
+                "flag_extraction_complete": True,
                 "verified_sources": sources,
                 "flag_attempts": attempt, "retry_count": attempt - 1}
     except (ValidationError, ValueError, AgentError) as exc:
@@ -82,7 +83,7 @@ async def extract_flags(state, deps):
             raise
         if isinstance(exc, AgentError) and exc.status == "FAILED":
             raise
-        update = {"flag_attempts": attempt, "retry_count": attempt - 1}
+        update = {"flag_attempts": attempt, "retry_count": attempt - 1, "flag_extraction_complete": False}
         if attempt >= 3:
             update.update(error="텍스트 조건·근거 검증 재시도 소진", status="MANUAL_CHECK")
         return update

@@ -247,6 +247,7 @@ async function submitOrg(decisions) {
   <div class="review-layout" :class="{ 'has-pending': pending.length }">
     <div class="review-main">
       <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <p v-if="review?.manual_check" class="notice warn">일부 재무 항목은 추가 확인이 필요합니다. 확인된 위험 근거와 안내문을 검토한 뒤 결정해 주세요.</p>
       <p v-if="message" class="success" role="status">{{ message }} <RouterLink v-if="approvedSubmitted" to="/tasks">연락 업무 보기</RouterLink></p>
       <section v-if="showProgress" class="card" aria-label="처리 진행"><RunProgress :state="runState" /></section>
 

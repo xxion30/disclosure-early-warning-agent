@@ -128,6 +128,7 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
                 "eval_amount": h.eval_amount,
                 "ratio_pct": round(h.eval_amount / cust.total_assets * 100, 1) if cust.total_assets else None,
                 "on_credit": h.on_credit, "stage": state.stage if state else "NONE", "alert": alert,
+                "manual_check": bool(state and state.manual_check),
             })
         exposed_states=[current[i['stock_code']] for i in items if i['alert'] and i['stock_code'] in current]
         order=load_rules()['stage_priority']
@@ -142,6 +143,7 @@ def list_customers(pb: CurrentPB = Depends(get_current_pb), db: Session = Depend
             "exposure": {
                 "alert_count": len(exposure), "top_level": top,
                 "top_stage": top_stage, "top_stage_label": STAGE_LABELS.get(top_stage),
+                "manual_check_count": sum(i['manual_check'] for i in items),
                 "amount": sum(i["eval_amount"] for i in items if i["alert"]),
             },
             "history": history[cid],

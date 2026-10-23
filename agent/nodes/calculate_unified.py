@@ -42,7 +42,8 @@ async def calculate_unified(state, deps):
         raise AgentError('계산 응답 기업·평가 기준 시점 불일치')
     if result.rules_digest != context['rules_version']:
         raise AgentError('실행 중 규칙 버전 변경: 새 판정 필요')
-    if result.manual_check:
+    partial = getattr(deps.unified, 'can_publish_partial', None)
+    if result.manual_check and (partial is None or not partial(result.model_dump())):
         raise AgentError('규칙 엔진의 수동 확인 요청')
     known, sources, fetched = input_evidence, list(state.get('verified_sources', [])), {}
     financial = [ev for row in result.breakdown for ev in row.get('evidence', [])
@@ -57,6 +58,8 @@ async def calculate_unified(state, deps):
     for row in result.breakdown:
         evidence = row.get('evidence') or []
         if not evidence:
+            if row.get('missing') and not row.get('active'):
+                continue
             raise AgentError('판정 항목 출처 누락')
         for ev in evidence:
             if ev.get('kind') == 'financial':

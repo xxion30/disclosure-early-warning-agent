@@ -92,9 +92,14 @@ def build_phase1_graph(deps, checkpointer):
                           ("draft_messages", "guardrail_check"), ("prepare_approval", "pb_approval"),
                           ("pb_approval", "save_rejection"), ("save_rejection", "create_tasks")]:
         edge(first, second)
-    branch("extract_flags", lambda s: "extract_flags" if (
-        any(r["text_flags"] for r in s["risk_routes"])
-        and not s.get("flags")) else ('calculate_unified' if deps.unified else 'score_orange'),
+    def after_extraction(state):
+        if deps.unified is not None:
+            return 'calculate_unified' if state.get('flag_extraction_complete') else 'extract_flags'
+        if any(route['text_flags'] for route in state['risk_routes']) and not state.get('flags'):
+            return 'extract_flags'
+        return 'score_orange'
+
+    branch("extract_flags", after_extraction,
            ["extract_flags", 'calculate_unified' if deps.unified else 'score_orange'])
     branch("explain_risk", lambda s: "explain_risk" if s.get("explanation_errors") else "save_state",
            ["explain_risk", "save_state"])

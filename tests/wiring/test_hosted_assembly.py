@@ -36,7 +36,7 @@ class LocalTools:
                 text = row.body_text
             return ToolResponse(ok=True, data={'content_sha256': hashlib.sha256(text.encode()).hexdigest(),
                 'normalization_version': 'protocol-fixture', 'truncated': False,
-                'chunks': [{'source': 'stored-document', 'rcept_no': RCEPT, 'location': 'stored-body', 'text': text}]})
+                'chunks': [{'source': 'stored-document', 'rcept_no': arguments['rcept_no'], 'location': 'stored-body', 'text': text}]})
         if name in ('release_disclosure_index', 'search_reference'):
             return ToolResponse(ok=True, data={'chunks': []})
         import importlib
@@ -70,20 +70,20 @@ class LocalModel:
         raise AssertionError(prompt)
 
 
-def prepare(*, available=True):
+def prepare(*, available=True, receipt=RCEPT):
     from risk_engine.loader import load_rules
     # A known-empty facts payload exercises the protocol, not actual API coverage.
     with db_module.get_session() as db:
-        disclosure = db.get(Disclosure, RCEPT)
+        disclosure = db.get(Disclosure, receipt)
         if available:
-            store_facts(db, RCEPT, {'schema_version': '1', 'rcept_no': RCEPT, 'corp_code': disclosure.corp_code,
+            store_facts(db, receipt, {'schema_version': '1', 'rcept_no': receipt, 'corp_code': disclosure.corp_code,
                                    'collected_at': '2025-03-21T09:00:00+09:00', 'facts': []})
         else:
             disclosure.structured_facts = None
-        mark_ready(db, RCEPT)
+        mark_ready(db, receipt)
         import json
         rules = hashlib.sha256(json.dumps(load_rules(), sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        return enqueue(db, RCEPT, DAY, rules).job_id
+        return enqueue(db, receipt, DAY, rules).job_id
 
 
 def hosted_settings():
@@ -125,6 +125,28 @@ def test_real_assembly_publication_and_private_drafts_are_separate(seeded_db, tm
                 assert review.execution_budget['model_turns'] == 2
                 assert review.status == 'WAITING_APPROVAL'
             assert not {'save_assessment', 'create_contact_task', 'purge_disclosure_text'} & {n for n, _ in tools.calls}
+    asyncio.run(run())
+
+
+def test_red_integer_zero_and_wire_float_zero_publish_the_same_rule_result(seeded_db, tmp_path):
+    receipt = '20220103900001'  # Actual stored Osstem embezzlement filing.
+    job_id=prepare(receipt=receipt)
+    class CopiedReasonModel(LocalModel):
+        async def generate(self,prompt,schema,payload):
+            response=await super().generate(prompt,schema,payload)
+            if prompt == 'extract_flags':
+                for flag in response.flags:
+                    if flag.flag == 'reason':
+                        flag.value=flag.evidence[0].quote
+            return response
+    async def run():
+        deps=await build_dependencies(hosted_settings(),tools=LocalTools(),model=CopiedReasonModel())
+        async with open_executors(build_runtime,deps,tmp_path/'red.db') as ports:
+            aid=await AnalysisWorker(ports.public).run_once()
+            assert aid is not None
+        with db_module.get_session() as db:
+            assert db.get(PublicAssessment,aid).result['stage'] == 'RED'
+            assert db.get(AnalysisJob,job_id).status == 'DONE'
     asyncio.run(run())
 
 
@@ -207,3 +229,69 @@ def test_unavailable_facts_and_verified_financial_sources_complete_public_analys
     forged = deepcopy(financial)
     forged[0]['values']['impairment_pct'] = 0
     assert not verify_financial_evidence(corp, DAY, forged)['ok']
+
+
+def test_missing_financial_indicator_does_not_hide_confirmed_risk(seeded_db, tmp_path):
+    """Protocol-only financial fixtures exercise missing-data handling, not accuracy."""
+    from shared.models import FinancialSnapshot, RiskState
+    from shared.presentation import INCOMPLETE_FINANCIAL_NOTICE
+    with db_module.get_session() as db:
+        corp = db.get(Disclosure, RCEPT).corp_code
+        db.add(FinancialSnapshot(corp_code=corp, rcept_no=RCEPT, period='2024', period_kind='ANNUAL',
+            basis='CONSOLIDATED', revision=1, created_at=DAY,
+            indicators={'CAPITAL_IMPAIRMENT':{'status':'OK','detail':{'impairment_pct':100}},
+                        'INTEREST_BURDEN':{'status':'MISSING','detail':{}}},
+            sources=[{'api':'protocol-fixture','accounts':[]}]))
+    job_id = prepare(available=False)
+    tools, model = LocalTools(), LocalModel()
+    async def run():
+        deps = await build_dependencies(hosted_settings(), tools=tools, model=model)
+        async with open_executors(build_runtime, deps, tmp_path/'partial.db') as ports:
+            aid = await AnalysisWorker(ports.public).run_once()
+            assert aid is not None
+            with db_module.get_session() as db:
+                public = db.get(PublicAssessment, aid)
+                assert public.result['manual_check'] and public.result['stage'] == 'YELLOW'
+                assert INCOMPLETE_FINANCIAL_NOTICE in public.explanation
+                assert db.get(RiskState,corp).manual_check
+                assert db.get(AnalysisJob,job_id).status == 'MANUAL_CHECK'
+                assert db.get(Disclosure,RCEPT).processed_at is None
+                review = db.scalar(select(OrganizationReview).where(OrganizationReview.assessment_id==aid))
+                rid = review.review_id
+            await run_review(ports.review, rid, 'default')
+            with db_module.get_session() as db:
+                assert db.get(OrganizationReview,rid).status == 'WAITING_APPROVAL'
+    asyncio.run(run())
+
+
+def test_only_missing_data_is_not_published_as_a_successful_no_risk_assessment(seeded_db, tmp_path):
+    from shared.models import FinancialSnapshot, RiskState
+    from shared.presentation import INCOMPLETE_FINANCIAL_NOTICE
+    with db_module.get_session() as db:
+        corp = db.get(Disclosure,RCEPT).corp_code
+        db.add(FinancialSnapshot(corp_code=corp,rcept_no=RCEPT,period='2024',period_kind='ANNUAL',
+            basis='CONSOLIDATED',revision=1,created_at=DAY,
+            indicators={'INTEREST_BURDEN':{'status':'MISSING','detail':{}}},
+            sources=[{'api':'protocol-fixture','accounts':[]}]))
+    job_id = prepare(available=False)
+    class BenignProtocolModel(LocalModel):
+        async def generate(self,prompt,schema,payload):
+            response=await super().generate(prompt,schema,payload)
+            if prompt == 'extract_flags':
+                for flag in response.flags:
+                    if flag.flag == 'opinion':
+                        flag.value='적정'
+            return response
+    async def run():
+        deps=await build_dependencies(hosted_settings(),tools=LocalTools(),model=BenignProtocolModel())
+        async with open_executors(build_runtime,deps,tmp_path/'missing-only.db') as ports:
+            aid=await AnalysisWorker(ports.public).run_once()
+            assert aid is not None
+        with db_module.get_session() as db:
+            public=db.get(PublicAssessment,aid)
+            assert public.result['stage'] == 'NONE' and public.result['manual_check']
+            assert INCOMPLETE_FINANCIAL_NOTICE in public.explanation
+            assert db.get(AnalysisJob,job_id).status == 'MANUAL_CHECK'
+            assert db.get(Disclosure,RCEPT).processed_at is None
+            assert db.scalar(select(OrganizationReview)) is None
+    asyncio.run(run())

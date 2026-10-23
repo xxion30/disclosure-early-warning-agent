@@ -151,6 +151,7 @@ const customerState = computed(() => {
         </div>
       </div>
       <p class="explanation"><strong>핵심 사유</strong><br />{{ unscored ? '위험 평가를 완료하지 못했어요.' : keyReason }}</p>
+      <p v-if="alert.manual_check" class="notice warn">일부 재무 항목은 추가 확인이 필요합니다. 표시된 위험은 확인된 근거를 기준으로 합니다.</p>
       <EvidenceCitation v-if="primaryEvidence" :evidence="primaryEvidence" />
       <p v-else class="notice warn">원문 인용을 확인할 수 없어요. 위의 "이번 공시 DART 원문"에서 직접 확인해 주세요.</p>
       <RouterLink

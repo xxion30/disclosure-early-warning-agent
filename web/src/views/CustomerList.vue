@@ -134,6 +134,7 @@ const toggle = (id) => (open[id] = !open[id])
                     <strong v-if="c.exposure.amount" class="exposure-amount">{{ formatWon(c.exposure.amount) }}</strong>
                   </template>
                   <span v-else class="muted">경보 종목 없음</span>
+                  <span v-if="c.exposure.manual_check_count" class="notice warn">추가 확인 {{ c.exposure.manual_check_count }}종목</span>
                 </div>
                 <div class="chip-row holdings-line">
                   <span v-for="h in shownAlerts(c)" :key="h.stock_code" class="chip alert" :title="h.on_credit ? '신용거래' : ''">{{ h.stock_name }}</span>
@@ -179,7 +180,9 @@ const toggle = (id) => (open[id] = !open[id])
                             <StageBadge :stage="h.alert.stage" :stages="h.alert.stages" :level="h.alert.level" />
                             <RouterLink :to="{ name: 'alert-detail', params: { assessmentId: String(h.alert.assessment_id) } }" @click.stop>경보 보기</RouterLink>
                           </template>
+                          <span v-else-if="h.manual_check" class="notice warn">판단 보류</span>
                           <span v-else class="muted">경보 없음</span>
+                          <span v-if="h.alert && h.manual_check" class="notice warn">일부 항목 추가 확인</span>
                         </div>
                       </div>
                       <p v-if="!c.holdings.length" class="muted">보유 종목 없음</p>

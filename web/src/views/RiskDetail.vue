@@ -161,7 +161,8 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
           <div class="hero-copy">
             <div class="hero-title">
               <h1>{{ state.corp_name || state.stock_code }}</h1>
-              <StageBadge all :stage="state.stage" :stages="state.active_stages" />
+              <span v-if="state.manual_check && state.stage === 'NONE'" class="notice warn">판단 보류</span>
+              <StageBadge v-else all :stage="state.stage" :stages="state.active_stages" />
               <span v-if="state.new" class="new-pill">새 경보</span>
               <span v-if="state.resolved" class="badge tone-ok">해소됨</span>
             </div>
@@ -221,7 +222,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
       </span>
       <span class="banner-text">
         <strong>사람의 확인이 필요해요</strong>
-        <span>판정에 필요한 값을 일부 찾지 못해 추측하지 않고 멈췄어요.<template v-if="missingItems.length"> 확인할 항목: {{ missingItems.map((i) => `${i.item}(${missingNames(i).join(', ')})`).join(', ') }}</template></span>
+        <span>확인된 근거를 표시했으며, 일부 항목은 추가 확인이 필요합니다.<template v-if="missingItems.length"> 확인할 항목: {{ missingItems.map((i) => `${i.item}(${missingNames(i).join(', ')})`).join(', ') }}</template></span>
       </span>
     </div>
 

@@ -141,6 +141,7 @@ export function isAlertRow(row) {
 const STOPPED_STATUSES = ['RUNNING', 'FAILED', 'MANUAL_CHECK']
 export function isUnscored(a) {
   if (!a) return false
+  if (a.manual_check && a.stage === 'NONE') return true
   if (typeof a.scored === 'boolean') return !a.scored
   if (!STOPPED_STATUSES.includes(a.status)) return false
   const noReasons = !Array.isArray(a.reasons) || a.reasons.length === 0

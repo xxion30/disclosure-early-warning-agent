@@ -16,6 +16,24 @@ LEGACY_LEVEL = {'RED': 'Critical', 'ORANGE': 'High', 'COMPOSITE': 'High',
                 'YELLOW': 'High', 'WATCH': 'Medium', 'NONE': 'Low'}
 
 
+def financial_missing_only(result):
+    """Known risks remain visible when unrelated financial data is missing.
+    Unverified correction links and textual conditions still require a stop.
+    """
+    financial = {'CAPITAL_IMPAIRMENT','OPERATING_CASH_FLOW','INTEREST_BURDEN','SHORT_TERM_DEBT'}
+    # Audit opinion is also extracted from text. Only the R3 financial-snapshot
+    # form qualifies here; an uncertain model/text condition must still stop.
+    snapshot_audit = any(row.get('signal_type') == 'AUDIT_OPINION'
+        and any(ev.get('kind') == 'financial' for ev in row.get('evidence', []))
+        for row in result.get('breakdown', []))
+    reasons = result.get('manual_reasons') or []
+    return bool(result.get('manual_check') and reasons and all(
+        isinstance(reason, dict) and (reason.get('signal_type') in financial
+            or (reason.get('signal_type') == 'AUDIT_OPINION' and snapshot_audit))
+        and isinstance(reason.get('missing'), list) and reason['missing']
+        and not reason.get('reason') for reason in reasons))
+
+
 def number(value):
     if value is None or isinstance(value, bool):
         return None

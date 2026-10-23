@@ -72,6 +72,7 @@ class UnifiedBindings:
     ensure_current: Callable[[dict], Awaitable[bool]]
     # Must persist request/time usage before another attempt, if provided.
     record_budget: Callable[[dict], Awaitable[None]] | None = None
+    can_publish_partial: Callable[[dict], bool] | None = None
 
 
 async def ensure_current(state, deps):

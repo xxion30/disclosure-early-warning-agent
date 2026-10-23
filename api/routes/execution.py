@@ -90,6 +90,7 @@ def get_review(review_id:str,pb:CurrentPB=Depends(get_current_pb),db=Depends(get
     from harness.guardrails import check_message
     allowed=set(db.scalars(select(Customer.customer_id).where(Customer.tenant_id==pb.tenant_id,Customer.pb_id==pb.pb_id)))
     return {'review_id':row.review_id,'assessment_id':row.assessment_id,'status':row.status,'version':row.version,
+            'manual_check':bool(assessment.result.get('manual_check')),
             'stage':assessment.result['stage'],'ai_explanation':public_explanation(assessment.explanation),
             'drafts':{cid:('' if check_message(text) else text) for cid,text in row.drafts.items() if cid in allowed},
             'decisions':{cid:d for cid,d in row.decisions.items() if cid in allowed}}
