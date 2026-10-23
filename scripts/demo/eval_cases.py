@@ -131,7 +131,7 @@ def replay(engine: Engine, steps: list[dict], as_of: str) -> dict:
         sigs.extend(new)
         missing.extend(miss)
         by_date.setdefault(s["filed_at"], []).append(s)
-    first_alert = None
+    first_alert = first_alert_stage = None
     for d in sorted(by_date):
         if d > as_of:
             break
@@ -139,11 +139,13 @@ def replay(engine: Engine, steps: list[dict], as_of: str) -> dict:
         active = set(r["active_stages"]) & set(ALERT_STAGES)
         if active - prev_active:
             alerts += 1  # 새 경보: 경보 단계가 새로 생기거나 다른 종류의 경보 단계가 더해짐
-            first_alert = first_alert or d
+            if first_alert is None:
+                first_alert, first_alert_stage = d, r["stage"]
         prev_active = active
         path.append((d, r["stage"]))
     final = stage_of(engine, sigs, as_of)
-    return {"final": final["stage"], "active": final["active_stages"], "path": path, "first_alert": first_alert, "alerts": alerts,
+    return {"final": final["stage"], "active": final["active_stages"], "path": path, "first_alert": first_alert,
+            "first_alert_stage": first_alert_stage, "alerts": alerts,
             "missing": sorted(set(missing)), "skipped": skipped, "manual": final.get("manual_check")}
 
 
@@ -200,14 +202,55 @@ def evaluate(cases: list[dict]) -> dict:
                     upto = [x for x in steps if (x["filed_at"], x["rcept_no"]) <= (s["filed_at"], s["rcept_no"])]
                     got = replay(eng, upto, s["filed_at"])["final"]
                     step_checks.append({"step": s, "got": got, "ok": got == s["expected_stage_after"]})
-            # 기대 단계는 기준일에 켜진 단계(active_stages)에 들어 있는지로 본다 (맨 위 배지는 서버 우선순위로 정해짐)
-            r["exp_ok"] = (exp_final in r["active"]) if exp_final else None
-            timelines.append({"case": c, **r, "exp_alert": exp_alert, "exp_final": exp_final, "step_checks": step_checks})
+            # 기대 단계: 기준일에 켜진 단계(active_stages)에 모두 들어 있는지. 함께 켜질 단계 목록이 정해진 사례(금양)는
+            # 맨 위 배지와 첫 경보 단계까지 본다 (R1 위험 정책 3-3: "🟠 먼저, 🟡 추가, 맨 위 🟠")
+            exp_stages = c.get("expected_final_stages") or ([exp_final] if exp_final else [])
+            exp_first = c.get("expected_first_alert_stage")
+            if exp_stages:
+                ok = all(st in r["active"] for st in exp_stages)
+                if c.get("expected_final_stages") and exp_final:
+                    ok = ok and r["final"] == exp_final
+                if exp_first:
+                    ok = ok and r["first_alert_stage"] == exp_first
+                r["exp_ok"] = ok
+            else:
+                r["exp_ok"] = None
+            r["fa_category"] = (c.get("false_alarm_policy") or {}).get("category")
+            timelines.append({"case": c, **r, "exp_alert": exp_alert, "exp_final": exp_final, "exp_stages": exp_stages,
+                              "exp_first": exp_first, "step_checks": step_checks})
     return {"scored": scored, "undecided": undecided, "ai_needed": ai_needed, "timelines": timelines}
 
 
 def days_before(a: str, b: str) -> int:
     return (date.fromisoformat(b) - date.fromisoformat(a)).days
+
+
+def summarize(res: dict) -> dict:
+    """채점 결과 → 지표 숫자 (기준값 비교표용, scripts/demo/compare_thresholds.py)"""
+    sc, tl = res["scored"], res["timelines"]
+    alert_cases = [t for t in tl if t["exp_alert"] is True or t["exp_final"] in ALERT_STAGES]
+    normal_cases = [t for t in tl if t["exp_alert"] is False]
+    false_alarms = [t for t in normal_cases if t["final"] in ALERT_STAGES or t["alerts"]]
+    exp_cases = [t for t in tl if t["exp_ok"] is not None]
+    weekly = [t["alerts"] / max(1, days_before(t["case"]["window"]["from"], t["case"]["window"]["to"]) / 7) for t in tl if t["case"].get("window")]
+    by_id = {t["case"]["case_id"]: t for t in tl}
+
+    def lead(cid):
+        t = by_id.get(cid)
+        return days_before(t["first_alert"], t["case"]["as_of"]) if t and t["first_alert"] else None
+
+    return {
+        "single": (sum(r["ok"] for r in sc), len(sc)),
+        "expected": (sum(t["exp_ok"] for t in exp_cases), len(exp_cases)),
+        "hits": (sum(t["final"] in ALERT_STAGES for t in alert_cases), len(alert_cases)),
+        "false_alarms": (len(false_alarms), len(normal_cases)),
+        "false_alarm_ids": [t["case"]["case_id"] for t in false_alarms],
+        "false_alarms_pb": sum(1 for t in false_alarms if t.get("fa_category") == "PB 판단 영역"),
+        "weekly": sum(weekly) / len(weekly) if weekly else 0.0,
+        "lead_days": {cid: lead(cid) for cid in by_id},
+        "final": {cid: t["final"] for cid, t in by_id.items()},
+        "active": {cid: t["active"] for cid, t in by_id.items()},
+    }
 
 
 def render(res: dict) -> str:
@@ -225,13 +268,22 @@ def render(res: dict) -> str:
     exp_cases = [t for t in tl if t["exp_ok"] is not None]
     L.append(f"_생성: `uv run python scripts/demo/eval_cases.py --write` · 사례 {len(sc) + len(res['undecided']) + len(res['ai_needed']) + len(tl)}건 (R3·R5) · 규칙 엔진만 (AI 추출 없음)_")
     L.append("")
+    lead_case = next((t for t in tl if t["case"]["case_id"] == "r5-timeline-001" and t["first_alert"]), None)
+    if lead_case:
+        days = days_before(lead_case["first_alert"], lead_case["case"]["as_of"])
+        L.append(f"**핵심: 사건 {days}일 전에 조기경보가 울렸다** — 금양은 감사의견 거절({lead_case['case']['as_of']})보다 {days}일 앞선 {lead_case['first_alert']}에 🟠 사건 경보가 처음 울렸다.")
+        L.append("")
+    fa_pb = sum(1 for t in false_alarms if t.get("fa_category") == "PB 판단 영역")
+    fa_note = f" — {fa_pb}건은 PB 판단 영역(허용한 비용)" if fa_pb else ""
+    L.append("평가는 **적중을 먼저** 보고, 오탐은 허용한 비용으로 원인과 함께 설명한다 (R1 위험 정책 원칙 3).")
+    L.append("")
     L.append("| 지표 | 결과 | 설명 |")
     L.append("| --- | --- | --- |")
+    L.append(f"| **적중 (1순위)** | **{len(hits)} / {len(alert_cases)}** | 경보가 있어야 하는 기간 사례에서 기준일에 경보 단계가 나온 수 |")
+    L.append(f"| 오탐 | **{len(false_alarms)} / {len(normal_cases)}**{fa_note} | 경보가 없어야 하는 기간 사례(정상 회사)에서 경보가 울린 수 |")
     L.append(f"| 단건 사례 정답률 | **{ok} / {len(sc)}** | 정답이 정해진 공시 한 건 사례에서 계산한 단계가 정답과 같은 수 |")
     L.append(f"| 타임라인 단계별 정답률 | **{steps_ok} / {steps_total}** | R3 타임라인의 단계마다 기대 단계와 같은 수. AI 판단이 필요한 단계 {steps_ai}개는 뺌 |")
     L.append(f"| 기간 사례 기대 단계 | **{sum(t['exp_ok'] for t in exp_cases)} / {len(exp_cases)}** | 기대 단계가 정해진 기간 사례에서 기준일에 그 단계가 켜진 수 |")
-    L.append(f"| 적중 | **{len(hits)} / {len(alert_cases)}** | 경보가 있어야 하는 기간 사례에서 기준일에 경보 단계가 나온 수 |")
-    L.append(f"| 오탐 | **{len(false_alarms)} / {len(normal_cases)}** | 경보가 없어야 하는 기간 사례(정상 회사)에서 경보가 울린 수 |")
     weekly = [t["alerts"] / max(1, days_before(t["case"]["window"]["from"], t["case"]["window"]["to"]) / 7) for t in tl if t["case"].get("window")]
     if weekly:
         L.append(f"| 경보 빈도 | 종목당 주 **{sum(weekly) / len(weekly):.2f}회** (최대 {max(weekly):.2f}) | 12개월 기간 사례에서 새 경보(경보 단계가 새로 생김) 수 ÷ 주 수 |")
@@ -255,13 +307,16 @@ def render(res: dict) -> str:
     for t in tl:
         c = t["case"]
         w = c.get("window") or {}
-        exp = STAGE_KO.get(t["exp_final"]) if t["exp_final"] else ("경보 없음(NONE·WATCH)" if t["exp_alert"] is False else "미정")
+        if t["exp_first"] and len(t["exp_stages"]) > 1:
+            exp = f"{STAGE_KO[t['exp_first']]} 먼저 → " + " · ".join(STAGE_KO[x] for x in t["exp_stages"] if x != t["exp_first"]) + f" 추가 (맨 위 {STAGE_KO[t['exp_final']]})"
+        else:
+            exp = STAGE_KO.get(t["exp_final"]) if t["exp_final"] else ("경보 없음(NONE·WATCH)" if t["exp_alert"] is False else "미정")
         first = f"{t['first_alert']} (기준일 {days_before(t['first_alert'], c['as_of'])}일 전)" if t["first_alert"] else "-"
         note = f"빠진 값 {len(t['missing'])}종, 제외 {len(t['skipped'])}건"
         active = " + ".join(STAGE_KO[a] for a in t["active"])
         mark = "" if t["exp_ok"] is None else (" ✓" if t["exp_ok"] else " ✗")
         if t["exp_alert"] is False:
-            mark = " ✗ 오탐" if (t["final"] in ALERT_STAGES or t["alerts"]) else " ✓"
+            mark = (f" ✗ 오탐 · {t['fa_category']}" if t.get("fa_category") else " ✗ 오탐") if (t["final"] in ALERT_STAGES or t["alerts"]) else " ✓"
         L.append(f"| {c['case_id']} {c['corp_name']} | {w.get('from', '-')} ~ {w.get('to', c['as_of'])} | {exp} | {active}{mark} | {first} | {t['alerts']} | {note} |")
     L.append("")
     step_wrong = [(t, x) for t in tl for x in t["step_checks"] if x["ok"] is False]

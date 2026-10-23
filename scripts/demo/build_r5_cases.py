@@ -48,19 +48,20 @@ TIMELINES = [
     {
         "case_id": "r5-timeline-001", "stock_code": "001570", "from": "2024-03-21", "as_of": "2025-03-21",
         "title": "금양 감사의견 거절까지 12개월 (2024-03-21 ~ 2025-03-21)",
-        "expected_final_stage": "YELLOW",
+        "expected_final_stage": "ORANGE",
+        "expected_final_stages": ["ORANGE", "YELLOW"],
+        "expected_first_alert_stage": "ORANGE",
         "expected_alert": True,
-        "expectation_source": "R1 결정 (2026-10-23): 감사의견 거절(20250321802001) = 🟡 재무 경보. 이전 시나리오 A의 Critical은 폐기",
+        "expectation_source": "R1 위험 정책 3-3 (docs/risk_policy.md, 2026-10-23): 🟠 사건 경보가 먼저 켜지고, 감사의견 거절 공시(20250321802001)에서 🟡 재무 경보가 추가된다. 맨 위 배지는 🟠. 이전 시나리오의 Critical·P1 5·P2 2는 폐기",
         "notes": "이전 프로젝트의 주인공 사례. 사건일보다 앞서 경보가 울렸는지(조기경보)는 정답이 아니라 측정값으로 본다.",
     },
     {
         "case_id": "r5-timeline-002", "stock_code": "079160", "from": "2022-06-20", "as_of": "2023-06-20",
         "title": "CJ CGV 대규모 유상증자까지 12개월 (2022-06-20 ~ 2023-06-20)",
-        "expected_final_stage": None,
-        "expected_alert": None,
-        "expectation_source": "이전 프로젝트: '유상증자 공시 1건으로는 경보 없음'(옛 등급 기준). 새 규칙 기준은 R1 확인 필요",
-        "ambiguity": "새 규칙은 유상증자 기본 2점 + 발행 비율 50% 이상 2점이다. 신주 74,700,000주 ÷ 증자 전 47,730,920주(약 156%)면 4점으로 🟠 기준(4점)에 닿는다. 옛 정답과 다를 수 있어 R1이 정해야 한다.",
-        "notes": "옛 프로젝트의 '신호 하나로는 경보가 없어야 하는' 비교 사례.",
+        "expected_final_stage": "ORANGE",
+        "expected_alert": True,
+        "expectation_source": "R1 위험 정책 3-3 (docs/risk_policy.md, 2026-10-23): 🟠 (2023-06-20 기준, 2022-07·2023-06 유상증자 반복 가산)",
+        "notes": "옛 정답('유상증자 공시 1건으로는 경보 없음')은 R1 결정대로 공시 1건만 있는 별도 사례로 남긴다 — 그 사례의 정답은 R1 확인 대기.",
     },
     {
         "case_id": "r5-timeline-003", "stock_code": "034730", "from": "2025-04-02", "as_of": "2026-03-31",
@@ -74,7 +75,9 @@ TIMELINES = [
 
 # 정상 회사: 2024 사업보고서 접수일까지 12개월. 오탐(경보가 울리면 안 됨) 확인용
 NORMALS = [
-    {"case_id": "r5-normal-001", "stock_code": "005380"},  # 현대차
+    {"case_id": "r5-normal-001", "stock_code": "005380",  # 현대차
+     "false_alarm_policy": {"category": "PB 판단 영역", "source": "R1 위험 정책 3-3 (docs/risk_policy.md, 2026-10-23)·원칙 2·3",
+                            "reason": "금융 자회사 차입금이 섞인 연결 재무, 자진 해외 상장폐지는 우리 기준과 AI 판단으로 설명할 수 없는 맥락이다. 경보를 빼지 않고 근거를 보여 PB가 판단한다. 오탐은 허용한 비용으로 기록한다."}},
     {"case_id": "r5-normal-002", "stock_code": "035420"},  # NAVER
     {"case_id": "r5-normal-003", "stock_code": "066570"},  # LG전자
 ]
@@ -189,6 +192,7 @@ async def main(dry_run: bool) -> int:
                 "as_of": spec["as_of"], "window": {"from": spec["from"], "to": spec["as_of"]},
                 "expected_final_stage": spec["expected_final_stage"], "expected_alert": spec["expected_alert"],
                 "expectation_source": spec["expectation_source"], **({"ambiguity": spec["ambiguity"]} if spec.get("ambiguity") else {}),
+                **{k: spec[k] for k in ("expected_final_stages", "expected_first_alert_stage") if spec.get(k)},
                 "window_disclosure_count": sum(spec["from"] <= r["filed_at"] <= spec["as_of"] for r in rows),
                 "list_source": "OpenDART list.json",
                 "steps": steps, "notes": spec["notes"],
@@ -210,6 +214,7 @@ async def main(dry_run: bool) -> int:
                 "window_disclosure_count": len(rows), "list_source": "OpenDART list.json",
                 "steps": steps,
                 "notes": "기대값은 '공시가 없다'가 아니라 '경보가 없다'(단계 NONE 또는 WATCH). 대기업도 🟠 종류 공시(자기주식 처분·양수도 등)를 낼 수 있다.",
+                **({"false_alarm_policy": spec["false_alarm_policy"]} if spec.get("false_alarm_policy") else {}),
             })
     payload = {
         "_note": "R5가 만든 테스트 사례 (회귀 타임라인·정상 회사). 접수번호·제목·접수일은 DART 공시 목록의 실제 값, facts는 DART API 원본 또는 R3 수집기(collector.indicators)로 계산한 값이며 지어낸 값이 없다. "

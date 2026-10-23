@@ -87,3 +87,38 @@ def test_report_renders_from_real_case_files():
     assert "| 지표 | 결과 | 설명 |" in text and "r5-timeline-001" in text
     # 화면·문서용 결과표에도 점수 숫자는 넣지 않는다
     assert "pts=" not in text and "점수 " not in text
+
+
+def test_threshold_compare_baseline_matches_scorer_and_leaves_rules_untouched():
+    import compare_thresholds as ct
+    from risk_engine.loader import DEFAULT_PATH
+    before = DEFAULT_PATH.read_bytes()
+    rows = ct.compare()
+    assert DEFAULT_PATH.read_bytes() == before  # R4의 rules.yaml은 고치지 않는다
+    names = [name for name, _, _ in rows]
+    assert names[0] == "지금 기준" and "복합 규칙 끔" in names
+    base = ev.summarize(ev.evaluate(ev.load_cases()))
+    assert rows[0][2]["single"] == base["single"] and rows[0][2]["false_alarms"] == base["false_alarms"]
+    off = dict((name, m) for name, _, m in rows)["복합 규칙 끔"]
+    assert all("COMPOSITE" not in active for active in off["active"].values())
+    text = ct.render(rows)
+    assert "| 설정 |" in text and "pts=" not in text
+
+
+def test_r1_gold_answers_for_r5_cases():
+    """R1 위험 정책 3-3: 금양 🟠 먼저 + 🟡 추가(맨 위 🟠), CJ CGV 🟠, 현대차 오탐은 PB 판단 영역"""
+    cases = {c["case_id"]: c for c in R5["cases"]}
+    kumyang, cgv, hyundai = cases["r5-timeline-001"], cases["r5-timeline-002"], cases["r5-normal-001"]
+    assert kumyang["expected_final_stage"] == "ORANGE" and kumyang["expected_final_stages"] == ["ORANGE", "YELLOW"]
+    assert kumyang["expected_first_alert_stage"] == "ORANGE"
+    assert cgv["expected_final_stage"] == "ORANGE" and cgv["expected_alert"] is True and "ambiguity" not in cgv
+    assert hyundai["expected_alert"] is False and hyundai["false_alarm_policy"]["category"] == "PB 판단 영역"
+    res = ev.evaluate(ev.load_cases())
+    by_id = {t["case"]["case_id"]: t for t in res["timelines"]}
+    assert by_id["r5-timeline-001"]["exp_ok"] is True and by_id["r5-timeline-002"]["exp_ok"] is True
+    m = ev.summarize(res)
+    assert m["lead_days"]["r5-timeline-001"] == 141
+    assert m["false_alarms_pb"] == m["false_alarms"][0]  # 지금 오탐은 모두 PB 판단 영역
+    text = ev.render(res)
+    assert "사건 141일 전에 조기경보가 울렸다" in text
+    assert text.index("적중 (1순위)") < text.index("| 오탐 |")
