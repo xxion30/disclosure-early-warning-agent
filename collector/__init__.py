@@ -2,7 +2,7 @@
 
 모듈 (구현됨 표시):
     dart_client.py   DART API 호출 (httpx, 재시도, 호출 속도 제한)  [구현됨]
-    watchlist.py     보유 종목 합집합(ETF 제외), 종목코드 → 회사 코드
+    watchlist.py     보유 종목 합집합(ETF 제외), 종목코드 → 회사 코드  [구현됨]
     cursor.py        증분 수집 커서(마지막 성공 시각)
     jobs.py          종목별 수집 작업
     backfill.py      새 종목의 최근 12개월 채우기
