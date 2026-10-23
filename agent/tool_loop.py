@@ -75,6 +75,9 @@ async def select_and_run(deps, purpose: str, rcept_no: str, context: dict) -> di
                 continue
             chunks = data.get("chunks") if isinstance(data, dict) else data
             chunks = [c for c in (chunks or []) if isinstance(c, dict)][:5]
+            if isinstance(data, dict):
+                chunks = [{**c, **{key: data[key] for key in ('content_sha256', 'normalization_version')
+                                  if data.get(key)}} for c in chunks]
             if req.tool == "search_disclosure_text":
                 # 현재 공시의 조각만 근거 후보로 쓴다
                 out["disclosure_chunks"] += [c for c in chunks if c.get("rcept_no") == rcept_no]

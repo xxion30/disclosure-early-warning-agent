@@ -24,7 +24,7 @@ def test_mcp_normalization_and_tool_allowlist():
 def test_versioned_prompts(name):
     version, body = read_prompt(name)
     # 프롬프트를 바꾸면 버전을 올린다. extract_facts v5: B의 signal_type·values 이름, 신호 없음 처리, 인용은 한 곳을 그대로 복사
-    assert version == {"extract_facts": "v7", "explain_risk": "v3", "select_tools": "v2"}.get(name, "v1")
+    assert version == {"system": "v3", "extract_facts": "v7", "explain_risk": "v6", "select_tools": "v2", "draft_message": "v2", "rewrite_message": "v2"}[name]
     assert body.strip()
 
 
@@ -38,7 +38,7 @@ def test_model_503_uses_d_recovery_and_same_schema(kit):
             return self
         async def ainvoke(self, messages, config):
             self.calls += 1
-            assert config["metadata"]["prompt_version"]["draft_message"] == "v1"
+            assert config["metadata"]["prompt_version"]["draft_message"] == "v2"
             return {"drafts": {"C001": "{고객명}님, 상담 부탁드립니다."}}
 
     async def scenario():

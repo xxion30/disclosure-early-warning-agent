@@ -1,6 +1,7 @@
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
+from risk_engine.loader import load_rules
 
 from risk_engine.risk_rules import minus_months, parse_date
 from mcp_servers.business.tools._common import guarded, invalid, require_company
@@ -13,12 +14,13 @@ def history_rows(s, corp_code: str, months: int, as_of: date) -> list[dict]:
     start = minus_months(as_of, months).isoformat()
     rows = s.scalars(
         select(Signal)
-        .where(Signal.corp_code == corp_code, Signal.filed_at >= start, Signal.filed_at <= f"{as_of.isoformat()}~")
+        .where(Signal.corp_code == corp_code, or_(Signal.filed_at >= start, Signal.signal_type.in_(list(load_rules().get("red", {})) + list(load_rules().get("yellow", {})))), Signal.filed_at <= f"{as_of.isoformat()}~")
         .order_by(Signal.filed_at, Signal.signal_id)
     ).all()
     return [
         {
             "signal_type": r.signal_type,
+            "event_id": r.event_id, "event_started_at": r.event_started_at,
             "points": r.points,
             "detail": r.detail or {},
             "rcept_no": r.rcept_no,
