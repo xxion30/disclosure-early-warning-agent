@@ -145,7 +145,7 @@ def test_server_registers_all_ten_tools():
 
     names, data = asyncio.run(run())
     assert names == {
-        "list_new_disclosures", "get_disclosure", "get_company_profile", "get_signal_history",
+        "list_new_disclosures", "get_disclosure", "get_disclosure_facts", "get_company_profile", "get_signal_history",
         "calculate_risk_score", "get_holders", "get_risk_state", "save_risk_state",
         "save_assessment", "create_contact_task", "update_task_status", "purge_disclosure_text",
     }

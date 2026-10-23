@@ -106,3 +106,7 @@
 ## 검증 후 실행 경로 보완 (2026-10-22)
 
 R4 assembly는 phase1_classification/phase1_allowed_signals_by_type을 데이터 계약으로 읽는 adapter를 사용한다. 구형 R2 분류기·KnownSignalsModel은 호환 테스트용으로 그대로 두며 실제 R4 조립에서는 선택하지 않는다. 정정은 원공시 관계를 확인해 처리하며 첨부 정정 전체를 제목만으로 건너뛰지 않는다. 새 phase1_signal_contract는 AI 입력에 허용 신호·필드 이름만 제공하고 점수 값은 제공하지 않는다. R2 프롬프트의 새 항목별 품질 검증은 별도다.
+
+## Pre-merge 재무 정책 (2026-10-23)
+
+자본잠식만 최신 유효 보고 기간의 OFS(SEPARATE)를 사용한다. 해당 기간에 OFS가 없으면 MISSING으로 판정하며 과거 OFS/CFS로 대체하지 않는다. 다른 지표는 같은 기간 CFS 우선이다. INTEREST_BURDEN은 금융비용 기반 지표의 경계값 확정 전 enabled:false로 자동 가점하지 않는다. 값·출처·policy_pending은 보존하되 다른 확인된 위험을 숨기지 않는다. 금융비용<=0은 산정 불가이며 부담 없음으로 해석하지 않는다.

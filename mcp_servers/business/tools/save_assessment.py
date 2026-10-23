@@ -45,6 +45,9 @@ def save_assessment(
     from risk_engine.states import score_fingerprint
     with get_session() as s:
         company = require_company(s, corp_code)
+        from shared.models import PublicAssessment
+        if s.scalar(select(PublicAssessment.assessment_id).where(PublicAssessment.rcept_no==rcept_no)):
+            raise invalid('새 공개 판정은 legacy save_assessment로 수정할 수 없습니다. 조직별 검토 경로를 사용하세요.')
         # Public analysis for a company is serialized, including first upsert.
         from shared.models import Company
         s.scalar(select(Company).where(Company.corp_code == corp_code).with_for_update())

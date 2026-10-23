@@ -74,3 +74,25 @@ Graph 선택: `GRAPH_ADAPTER=fake`(기본, MCP·키 없이 시나리오 A 흉내
 - 설명문에 내부 점수·반영률 표현이 있으면 PB 응답에서 설명을 수동 확인 문구로 대체한다. 원문 인용은 별도 evidence에 그대로 보존한다. R4 adapter의 규칙 설명 fallback 자체도 점수를 포함하지 않는다.
 - 기존 /alerts도 새 stage 우선순위와 기준 대비 정렬값을 사용한다. 과거 level만 있는 행에 한해 기존 순위를 호환한다.
 - 수집 실행자는 heartbeat로 임대를 갱신하고 finish_stock으로 완료한다. 만료 실행은 다음 요청 또는 운영 복구 함수에서 실패 처리하며 같은 run_id로 재사용하지 않는다.
+
+## Pre-merge 실행·조직 검토 (2026-10-23)
+
+새 DB 작업은 수집 완료 mark_ready 이후 등록한다. 기본 큐는 비활성 상태다. 새 공개 판정/조직별 검토는 legacy /runs의 접수번호 단독 실행과 섞지 않는다. 새 검토 API는 서버의 tenant/PB 문맥을 사용한다. 검토 executor는 공개 판정 이후 고객 구간만 실행하며 start/resume/rewrite에서 공개 분석을 다시 실행하지 않는다. 구형 실행은 분리 완료를 뜻하지 않는다.
+
+R2가 제공하는 public executor와 review executor는 R4가 생성한 체크포인터/고정 thread ID/작업 lease를 주입받는다. R4는 Graph 노드와 프롬프트를 새로 구현하지 않는다. executor 미연결은 명시적 503이며 legacy fallback은 하지 않는다.
+
+### 새 경로와 R2 주입 계약
+
+- `POST /analysis/jobs`: 관리자만. `{rcept_no,as_of,reanalysis_request_id?:UUID}`. 준비된 공시만 등록하며 응답은 job_id/status다.
+- `GET /analysis/jobs/{job_id}`: 해당 고객사 보유 종목에 접근 가능한 PB/관리자만. 상태/시도 횟수/오류 코드/완료 판정 ID. 입력 manifest·점수·규칙 digest는 제외한다.
+- `POST /public-assessments/{assessment_id}/reviews`: 서버 tenant로 조직별 검토를 멱등 생성한다. 경보이고 현재 유효한 판정이어야 한다.
+- `GET /reviews/{review_id}`: 서버 tenant와 담당 고객으로 초안/결정을 필터링한다. 점수·내부 근거 조각은 반환하지 않는다.
+- `POST /reviews/{review_id}/run`: 주입된 조직별 초안 executor만 호출한다. 미연결은 503이다.
+- `POST /reviews/{review_id}/decisions`: `{expected_version,decisions:[{customer_id,action:approve|reject|rewrite,edited_draft?,reject_reason?}]}`. R4 저장 서비스가 담당 PB/조직/최신 판정/문안을 검사하고 승인 후에만 기존 contact_tasks에 멱등 생성한다. rewrite는 재생성 대기로 돌리며 이미 결정한 문안·업무는 보존한다.
+
+`PHASE1_RUNTIME_FACTORY=module:factory`가 설정된 호스트만 R2 새 포트를 시작한다. `factory(deps, initialized_checkpointer)`는 동기/비동기 생성 가능하며 다음 두 비동기 진입점을 제공해야 한다.
+
+1. `analyze_public(AnalysisContext) -> {status:DONE|MANUAL_CHECK, score_result?, ai_explanation?}`. 고객·초안·승인·업무를 실행하거나 자체 공개 저장하지 않는다. 실제 calculate_risk_score 출력의 메타데이터와 signals를 보존한다. R4가 lease/input hash/규칙/CAS를 확인하고 규칙 결과를 재계산 대조한 뒤 한 트랜잭션으로 발행한다. 일시 장애는 TransientAnalysisError/TimeoutError/ConnectionError, 근거 부족은 ManualAnalysisError 또는 MANUAL_CHECK로 구분한다.
+2. `draft_review(ReviewContext) -> {drafts:{customer_id:message}}`. 서버가 준 tenant/판정/thread/고객 ID 목록과 기존 결정·재작성 대상만 사용한다. 공개 분석을 재실행하거나 스스로 업무를 생성하지 않는다. R4는 반환 문안과 고객 범위를 검증·저장하고 PB 승인 기록 이후 업무를 생성한다.
+
+현재 R2 AgentRuntime.start(rcept_no)는 이 포트가 아니다. R2가 조직 문맥·판정 식별·근거 보존에 맞춘 진입점을 제공해야 하며, R4가 구형 start를 새 포트로 위장하지 않는다. 기존 /runs·SSE·구형 승인 경로의 전환도 R2/R5와 별도 확인한다. 새 경로를 기존 UI가 자동 사용한다는 의미가 아니다.

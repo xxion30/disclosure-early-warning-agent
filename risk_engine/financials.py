@@ -60,4 +60,24 @@ def select_snapshot_signals(snapshots, filing_dates):
                    filing_dates[snapshot.rcept_no], snapshot.rcept_no)
             if st not in candidates or key > candidates[st][0]:
                 candidates[st] = (key, signal)
+    # Capital impairment is a policy exception: latest period OFS only, no CFS/older fallback.
+    cap = []
+    for snapshot in snapshots:
+        if snapshot.basis in ('CONSOLIDATED','SEPARATE') and 'CAPITAL_IMPAIRMENT' in snapshot.indicators and snapshot.period_kind in ('ANNUAL', 'QUARTER', 'YTD'):
+            match = re.fullmatch(r'(\d{4})(?:-Q([1-4]))?', snapshot.period)
+            if match:
+                cap.append(((int(match[1]), int(match[2] or '4'), snapshot.period_kind == 'ANNUAL'), snapshot))
+    if cap:
+        latest = max(period for period, _ in cap)
+        eligible = [snapshot for period, snapshot in cap if period == latest and snapshot.basis == 'SEPARATE']
+        if eligible:
+            chosen = max(eligible, key=lambda snap: (snap.revision, filing_dates[snap.rcept_no], snap.rcept_no))
+            signal = next(sig for sig in snapshot_signals(chosen, filing_dates[chosen.rcept_no])
+                          if sig['signal_type'] == 'CAPITAL_IMPAIRMENT')
+        else:
+            chosen = max((snap for period, snap in cap if period == latest), key=lambda snap: (snap.revision, snap.rcept_no))
+            signal = next(sig for sig in snapshot_signals(chosen, filing_dates[chosen.rcept_no])
+                          if sig['signal_type'] == 'CAPITAL_IMPAIRMENT')
+            signal = {**signal, 'detail': {}, 'selection_reason': 'latest_period_ofs_missing'}
+        candidates['CAPITAL_IMPAIRMENT'] = ((), signal)
     return [candidates[st][1] for st in sorted(candidates)]

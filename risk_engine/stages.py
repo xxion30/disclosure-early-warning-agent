@@ -145,6 +145,8 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
             continue
         title = ''.join(str(detail.get('title', '')).split())
         excluded = any(marker in title for marker in ('(종속회사의주요경영사항)', '(자회사의주요경영사항)'))
+        policy_pending = spec.get('enabled') is False
+        excluded |= policy_pending
         excluded |= any(word in f"{detail.get('title', '')} {detail.get('reason', '')}" for word in spec.get('exclude_words', []))
         resolved = detail.get('resolved') is True or detail.get('lifted') is True
         if resolved and not sig['evidence']:
@@ -175,7 +177,7 @@ def calculate(*, new_signals, history=(), as_of, rules=None):
         rows.append({'group': group.upper(), 'item': spec['label'], 'signal_type': st, 'event_id': sig['event_id'],
                      'rcept_no': sig.get('rcept_no'), 'filed_at': sig['filed_at'], 'points': points,
                      'raw_points': raw_points, 'weight': weight, 'active': not excluded and not resolved and bool(weight) and (group == 'red' or points > 0),
-                     'excluded': excluded, 'resolved': resolved, 'quote': detail.get('quote'), 'evidence': sig['evidence'], 'missing': missing})
+                     'excluded': excluded, 'policy_pending': policy_pending, 'resolved': resolved, 'quote': detail.get('quote'), 'evidence': sig['evidence'], 'missing': missing})
     incoming_ids = {id(item) for item in incoming}
     incoming = [sig for sig in versions.values() if id(sig) in incoming_ids]
     stage, active, ratio = judge(orange, yellow, red, rules)
