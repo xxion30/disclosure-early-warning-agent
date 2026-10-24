@@ -9,6 +9,7 @@ import { useAuthStore } from './stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const localDemo = import.meta.env.VITE_LOCAL_DEMO === 'true'
 // 가짜 데이터 모드 표시 (화면을 옮길 때마다 다시 확인)
 const isMock = computed(() => route.fullPath && mockMode())
 
@@ -22,6 +23,7 @@ function logout() {
 
 <template>
   <a href="#main-content" class="skip-link">본문 바로 가기</a>
+  <p v-if="localDemo" class="notice" role="status">로컬 시연 · 고객은 데모 자료이며 분석은 실제 API를 사용합니다. 시작 스크립트를 다시 실행하면 초기화됩니다.</p>
   <header v-if="auth.isLoggedIn" class="topbar">
     <div class="topbar-inner">
       <RouterLink to="/alerts" class="brand" aria-label="다치 홈">

@@ -3,6 +3,8 @@ WORKDIR /app
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+ARG VITE_LOCAL_DEMO=false
+ENV VITE_LOCAL_DEMO=$VITE_LOCAL_DEMO
 RUN npm run build
 
 FROM nginx:1.28-alpine

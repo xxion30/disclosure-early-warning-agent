@@ -1,111 +1,106 @@
-# DARTCH 실행·배포 (2026-10-24)
+# 로컬 시연 실행
 
-공시 수집 → 공개 위험 판정 → 조직별 안내문 검토 → 담당 PB 승인 → 연락 업무 순서다.
-직접 메시지를 발송하지 않으며 점수·가중치는 화면이나 설명 모델에 보내지 않는다.
+현재 사용자용 실행 방식은 Docker + PostgreSQL 하나다. 온라인 배포는 이번 범위가 아니다.
+시작 스크립트를 실행할 때마다 고정된 시연 DB `dartch_demo`를 삭제·재생성하고 기본 데이터를 적재한다.
+실행 중 새로고침·로그아웃·개별 컨테이너 재시작은 초기화하지 않는다.
 
-## 1. 설정
+## 최초 준비
+
+1. Docker Desktop을 설치하고 실행한다. Windows에서는 Linux 컨테이너를 사용한다.
+2. 저장소 최상위의 `.env.example`을 `.env`로 복사한다(기존 파일을 덮어쓰지 않는다).
+3. `.env`에 유효한 `OPENAI_API_KEY`, `DART_API_KEY`를 입력한다.
+
+```dotenv
+OPENAI_API_KEY=직접_발급받은_키
+DART_API_KEY=직접_발급받은_키
+ANTHROPIC_API_KEY=
+LLM_PRIMARY=gpt-5.4-mini
+LLM_FALLBACK=gpt-5.4-mini
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+# 기본 포트를 사용할 수 없을 때만 변경
+WEB_PORT=8080
+API_PORT=8000
+```
+
+모델명은 계정에서 접근 가능한 모델로 설정한다. 실제 키를 제출 소스·대화·로그에 넣지 않는다.
+Python, uv, Node.js, PostgreSQL을 호스트에 각각 설치할 필요는 없다. 최초 이미지 다운로드·빌드에는 인터넷과 시간이 필요하다.
+
+## 실행
+
+저장소 최상위에서 Windows PowerShell:
+
+```powershell
+.\start.ps1
+```
+
+PowerShell의 로컬 스크립트 실행 정책에 막히는 경우에만 별도 프로세스로 실행:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+macOS/Linux:
 
 ```bash
-uv sync --frozen
-# .env가 없는 새 환경에서만 복사한다. 기존 파일을 덮어쓰지 않는다.
-cp -n .env.example .env
-uv run python -m scripts.ops.prepare_release
+sh ./start.sh
 ```
 
-`.env`에 유효한 `DART_API_KEY`, `OPENAI_API_KEY`를 설정한다. 키는 대화·Git·로그에 넣지 않는다.
-`LLM_PRIMARY`/`LLM_FALLBACK`은 해당 계정에서 사용 가능한 모델로 설정한다.
-임베딩은 기본 `text-embedding-3-small`이다. 키 존재만으로 호출 성공을 보장하지 않는다.
-`uv run python -m scripts.ops.check_providers`는 키 값을 출력하지 않고 모델 메타데이터 접근과 작은 DART 목록 조회를 검사한다(생성/임베딩은 호출하지 않으며 DART 조회량은 사용한다). 실제 분석 성공은 별도 확인한다.
-`data/release.env`에는 무작위 JWT·PostgreSQL 비밀번호가 생성되며 재실행해도 교체하지 않는다.
-이 파일은 Git·Docker 이미지에서 제외된다. 분실·교체 전에는 운영 DB의 비밀번호 변경 절차가 필요하다.
+API 접근 검사·기본 공시 응답 검증 → 시연 DB 재생성 → 마이그레이션 → 기본 데이터 → 서버 기동 순서다.
+API 검사 또는 기본 공시 응답 검증 실패 시 이전 DB는 삭제하지 않는다. 서비스는 중지된 상태일 수 있으므로 설정 수정 후 시작 명령을 다시 실행한다.
+화면은 http://127.0.0.1:8080, API 문서는 http://127.0.0.1:8000/docs (포트 변경 시 해당 포트).
+`.env`의 키는 Compose `env_file`로 컨테이너에 직접 전달한다. 호스트 셸의 오래된 API 키는 이를 덮어쓰지 않는다.
+DB/MCP에는 호스트 공개 포트가 없고 화면/API도 loopback에만 연결된다.
 
-## 2. Docker 배포
+## 기본 자료와 실제 동작
+
+- `data/seed/customers.json`: 가상 PB 2명, 고객 20명, 보유 42건. 화면의 데모 계정 버튼과 일치한다.
+- P01: `p01@demo.local` / `demo1234`, 관리자 권한으로 수집·분석 가능.
+- P02: `p02@demo.local` / `demo1234`, 일반 PB로 담당 고객 접근을 확인한다.
+- `data/demo_companies.json`, `data/disclosures/*.json`: 기존 실제 기업·공시 메타데이터. 과거 기대 점수·영향도는 판정에 넣지 않는다.
+- 저장 원문·가짜 분석·사전 승인·연락 업무는 넣지 않는다. 원문은 실제 DART에서 가져와 임시 색인한다.
+- 시작 시 위니아 부도 공시 `20231005000522`의 `dfOcr` 사실을 실제 API에서 재조회해 저장하고, 이 1건만 분석 인계한다.
+- 나머지 기본 공시는 목록 자료이며 아직 수집 완료 인계된 자료가 아니다. 추가 분석은 화면의 보유 종목 공시 수집으로 실제 수집한 뒤 요청한다.
+- 실제 모델/임베딩 호출은 비용이 발생한다. 시작마다 초기 분석 1건도 반복된다. 추가 백필 수집은 다수 공시 분석을 만들 수 있다.
+- 기본 분석이 끝나기 전 경보 목록은 비어 있을 수 있다. 수동 확인·실패를 정상 분석 결과로 대체하지 않는다.
+
+시연: P01 로그인 → 고객 현황 → 분석 작업 상태/경보 → 공시 근거 → 안내문 생성 → 담당 고객 승인 → 연락 업무.
+P01/P02는 각자의 고객만 승인한다. 승인 전 연락 업무가 없어야 하고 반복 제출해도 중복 생성되면 안 된다.
+역사적 공시의 현재 판정은 기준일·감쇠·후속 자료에 따라 달라진다. 과거 정답 배지를 고정해서 보여주지 않는다.
+
+## 종료·재실행
 
 ```bash
-docker compose --env-file .env --env-file data/release.env up -d --build
+docker compose --env-file .env -p dartch-local-demo -f docker-compose.demo.yml stop
 ```
 
-새 Compose 프로젝트에는 별도의 PostgreSQL 볼륨이 생긴다. 기존 SQLite 데이터는 자동 이관하지 않는다.
-마이그레이션(현재 head `20261024_07`) → business/rag MCP health → API/DB worker → web 순서로 시작한다.
-화면은 `http://127.0.0.1:8080`, API는 `http://127.0.0.1:8000/docs`다.
-화면의 `/api`는 Nginx가 API로 전달한다. MCP와 DB는 외부 공개하지 않는다.
-`WEB_PORT`, `API_PORT`, `POSTGRES_PORT`로 호스트 포트를 바꿀 수 있다.
-운영 환경은 약한 JWT 비밀값과 fake/비 hosted 실행을 거부한다.
+종료는 현재 DB를 즉시 삭제하지 않는다. 다음에 시작 스크립트를 실행하면 시연 DB와 체크포인트를 함께 새로 만든다.
+즉 접속·새로고침·컨테이너 장애 재시작으로 데이터가 사라지지는 않는다.
+같은 시연을 복구하고 싶다면 시작 스크립트 대신 아래 명령으로 기존 컨테이너를 재개할 수 있다(일반 시연 시작 절차는 아님).
 
 ```bash
-docker compose --env-file .env --env-file data/release.env ps
-curl --fail http://127.0.0.1:8000/ready
+docker compose --env-file .env -p dartch-local-demo -f docker-compose.demo.yml start
 ```
 
-`/health`는 프로세스 확인, `/ready`는 DB 연결 및 실행기 생존 확인이다.
-공급자 키·한도·실제 공시 분석 성공까지 뜻하지 않는다.
-외부 서버에서는 HTTPS reverse proxy/도메인과 백업 위치를 먼저 준비한 뒤 loopback 화면 포트를 연결한다.
-외부 서버·도메인은 아직 지정 대기이며 로컬 기동을 외부 배포 완료로 간주하지 않는다.
+기존 `data/app.db`, `data/checkpoints.db`, `dartch-release-validation` 및 이전 배포 볼륨은 변경하지 않는다.
+전용 Compose 프로젝트/DB에만 사용하는 내부 접속 계정은 로컬 데모 전용이다. 이 구성을 온라인에 공개하지 않는다.
+`docker-compose.yml`은 과거 영구 저장 구성이며 이번 사용자 실행 경로가 아니다. 이전 절차는 [보존 문서](legacy/run-before-local-docker-demo.md)에 있다.
 
-## 3. 계정·보유 내역 준비
-
-기본 데모 계정을 자동 생성하지 않는다. 최초 관리자는 아래 명령으로 만든다.
-비밀번호는 터미널에서 숨김 입력하며 기존 계정은 덮어쓰지 않는다.
+## 문제 확인
 
 ```bash
-docker compose --env-file .env --env-file data/release.env exec api python -m scripts.ops.bootstrap_admin \
-  --tenant-id default --tenant-name MyCompany --pb-id admin --name Administrator --email admin@example.com
+docker compose --env-file .env -p dartch-local-demo -f docker-compose.demo.yml ps
+docker compose --env-file .env -p dartch-local-demo -f docker-compose.demo.yml logs --tail 80 api business rag
 ```
 
-추가 PB는 같은 명령에 `--role PB`를 붙여 같은 조직 소속으로 만든다. 고객·보유 JSON은 `data/imports/portfolio.json`에 둔다.
-첫 실행은 검증 후 rollback이고, `--apply`를 붙여야 저장된다. 존재하는 PB와 같은 조직의 고객만 받는다.
-제공된 고객·보유 종목을 upsert하며 입력에서 빠진 고객·종목을 삭제하지 않는다.
-매도·담당자 변경 등 운영 데이터 변경은 원장과 대조해 별도 관리해야 한다.
+키 검사 성공은 모델 메타데이터 접근 확인이며 실제 생성 성공까지 보장하지 않는다.
+401은 키/전달 경로, 403·404는 모델 권한, 429는 한도·결제 등을 확인한다. 민감한 로그를 공유하기 전 내용을 확인한다.
+검증 결과와 제한은 [작업 로그](log/2026-10-24-local-docker-demo.md)를 따른다.
 
-```json
-{"customers":[{"customer_id":"internal-customer-id","pb_id":"admin","name":"고객명","risk_profile":"안정형","total_assets":1000000,"holdings":[{"stock_code":"001570","eval_amount":100000,"on_credit":false}]}]}
-```
-
-위 값은 입력 형식 예시이며 실제 고객·공시 사실이 아니다. 실제 데이터를 Git에 넣지 않는다.
+시작 스크립트가 강제 종료되어 시작 잠금이 남았다면, 다른 시작 작업이 실제로 끝났는지 확인한 후에만 잠금을 제거한다. 이 명령은 DB를 삭제하지 않는다.
 
 ```bash
-docker compose --env-file .env --env-file data/release.env cp data/imports/portfolio.json api:/tmp/portfolio.json
-docker compose --env-file .env --env-file data/release.env exec api python -m scripts.ops.import_portfolio /tmp/portfolio.json --tenant-id default
-# 검증 결과를 확인한 다음 같은 명령에 --apply를 추가한다.
+docker rm dartch-local-demo-start-lock
 ```
 
-## 4. 실제 기능 확인
-
-1. 준비한 계정으로 로그인한다. 관리자는 수집 실행 버튼으로 보유 종목 공시 수집을 요청한다. ETF 등 corp_code 없는 종목은 제외 기록을 확인한다.
-2. `/collect/status`에서 DONE/PARTIAL/FAILED와 종목별 문제를 확인한다. 사실이 NULL이어도 분석 대상으로 인계되며 위험 없음으로 바꾸지 않는다.
-3. `/analysis/jobs`에서 PENDING/RUNNING/RETRY_WAIT/DONE/MANUAL_CHECK/FAILED를 확인한다. 기업별 순서대로 처리한다. 일시적 장애만 최초 포함 최대 3회 재시도한다.
-   재무 일부가 결측인 경우 검증된 위험은 표시할 수 있지만 작업은 MANUAL_CHECK로 남는다. 상세의 추가 확인 항목을 확인한다. 결측만 있는 판단 보류를 정상 완료로 취급하지 않는다.
-4. 경보 상세와 종목 상세에서 한국어 단계·근거·이번 변화를 확인한다. 원문 인용, API 사실, 재무 스냅샷 근거를 구분한다.
-5. 최신 조직별 검토에서 초안을 생성한다. 담당 고객별 승인·수정 승인·재작성·반려를 확인한다. 승인 전 연락 업무가 없어야 하며 반복 제출해도 중복 생성되면 안 된다.
-6. 다른 PB/조직의 고객·초안·승인은 접근할 수 없어야 한다. 확인함은 화면에서 받은 알림 버전으로 요청한다.
-
-관리자의 직접 분석은 먼저 수집된 접수번호를 `/analysis/jobs`로 요청한다.
-명시적 재분석은 새 UUID `reanalysis_request_id`를 사용한다. 기존 실패를 자동 무한 반복하지 않는다.
-현재 서비스에서 구형 `/runs`·구형 승인 경로는 사용하지 않는다.
-자동 수집이 필요하면 `docker compose --env-file .env --env-file data/release.env --profile integration up -d collector`를 실행한다(기본 09:05 KST).
-
-## 5. 로컬 개발 실행
-
-```bash
-uv run python scripts/ops/run_stack.py
-```
-
-실제 hosted 실행·DB 작업 실행기·DART 임시 색인을 연결한다. 기존 DB 초기화나 Chroma ingest는 하지 않는다.
-화면은 5173, API/MCP는 8000/8001/8002다. `--api-port`, `--business-port`, `--rag-port`, `--web-port`, `--no-web`을 지원한다.
-SQLite는 로컬용이고 PostgreSQL은 `DB_URL`, `CHECKPOINT_DB`를 설정한 뒤 migration을 적용한다.
-`--fake`는 명시적인 구형 화면 개발용이며 서비스 검증 결과에 포함하지 않는다.
-
-## 6. 검증·운영
-
-```bash
-uv run pytest -q
-cd web && npm ci && npm run build
-# 별도의 PostgreSQL 테스트 DB에서만 실행(무작위 스키마 생성·삭제)
-R4_POSTGRES_TEST_URL=postgresql+psycopg://user:password@localhost/test uv run pytest tests/business/test_postgres_review.py tests/business/test_premerge_postgres.py -q
-```
-
-수집은 커서·분석은 입력/규칙 버전·승인은 조직/검토 버전으로 재개한다. 새 공시가 없는 날도 기준일·규칙이 바뀌면 최신 공시를 재평가한다. 동일한 의미의 판정은 기존 조직별 검토·결정을 유지한다.
-DB 볼륨을 지우는 `down -v`, seed reset, 체크포인트 삭제는 일반 재시작 절차에 포함하지 않는다.
-정기 PostgreSQL dump와 복구 시험은 실제 배포 환경에서 설정한다.
-이전 실행·시연 기대값은 [과거 기록](legacy/run-before-service-integration.md)에 보존했다.
-최신 구현·실제 검증 범위와 남은 제약은 [통합 로그](log/2026-10-24-service-integration-release.md)를 확인한다.
+같은 Docker 엔진에서 시연 시작을 동시에 실행하지 않는다. 시작 잠금은 중복 초기화를 차단한다.

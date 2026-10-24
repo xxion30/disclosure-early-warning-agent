@@ -1,5 +1,7 @@
 # DB 테이블 계약
 
+> 로컬 시연 수명(2026-10-24): `docker-compose.demo.yml`의 PostgreSQL `dartch_demo`만 시작 스크립트에서 삭제·재생성한다. 동일 DB의 분석 체크포인트도 함께 초기화한다. 일반 테이블 구조/위험 정책은 변경하지 않는다. 접속·개별 컨테이너 재시작에서는 데이터를 보존하며 기존 배포 DB와 SQLite 파일은 초기화하지 않는다.
+
 > 전체 통합(2026-10-24): disclosures.event_link_evidence(JSON nullable)에 확인된 원공시 연결의 실제 짧은 인용을 보존한다. Alembic head는 20261024_07이다. analysis_jobs는 기업별 직렬 실행하며 PostgreSQL 회사 행 잠금과 RUNNING 조건으로 서로 다른 작업의 동시 실행도 막는다. 최신 상태보다 오래된 백필 판정은 state_version=0으로 보존하며 현재 승인에는 사용할 수 없다. 과거 본문 표는 이력이며 현재 모델은 shared/models/와 후속 계약 절을 따른다.
 
 > 담당: **R4** · 상태: 이전 프로젝트(Capstone) 계약을 그대로 옮긴 것이다. `contact_tasks`는 오후 회의로 되살아나고(`priority`·`impact_score` 제외), `level`은 `stage`로 바뀌며, `tenants`·`risk_states`·`financial_snapshots`·`collect_runs`가 추가된다.

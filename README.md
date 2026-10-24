@@ -26,8 +26,18 @@
 | R5 프론트·데모 | 박세호 | `web/`, `scripts/demo/`, 화면 검증·시연 |
 
 ## 빠른 시작
-실행 방법은 [docs/run.md](docs/run.md)를 본다.
-```bash
-uv sync                       # 의존성 설치
-uv run pytest -q              # 단위 테스트
+Docker Desktop 실행 후 `.env.example`을 `.env`로 복사하고 OpenAI·DART 키를 설정한다.
+
+```powershell
+# Windows PowerShell
+.\start.ps1
 ```
+
+```bash
+# macOS/Linux
+sh ./start.sh
+```
+
+화면은 http://127.0.0.1:8080. 데모 계정 버튼으로 로그인한다.
+**시작 스크립트는 이전 시연 DB를 초기화한다.** 실제 API·MCP를 사용하므로 호출 비용이 발생한다.
+자세한 준비·종료·시연 방법은 [docs/run.md](docs/run.md)를 본다.
