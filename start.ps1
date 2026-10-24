@@ -6,8 +6,11 @@ function Invoke-Demo {
     if ($LASTEXITCODE -ne 0) { throw 'Docker command failed. Check the error above.' }
 }
 Write-Host 'Starting a new demo. Previous demo data will be reset.'
-& docker image inspect python:3.11-slim *> $null
-if ($LASTEXITCODE -ne 0) {
+# Windows PowerShell 5.1 can turn redirected native stderr into a terminating
+# error before LASTEXITCODE is checked. Listing an absent image succeeds empty.
+$lockImage = @(& docker image ls --quiet python:3.11-slim)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot access Docker. Start Docker Desktop first.' }
+if ($lockImage.Count -eq 0) {
     & docker pull python:3.11-slim
     if ($LASTEXITCODE -ne 0) { throw 'Cannot download the startup lock image.' }
 }

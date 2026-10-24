@@ -138,3 +138,9 @@ Windows 네이티브 PowerShell 실행과 실제 브라우저 클릭은 여전�
 최종 시작 재실행 결과: 종료 코드 0, 새 DB OID, 이전 로그인 토큰 401, 업무 0건, 기존 SQLite 해시 유지, 새 실제 분석 DONE/RED, 화면 HTTP 200.
 `/alerts`, `/alerts/1`, `/states`, `/states/071460`, `/customers` 실제 응답에서 점수·정렬값·영향도 필드가 노출되지 않는 것도 재귀 검사했다.
 시연 스택은 기본 분석 완료·승인 업무 0건 상태로 유지하고, 격리 회귀용 PostgreSQL 서버만 종료했다.
+
+## Windows 최초 실행 오류 보완
+
+사용자의 Windows PowerShell 실행에서 `docker image inspect ... *> $null`이 이미지 부재를 NativeCommandError로 올려, `$ErrorActionPreference = Stop`에 의해 다운로드 분기 전에 중단됐다.
+`docker image ls --quiet`로 바꿔 이미지 부재를 정상 빈 결과로 판정하고, Docker 자체 접근 실패와 분리했다.
+존재하지 않는 이미지에 대한 해당 Docker 명령이 종료 코드 0/빈 결과를 주는 것을 확인하고 diff 검사를 통과했다. Windows 네이티브 전체 재실행은 사용자 컴퓨터에서 확인이 필요하다.
