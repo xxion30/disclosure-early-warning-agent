@@ -97,6 +97,7 @@ const summary = computed(() => `기준일까지 12개월 공시 ${dots.value.len
           <div class="dtl-row">
             <span class="dtl-date">{{ t.filed_at }}</span>
             <span class="dtl-kind" :class="`dtl-kind-${t.kind}`">{{ TIMELINE_KINDS[t.kind] || '공시' }}</span>
+            <span v-if="t.reference_only" class="dtl-ref" title="자회사·종속회사 공시는 단계에 반영하지 않고 참고로만 보여 줘요">참고 · 자회사</span>
             <strong class="dtl-title">{{ t.title }}</strong>
           </div>
           <div v-if="t.stage_after" class="dtl-change">
@@ -114,6 +115,7 @@ const summary = computed(() => `기준일까지 12개월 공시 ${dots.value.len
         <li v-for="t in older" :key="t.rcept_no">
           <span class="dtl-date">{{ t.filed_at }}</span>
           <span v-if="t.kind !== 'other'" class="dtl-kind" :class="`dtl-kind-${t.kind}`">{{ TIMELINE_KINDS[t.kind] }}</span>
+          <span v-if="t.reference_only" class="dtl-ref">참고 · 자회사</span>
           <a v-if="t.url" :href="t.url" target="_blank" rel="noopener" class="dtl-title">{{ t.title }}</a>
           <span v-else class="dtl-title">{{ t.title }}</span>
         </li>
@@ -159,6 +161,7 @@ const summary = computed(() => `기준일까지 12개월 공시 ${dots.value.len
 .dtl-kind { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--neutral-soft); color: var(--muted); }
 .dtl-kind-risk { background: var(--warn-soft); color: var(--warn); }
 .dtl-kind-resolution { background: var(--ok-soft); color: var(--ok); }
+.dtl-ref { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
 .dtl-title { font-size: 14px; overflow-wrap: anywhere; }
 .dtl-change { font-size: 13px; color: var(--text); background: var(--surface-2); border-radius: 10px; padding: 6px 10px; align-self: flex-start; }
 .dtl-link { font-size: 13px; font-weight: 600; }

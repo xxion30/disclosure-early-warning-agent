@@ -31,6 +31,11 @@ async function load() {
 
 // 지난 진행 이벤트를 그리고, 아직 실행 중이면 SSE로 이어 받는다
 async function loadProgress() {
+  // 가짜 데이터 모드의 예시 경보는 실제 서버에 실행 기록이 없다 (불러도 404)
+  if (alert.value?.mock) {
+    hasRunHistory.value = false
+    return
+  }
   try {
     const run = await api.getRun(alert.value.rcept_no)
     hasRunHistory.value = true
@@ -76,7 +81,7 @@ const customers = computed(() => alert.value?.customers || [])
 const keyReason = computed(() => stageText(alert.value?.summary?.headline) || alert.value?.reasons?.[0]?.item || '핵심 사유를 확인할 수 없어요. 공시 원문을 확인해 주세요.')
 const primaryEvidence = computed(() => evidence.value[0])
 const dartUrl = (rcept) => `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(rcept)}`
-const evidenceUrl = (e) => e?.rcept_no ? dartUrl(e.rcept_no) : alert.value?.disclosure?.url
+const evidenceUrl = (e) => (alert.value?.mock ? null : e?.rcept_no ? dartUrl(e.rcept_no) : alert.value?.disclosure?.url)
 const disclosureUrl = computed(() => alert.value?.disclosure?.url || (alert.value?.rcept_no && !alert.value?.mock ? dartUrl(alert.value.rcept_no) : ''))
 // 인용이 다른(과거) 공시에서 왔으면 링크 이름으로 알려 준다
 const evidenceLinkLabel = (e) => (e?.rcept_no && e.rcept_no !== alert.value?.rcept_no ? '인용한 공시 원문' : 'DART 원문 확인')
@@ -181,7 +186,7 @@ const customerState = computed(() => {
         <span class="muted section-note">등급은 규칙으로 정해요. AI는 등급을 바꾸지 않아요.</span>
       </div>
       <div class="table-wrap">
-        <ScoreBreakdown :reasons="alert.reasons" :combo-upgraded="alert.combo_upgraded" />
+        <ScoreBreakdown :reasons="alert.reasons" :combo-upgraded="alert.combo_upgraded" :linkable="!alert.mock" />
       </div>
     </section>
 

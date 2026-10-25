@@ -8,11 +8,13 @@ import { useRouter } from 'vue-router'
 import { api, errorMessage } from '../api/client'
 import { mockMode } from '../api/mock'
 import DisclosureTimeline from '../components/DisclosureTimeline.vue'
+import EvidenceItem from '../components/EvidenceItem.vue'
 import StageBadge from '../components/StageBadge.vue'
-import { formatTime, ITEM_GROUPS, itemStatus, missingNames, signalLabel, STAGES, stagesOf, stageText } from '../labels'
+import { basisLabel, DISPOSITION_LABELS, uniqueEvidence, formatTime, ITEM_GROUPS, itemStatus, missingNames, signalLabel, STAGES, stagesOf, stageText } from '../labels'
 
 const props = defineProps({ stockCode: { type: String, required: true } })
 const router = useRouter()
+const isDev = import.meta.env.DEV // 개발 서버에서만 개발용 안내를 보인다 (배포 빌드에서는 false)
 
 const state = ref(null)
 const error = ref('')
@@ -120,6 +122,11 @@ async function startReview() {
   }
 }
 
+// 제목 분류 표시. candidate(일반 위험 공시)는 따로 표시하지 않는다. reference_only만 오는 응답도 참고로 표시한다
+const disposition = (it) => DISPOSITION_LABELS[it.title_disposition] || (it.reference_only ? DISPOSITION_LABELS.reference : null)
+// 기준별 확인 상태 (basis_checks[].status)
+const BASIS_STATUS = { OK: '확인됨', MISSING: '값 없음', MANUAL_CHECK: '확인 필요', NOT_APPLICABLE: '해당 없음', NEEDS_CHECK: '확인 필요' }
+
 const latestActive = computed(() => [...activeItems.value].sort((a, b) => String(b.filed_at || '').localeCompare(String(a.filed_at || '')))[0] || null)
 
 // 타임라인: API는 접수번호·제목·일자·링크만 준다. 위험 항목·해소 근거와 접수번호를 맞춰 종류와 색을 붙인다
@@ -148,7 +155,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
   <section v-if="notFound" class="card empty-state">
     <h1>이 종목의 위험 상태를 볼 수 없어요</h1>
     <p class="muted">내 담당 고객이 보유한 종목이 아니거나, 아직 위험 판정이 없는 종목이에요.</p>
-    <p v-if="!mockMode()" class="muted">화면만 먼저 보려면 주소에 <code>?mock=stages</code>를 붙여 예시 종목을 열어 보세요.</p>
+    <p v-if="isDev && !mockMode()" class="muted">(개발 서버에서만 보이는 안내) 화면만 먼저 보려면 주소에 <code>?mock=stages</code>를 붙여 예시 종목을 열어 보세요.</p>
   </section>
 
   <template v-if="state">
@@ -236,13 +243,7 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
     </div>
     <section v-if="state.resolution_evidence?.length" class="card" aria-label="해소 근거">
       <div class="card-head"><h2>해소 근거</h2></div>
-      <figure v-for="(e, j) in state.resolution_evidence" :key="j" class="quote">
-        <blockquote>“{{ e.quote }}”</blockquote>
-        <figcaption>
-          <span v-if="e.source" class="chip strong">{{ e.source }}</span>
-          <a v-if="dartUrl(e.rcept_no)" :href="dartUrl(e.rcept_no)" target="_blank" rel="noopener">DART 원문 확인</a>
-        </figcaption>
-      </figure>
+      <EvidenceItem v-for="(e, j) in uniqueEvidence(state.resolution_evidence)" :key="j" :evidence="e" :linkable="!state.mock" />
     </section>
 
     <!-- 위험 항목과 근거 -->
@@ -254,21 +255,29 @@ const dartUrl = (rcept) => (rcept && !state.value?.mock ? `https://dart.fss.or.k
       <p v-if="!groups.length" class="muted">지금은 위험 항목이 없어요.</p>
       <div v-for="g in groups" :key="g.group" class="item-group">
         <h3 class="group-title"><span class="chip-dot" :class="g.group.toLowerCase()" aria-hidden="true"></span>{{ ITEM_GROUPS[g.group].label }} · {{ ITEM_GROUPS[g.group].name }}</h3>
-        <article v-for="(it, k) in g.items" :key="it.event_id || k" class="risk-item" :class="{ inactive: !it.active }">
+        <article v-for="(it, k) in g.items" :key="it.event_id || k" class="risk-item" :class="{ inactive: !it.active, reference: it.reference_only }">
           <div class="risk-head">
             <strong>{{ it.item }}</strong>
             <span class="badge" :class="`tone-${itemStatus(it).tone}`">{{ itemStatus(it).text }}</span>
+            <!-- 제목 분류: 참고(자회사·종속회사)·관찰·후속·확인 필요 (R1 위험 정책 3-1, 요청 3번) -->
+            <span v-if="disposition(it)" class="badge" :class="`tone-${disposition(it).tone}`" :title="disposition(it).hint">{{ disposition(it).text }}</span>
+            <span v-if="basisLabel(it.fs_div)" class="badge tone-info" title="어느 재무 기준으로 켜졌는지">{{ basisLabel(it.fs_div) }} 기준으로 켜짐</span>
             <span v-if="it.filed_at" class="sub">{{ it.filed_at }}</span>
           </div>
+          <p v-if="it.reference_only" class="reference-note">자회사·종속회사 공시라 단계와 점수에는 반영하지 않고 참고로만 보여 줘요.</p>
+          <!-- 개별·연결을 모두 확인하는 지표(자본잠식): 기준별 확인 결과 -->
+          <ul v-if="it.basis_checks?.length" class="basis-list" aria-label="기준별 확인 결과">
+            <li v-for="(b, bi) in it.basis_checks" :key="bi" :class="{ chosen: b.fs_div && b.fs_div === it.fs_div }">
+              <strong>{{ basisLabel(b.fs_div) || '기준 미상' }}</strong>
+              <span v-if="b.period">{{ b.period }}</span>
+              <span v-if="b.impairment_pct !== null && b.impairment_pct !== undefined">자본잠식률 {{ Math.round(b.impairment_pct * 10) / 10 }}%</span>
+              <span v-if="b.status" class="sub">{{ BASIS_STATUS[b.status] || b.status }}</span>
+              <span v-if="b.fs_div && b.fs_div === it.fs_div" class="chosen-mark">이 기준으로 판정</span>
+            </li>
+          </ul>
           <p v-if="it.explanation" class="risk-text">{{ stageText(it.explanation) }}</p>
           <p v-if="it.missing?.length" class="notice warn">찾지 못한 값: {{ missingNames(it).join(', ') }} — 공시 원문을 직접 확인해 주세요.</p>
-          <figure v-for="(e, j) in it.evidence" :key="j" class="quote">
-            <blockquote>“{{ e.quote }}”</blockquote>
-            <figcaption>
-              <span v-if="e.source" class="chip strong">{{ e.source }}</span>
-              <a v-if="dartUrl(e.rcept_no || it.rcept_no)" :href="dartUrl(e.rcept_no || it.rcept_no)" target="_blank" rel="noopener">DART 원문 확인</a>
-            </figcaption>
-          </figure>
+          <EvidenceItem v-for="(e, j) in uniqueEvidence(it.evidence)" :key="j" :evidence="e" :rcept-no="it.rcept_no" :linkable="!state.mock" />
           <p v-if="!it.evidence?.length" class="notice warn">근거 인용을 찾지 못했어요. 추측하지 않고 수동 확인으로 남겼어요.</p>
         </article>
       </div>
@@ -333,6 +342,12 @@ button.review-link { border: none; font-size: 15px; }
 .chip-dot.yellow { background: var(--caution-dot); }
 .risk-item { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .risk-item.inactive { background: var(--surface-2); }
+.risk-item.reference { border-style: dashed; }
+.reference-note { margin: 0; font-size: 13px; color: var(--muted); }
+.basis-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.basis-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); font-size: 14px; }
+.basis-list li.chosen { background: var(--blue-soft); }
+.chosen-mark { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--blue-strong); }
 .risk-item.inactive .risk-text { color: var(--muted); }
 .risk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .risk-head strong { font-size: 16px; }

@@ -86,7 +86,9 @@ async function load({ keepError = false } = {}) {
   }
 }
 onMounted(load)
-onMounted(async () => {
+onMounted(loadInfo)
+async function loadInfo() {
+  alertInfo.value = null
   try {
     if (!isOrg.value) alertInfo.value = await api.getAlert(props.assessmentId)
     else if (props.stockCode) {
@@ -96,8 +98,18 @@ onMounted(async () => {
   } catch {
     // 부가 정보가 없어도 안내문은 검토할 수 있다
   }
+}
+// 같은 화면에서 다른 경보·검토로 바뀌면(주소만 바뀌면 화면을 다시 만들지 않는다) 고른 결정을 비우고 다시 불러온다
+watch(() => [props.assessmentId, props.reviewId], () => {
+  for (const key of Object.keys(form)) delete form[key]
+  data.value = null
+  review.value = null
+  message.value = ''
+  approvedSubmitted.value = false
+  showProgress.value = false
+  load()
+  loadInfo()
 })
-watch(() => props.reviewId, () => { if (isOrg.value) load() })
 
 // 새 조직별 검토: PB가 눌러야 초안을 만든다 (R2 실행기가 연결되지 않은 서버는 503)
 async function runDrafts() {
@@ -188,6 +200,15 @@ async function submit() {
   if (isOrg.value) return submitOrg(decisions)
   try {
     const res = await api.decide(props.assessmentId, decisions)
+    if (res.mock) {
+      // 가짜 데이터 모드: 실행 흐름이 없으니 진행 이벤트를 기다리지 않고 바로 다시 불러온다
+      submitting.value = false
+      message.value = `${decisions.length}건 결정을 반영했어요. (예시 데이터)`
+      approvedSubmitted.value = decisions.some((d) => d.action === 'approve')
+      for (const d of decisions) form[d.customer_id].choice = null
+      await load()
+      return
+    }
     showProgress.value = true
     connect(res.rcept_no, {
       doneBefore: MAIN_PATH.slice(0, MAIN_PATH.indexOf('pb_approval')),

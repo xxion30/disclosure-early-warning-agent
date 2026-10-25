@@ -61,8 +61,8 @@ export const api = {
   getState: (code) => (mockMode() && mockApi.isMockStock(code) ? mockApi.getState(code) : http.get(`/states/${code}`).then((r) => r.data)),
   // 읽음 표시: 지금 본 알림 버전(version)까지만 읽음으로 남긴다 (R4 계약)
   ackState: (code, version) => (mockMode() && mockApi.isMockStock(code) ? mockApi.ackState(code, version) : http.post(`/states/${code}/ack`, { version }).then((r) => r.data)),
-  getDrafts: (id) => http.get(`/alerts/${id}/drafts`).then((r) => r.data),
-  decide: (id, decisions) => http.post(`/alerts/${id}/decision`, { decisions }).then((r) => r.data),
+  getDrafts: (id) => (mockMode() && mockApi.isMockId(id) ? mockApi.getDrafts(id) : http.get(`/alerts/${id}/drafts`).then((r) => r.data)),
+  decide: (id, decisions) => (mockMode() && mockApi.isMockId(id) ? mockApi.decide(id, decisions) : http.post(`/alerts/${id}/decision`, { decisions }).then((r) => r.data)),
 
   // 새 조직별 검토 (R4 계약 "Pre-merge 실행·조직 검토"). 초안 생성은 R2 실행기가 연결돼야 동작하고, 없으면 서버가 503을 준다
   createReview: (publicAssessmentId) => (mockMode() && mockApi.isMockReview(publicAssessmentId) ? mockApi.createReview(publicAssessmentId) : http.post(`/public-assessments/${publicAssessmentId}/reviews`).then((r) => r.data)),

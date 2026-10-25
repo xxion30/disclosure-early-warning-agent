@@ -22,16 +22,22 @@ const GROUPS = [
   { label: 'PB 검토', nodes: ['pb_approval'] },
   { label: '업무 생성', nodes: ['save_rejection', 'create_tasks', 'finalize'] },
 ]
-const statusLabels = { todo: '대기', running: '진행 중', waiting: '승인 대기', done: '완료', failed: '실패', manual: '확인 필요', skipped: '대상 아님' }
+const statusLabels = { todo: '대기', running: '진행 중', waiting: '승인 대기', done: '완료', partial: '일부 완료', failed: '실패', manual: '확인 필요', skipped: '대상 아님' }
 const groups = computed(() => GROUPS.map((group, index) => {
   const states = group.nodes.map((node) => props.state.nodes[node]).filter(Boolean)
   const laterStarted = GROUPS.slice(index + 1).some((g) => g.nodes.some((node) => props.state.nodes[node]))
+  // 이 묶음에서 시작한 단계가 모두 끝났는지. 마지막 묶음(업무 생성)은 뒤 묶음이 없어 이 값으로만 끝을 안다
+  const allDone = states.length > 0 && states.every((s) => s === 'done')
+  // 일부 고객만 결정하면 업무 생성을 마친 뒤 다시 PB 승인 대기로 돌아간다
+  const waitingBefore = GROUPS.slice(0, index).some((g) => g.nodes.some((node) => props.state.nodes[node] === 'waiting'))
   let status = 'todo'
   if (states.includes('failed')) status = 'failed'
   else if (states.includes('manual')) status = 'manual'
   else if (states.includes('waiting')) status = 'waiting'
   else if (props.state.last === 'done') status = states.length ? 'done' : 'skipped'
   else if (laterStarted) status = 'done'
+  // 실행 중에는 다음 단계 시작 직전에 잠깐 모두 끝난 것처럼 보일 수 있어, 승인 대기로 멈춘 뒤에만 적용한다
+  else if (allDone && props.state.last === 'waiting_approval') status = waitingBefore ? 'partial' : 'done'
   else if (states.length) status = 'running'
   return { ...group, status }
 }))
