@@ -5,27 +5,34 @@
 // 가짜 모드처럼 {item, points}만 있어도 깨지지 않는다.
 import { computed } from 'vue'
 
+import { uniqueEvidence } from '../labels'
+
+import EvidenceItem from './EvidenceItem.vue'
+
 const props = defineProps({
   reasons: { type: Array, default: () => [] },
   totalScore: { type: Number, default: null },
   comboUpgraded: { type: Boolean, default: false },
+  linkable: { type: Boolean, default: true }, // 가짜 데이터 모드처럼 접수번호가 가짜면 DART 링크를 만들지 않는다
 })
 
 const GROUPS = {
   BASE: { label: '재무 상태', hint: '직전 사업보고서 재무제표', cls: 'g-base' },
   A: { label: '확정 악재', hint: '점수와 상관없이 등급 고정', cls: 'g-a' },
   B: { label: '숨은 신호', hint: '공시에서 찾은 위험 신호', cls: 'g-b' },
+  // 새 단계 항목 묶음 (종목 상세와 같은 이름)
+  RED: { label: '즉시', hint: '한 건만 있어도 경보', cls: 'g-a' },
+  ORANGE: { label: '사건', hint: '사건성 공시', cls: 'g-b' },
+  YELLOW: { label: '재무', hint: '재무 지표', cls: 'g-base' },
 }
 
 const num = (v) => (v == null || Number.isNaN(Number(v)) ? null : Number(Number(v).toFixed(2)))
 const pct = (w) => `${Math.round(Number(w) * 100)}%`
-const dartUrl = (rcept) => `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${rcept}`
-const short = (s, n = 90) => (s && s.length > n ? `${s.slice(0, n)}…` : s)
 
 const rows = computed(() =>
   (props.reasons || []).map((r) => {
     const g = GROUPS[r.group] || { label: '항목', hint: '', cls: 'g-b' }
-    const evidence = Array.isArray(r.evidence) ? r.evidence : []
+    const evidence = uniqueEvidence(r.evidence)
     const detail = []
     if (r.group === 'A') {
       detail.push('확정 악재: 점수와 상관없이 경보 등급이 정해지는 사건')
@@ -60,7 +67,7 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
     <thead>
       <tr>
         <th scope="col">위험 항목</th>
-        <th scope="col">근거 인용</th>
+        <th scope="col">근거</th>
       </tr>
     </thead>
     <tbody>
@@ -78,20 +85,15 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
           <div v-if="r.note" class="calc" :class="{ warn: r.needsCheck }">{{ r.note }}</div>
         </td>
         <td class="evidence">
-          <!-- 발표 때 근거가 바로 보이도록 첫 인용은 펼쳐 두고, 나머지는 접는다 -->
-          <figure v-if="r.evidence.length" class="quote">
-            <blockquote :title="r.evidence[0].quote">“{{ short(r.evidence[0].quote, 140) }}”</blockquote>
-            <figcaption>
-              <a v-if="r.rcept" :href="dartUrl(r.rcept)" target="_blank" rel="noopener" class="src">DART 원문 {{ r.rcept }}</a>
-              <span v-if="r.evidence[0].source" class="chip">{{ r.evidence[0].source }}</span>
-            </figcaption>
-            <details v-if="r.evidence.length > 1 || r.evidence[0].quote?.length > 140">
-              <summary>{{ r.evidence.length > 1 ? `인용 ${r.evidence.length - 1}개 더 보기` : '전체 문장 보기' }}</summary>
-              <blockquote v-if="r.evidence[0].quote?.length > 140">“{{ r.evidence[0].quote }}”</blockquote>
-              <blockquote v-for="(e, j) in r.evidence.slice(1)" :key="j">“{{ e.quote }}”<small> · {{ e.source }}</small></blockquote>
+          <!-- 발표 때 근거가 바로 보이도록 첫 근거는 펼쳐 두고, 나머지는 접는다. API 근거(kind:'api')도 같은 부품이 그린다 -->
+          <template v-if="r.evidence.length">
+            <EvidenceItem :evidence="r.evidence[0]" :rcept-no="r.rcept" :clamp="140" :linkable="linkable" dense />
+            <details v-if="r.evidence.length > 1" class="more-evidence">
+              <summary>근거 {{ r.evidence.length - 1 }}개 더 보기</summary>
+              <EvidenceItem v-for="(e, j) in r.evidence.slice(1)" :key="j" :evidence="e" :rcept-no="r.rcept" :linkable="linkable" dense />
             </details>
-          </figure>
-          <span v-else class="muted">근거 인용 없음</span>
+          </template>
+          <span v-else class="muted">근거 없음</span>
         </td>
       </tr>
     </tbody>
@@ -135,6 +137,8 @@ const fixedLevels = computed(() => rows.value.map((r) => r.fixedLevel).filter(Bo
 .evidence .quote blockquote { font-size: 15px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
 .evidence summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .evidence details blockquote { margin-top: 6px; }
+.more-evidence { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.more-evidence > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .empty-note { margin: 0; padding: 0 24px 16px; }
 @media (max-width: 640px) { .empty-note { padding: 0 16px 16px; } }
 tfoot td { border-top: 2px solid var(--border); }

@@ -119,6 +119,8 @@ export const COLLECT_STATUS = {
 export function itemStatus(it) {
   if (it.resolved) return { text: '해소됨', tone: 'ok' }
   if (it.active) return { text: '지금 판정에 반영', tone: 'info' }
+  // 참고·후속 공시처럼 이유가 따로 붙는 항목은 "기간 지남"으로 오해하지 않게 짧게 (이유는 분류 배지가 말한다)
+  if (it.reference_only || (it.title_disposition && it.title_disposition !== 'candidate')) return { text: '반영 안 함', tone: 'muted' }
   return { text: '반영 안 함 (기간 지남 등)', tone: 'muted' }
 }
 // 공시 타임라인 종류
@@ -166,6 +168,60 @@ export const STATUS_GUIDE = {
     title: '아직 처리 중이에요',
     text: '분석이 끝나면 위험 평가와 대상 고객을 확인할 수 있어요.',
   },
+}
+
+// ---- 근거 표시 (R4 계약 "R4 hosted 연결과 근거 표시", docs/contracts/api.md) ----
+// items[].evidence는 문서 근거(source·quote·rcept_no·location) 또는 API 근거(kind:'api', api·field·value·unit·period·basis…)다
+export const isApiEvidence = (e) => e?.kind === 'api'
+// 같은 근거가 여러 판단(예: 감사의견 '의견'과 '계속기업')에 겹쳐 붙어 오면 한 번만 보여 준다
+export function uniqueEvidence(list) {
+  const seen = new Set()
+  return (Array.isArray(list) ? list : []).filter((e) => {
+    if (!e || typeof e !== 'object') return false
+    const key = isApiEvidence(e)
+      ? ['api', e.api, e.field, e.rcept_no, e.row_key, e.period, e.basis, JSON.stringify(e.value)].join('|')
+      : ['doc', e.source, e.rcept_no, e.location, (e.quote || '').trim()].join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+// DART API 이름 (collector/facts.py SPECS 기준)
+export const API_LABELS = {
+  piicDecsn: '유상증자 결정', cvbdIsDecsn: '전환사채 발행 결정', bdwtIsDecsn: '신주인수권부사채 발행 결정', exbdIsDecsn: '교환사채 발행 결정',
+  crDecsn: '감자 결정', lwstLg: '소송 등의 제기', cmpMgDecsn: '회사 합병 결정', tsstkDpDecsn: '자기주식 처분 결정',
+  dfOcr: '부도 발생', ctrcvsBgrq: '회생절차 개시신청', dsRsOcr: '해산사유 발생', bnkMngtPcbg: '채권은행 관리절차 개시', bsnSp: '영업정지',
+  fnlttSinglAcntAll: '재무제표', accnutAdtorNmNdAdtOpinion: '감사의견',
+}
+// DART 항목 코드와 계산식 → PB가 읽는 이름. 모르는 항목은 원래 이름을 그대로 보여 준다
+export const FIELD_LABELS = {
+  nstk_ostk_cnt: '신주 수(보통주)', bfic_tisstk_ostk: '증자 전 주식 수(보통주)', ic_mthn: '증자 방식',
+  'nstk_ostk_cnt ÷ bfic_tisstk_ostk × 100': '증자 비율(보통주)', "ic_mthn에 '제3자배정' 포함 여부": '제3자배정 여부',
+  cr_rt_ostk: '감자 비율(보통주)', cr_rt_estk: '감자 비율(종류주)', bd_fta: '사채 권면 총액', cv_prc: '전환가액',
+  act_mktprcfl_cvprc_lwtrsprc: '전환가액 최저 조정가액', 'act_mktprcfl_cvprc_lwtrsprc < cv_prc': '전환가액 조정(리픽싱) 조항',
+  df_amt: '부도 금액', bsnsp_amt: '영업정지 매출액', sl_vs: '영업정지 매출 비중',
+}
+export const apiLabel = (api) => API_LABELS[api] || api || 'DART API'
+export const fieldLabel = (field) => FIELD_LABELS[field] || field || '-'
+// 재무 기준 (fs_div·basis)
+export const BASIS_LABELS = { CFS: '연결', OFS: '개별', CONSOLIDATED: '연결', SEPARATE: '개별' }
+export const basisLabel = (b) => BASIS_LABELS[b] || b || ''
+/** API 근거 값 → 읽기 쉬운 글자 (실제 금액·비율이며 점수가 아니다) */
+export function factValue(value, unit) {
+  if (value === null || value === undefined || value === '') return '-'
+  if (typeof value === 'boolean') return value ? '예' : '아니오'
+  const n = typeof value === 'number' ? value : Number(value)
+  if (unit === '%' && Number.isFinite(n)) return `${Math.round(n * 100) / 100}%`
+  if (unit === '원' && Number.isFinite(n)) return formatWon(n)
+  if (unit === '주' && Number.isFinite(n)) return `${n.toLocaleString()}주`
+  return unit ? `${value} ${unit}` : String(value)
+}
+// 제목 분류 (items[].title_disposition). candidate는 일반 위험 공시라 따로 표시하지 않는다
+export const DISPOSITION_LABELS = {
+  watch: { text: '관찰로 분류', tone: 'muted', hint: '풍문·보도 관련 정지처럼 경보가 아니라 관찰로 남기는 공시예요' },
+  timeline: { text: '후속 공시 · 타임라인에만', tone: 'muted', hint: '이미 켜진 사건의 후속·해제 공시라 새 경보를 만들지 않아요' },
+  reference: { text: '참고 · 자회사·종속회사 공시', tone: 'outline', hint: '자회사·종속회사 공시는 단계와 점수에 반영하지 않고 참고로만 보여 줘요' },
+  needs_check: { text: '신규·후속 확인 필요', tone: 'warn', hint: '제목만으로는 새 사건인지 후속인지 정할 수 없어 사람이 확인해야 해요' },
 }
 
 export function formatWon(n) {

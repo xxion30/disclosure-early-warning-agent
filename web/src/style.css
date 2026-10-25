@@ -247,6 +247,8 @@ button.block { width: 100%; }
 .progress .dot { width: 8px; height: 8px; background: #c5cad3; }
 .progress .step-done { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
 .progress .step-done .dot { background: var(--ok-dot); }
+.progress .step-partial { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.progress .step-partial .dot { background: var(--ok-dot); opacity: .55; }
 .progress .step-running { background: var(--blue-soft); color: var(--blue-strong); font-weight: 600; }
 .progress .step-running .dot { background: var(--blue); animation: pulse 1s infinite; }
 .progress .step-waiting { background: var(--blue-strong); color: #fff; font-weight: 700; }
