@@ -1,326 +1,212 @@
-# 공시 조기경보 에이전트 — 아키텍처 설계서
+# DARTCH 아키텍처
 
-증권사 PB를 위한 B2B 에이전트의 전체 AI 아키텍처 설계와 ISO/IEC 25010 품질 특성별 설계·검증 근거를 정리한다.
-각 항목은 **설계 결정 → 구현 위치(파일) → 검증 증거(테스트·실행 결과) → 한계**를 함께 적었다. 구현과 다른 내용은 쓰지 않았고, 아직 못 한 것은 "한계"에 그대로 남겼다.
+증권사 PB가 고객 보유 종목의 공시 위험을 조기에 확인하고, 근거와 고객 안내문을 검토한 뒤 연락 업무를 관리하도록 돕는 서비스다.
 
-- 팀 약속(테이블·도구·State)은 [CLAUDE.md](../CLAUDE.md), Agent 연동 경계는 [docs/contracts/agent.md](../docs/contracts/agent.md), 실행·검증은 [README.md](../README.md)
-- 검증 증거: `uv run pytest -q`(202 통과), `uv run python scripts/ops/verify_all.py`(33개 항목), `eval/results/scenario_b.md`(데모 회사 5개)
+이 문서는 [README](../README.md)의 실행 방법·기능 범위·한계를 기준으로 구성도와 처리 흐름을 설명한다. API 상세는 [api.md](api.md), 데이터 원천·개인정보는 [SOURCES.md](../data/SOURCES.md)를 따른다. 코드에 있는 구성과 실제 외부 시스템까지 검증한 범위는 구분한다.
 
----
+## 1. 설계 원칙
 
-## 1. 설계 기준 (요구 → 결정)
+| 원칙 | 구현 |
+| --- | --- |
+| 점수·단계는 규칙이 계산 | risk_engine/rules.yaml·stages.py·financials.py. AI가 숫자·최종 단계를 결정하지 않음 |
+| AI는 사실·텍스트 조건·근거·초안 담당 | agent/의 사실·조건 추출, 근거 검증, 설명·안내문 노드 |
+| 근거 부족은 수동 확인 | 문서 인용·접수번호·위치·해시·API 원천 검증. 필수 값 누락을 0이나 false로 채우지 않음 |
+| 공개 분석과 조직별 고객 대응 분리 | 공개 판정은 공통 결과로 저장, 고객 초안·결정·업무는 조직별 검토로 분리 |
+| PB 승인 전 연락 업무 생성 금지 | 기존 Graph 승인 대기·재개, 새 조직 검토의 권한·버전 검사와 DB 저장 |
+| 고객명은 모델 입력과 분리 | 마스킹과 {고객명} 자리표시. 공개 공시 원문의 모든 개인 식별 정보 제거와는 별개 |
+| 권한과 최신성을 서버가 검사 | JWT·조직·담당 보유 종목·고객·판정 버전·검토 버전 검사 |
 
-| 요구 | 아키텍처 결정 | 구현 위치 |
-| --- | --- | --- |
-| LLM 응답은 수 초~수십 초 걸린다 | 공시 처리는 작업으로 접수해 **202를 바로 돌려주고**, 진행 상황은 **SSE 이벤트**로 보낸다 | `api/routes/runs.py`, `api/routes/events.py` |
-| 점수는 설명 가능해야 하고 AI가 바꾸면 안 된다 | **점수·등급·우선순위는 규칙(코드)**이 계산하고, AI는 공시 해석(사실 추출)·설명·안내문만 맡는다. 규칙의 숫자는 `rules.yaml` 한 곳에만 둔다 | `risk_engine/` |
-| 데이터를 바꾸는 일은 사람이 확인한다 | 변경 도구(`create_contact_task`) 앞에서 Graph가 **`interrupt()`로 멈추고** 상태를 저장한 뒤, PB 승인을 받으면 **같은 `thread_id`로 재개**한다 | `agent/nodes/pb_approval.py`, `agent/runtime.py` |
-| 답변에는 근거 문서가 있어야 한다 | 원문을 질문과 별개로 **미리 색인**하고(rag-mcp), AI의 인용은 **검색된 원문의 연속 구간과 글자 그대로 일치**해야 통과한다(아니면 수동 확인) | `mcp_servers/rag/`, `agent/evidence.py`, `agent/assembly.py` |
-| 고객 개인정보를 모델에 보내지 않는다 | 모델 입력에서 이름·연락처를 마스킹하고 안내문은 `{고객명}` 자리표시로만 쓴다. 이름은 화면에 보여줄 때만 채운다 | `harness/masking.py`, `agent/assembly.py`(`prepare_input`) |
-| 한 PB는 자기 고객만 다룬다 | JWT 인증 + 모든 고객 대상 API에서 담당 PB를 확인(403) | `api/auth.py`, `api/routes/` |
-
-## 2. 전체 구성도 (Container 관점, Client-Server)
+## 2. 전체 구성도
 
 ```mermaid
 flowchart LR
-  subgraph Browser["브라우저 (사용자 PC)"]
-    UI["Vue 3 화면<br/>경보·고객 현황·안내문 검토·연락 업무"]
-  end
-
-  subgraph Local["내부망: 모든 서버는 127.0.0.1에서만 열림"]
-    API["API 서버 (FastAPI :8000)<br/>인증(JWT) · /runs(202) · SSE · 승인 API"]
-    subgraph Agent["Agent 런타임 (API 프로세스 안)"]
-      G["LangGraph StateGraph"]
-      H["Harness<br/>Instructions · Context · Guardrails<br/>Recovery · Loop 한도 · Observability"]
-      MC["MCP Client (langchain-mcp-adapters)"]
-    end
-    BIZ["business-mcp (FastMCP :8001)<br/>조회·규칙 계산·변경 도구 10개"]
-    RAG["rag-mcp (FastMCP :8002)<br/>원문·참고 문서 검색 2개"]
-    SQL[("SQLite app.db<br/>업무 데이터·감사 로그")]
-    CKPT[("SQLite checkpoints.db<br/>Graph 상태 (thread_id)")]
-    VDB[("Chroma<br/>원문 조각 + 임베딩")]
-  end
-
-  LLM["LLM API (OpenAI 등)"]
-  LS["LangSmith (trace)"]
-  MQ["RabbitMQ (선택, 가산점)"]
-  DOCS["rag_docs/ (공시 원문·참고 문서)"]
-
-  UI -- "REST · SSE" --> API
-  API --> G
-  G --- H
-  G --> MC
-  MC -- "MCP (Streamable HTTP /mcp)" --> BIZ
-  MC -- "MCP (Streamable HTTP /mcp)" --> RAG
-  BIZ --> SQL
-  RAG --> VDB
-  G --> CKPT
-  H --> LLM
-  H -.-> LS
-  API <-. "QUEUE_ENABLED=true" .-> MQ
-  DOCS -. "ingest (오프라인: 청킹 800/100 → 임베딩 → 색인)" .-> VDB
-  API --> SQL
+  UI["web / Vue 3 / :5173"] -->|"HTTP · 기존 실행 SSE"| API["api / FastAPI / README :8010"]
+  API --> AUTH["JWT · 조직 · 담당 고객 권한"]
+  API --> LEGACY["기존 실행 /runs / fake 또는 real"]
+  API --> HOSTED["새 실행 /analysis/jobs · /reviews"]
+  LEGACY --> GRAPH["agent / LangGraph"]
+  HOSTED --> GRAPH
+  GRAPH --- HARNESS["harness / 예산 · 검증 · 복구 · 마스킹"]
+  GRAPH --> MCP["MCP Client"]
+  MCP --> BIZ["business-mcp / :8001"]
+  MCP --> RAG["rag-mcp / :8002"]
+  BIZ --> RULES["risk_engine / 규칙 계산"]
+  BIZ --> DB[("shared / 업무 DB / SQLite 또는 PostgreSQL")]
+  API --> DB
+  HOSTED --> DB
+  GRAPH --> CKPT[("체크포인트 저장소")]
+  GRAPH --> LLM["OpenAI · Anthropic"]
+  RAG --> PERSIST[("persistent / Chroma")]
+  RAG --> MEMORY["ephemeral / 메모리 색인"]
+  MEMORY --> DART["OpenDART"]
+  DOCS["rag_docs / 테스트 원문 · 참고 문서"] -->|ingest| PERSIST
+  COLLECT["collector / 증분 · 백필 · 스케줄"] --> DART
+  COLLECT --> DB
+  API -. "기존 선택 큐" .-> MQ["RabbitMQ"]
+  HARNESS -. "관측·감사" .-> OBS["LangSmith · 감사 로그"]
 ```
 
-## 3. 논리 뷰 (계층과 책임)
+구성도는 실제 분석 연결을 포함한 코드 구조다. README의 **fake 데모는 API·웹·SQLite로 흐름을 모사하며 실제 MCP·모델·DART를 호출하지 않는다.** LangSmith 관측은 선택 설정이고, 새 경로는 원문 자동 trace를 제한한다.
 
-위 계층은 바로 아래 계층의 인터페이스만 쓴다.
+## 3. 모듈과 책임
 
-| 계층 | 구성 | 책임 | 금지 사항 | 아래 계층과의 인터페이스 |
-| --- | --- | --- | --- | --- |
-| Presentation | `web/` (Vue 3, Pinia) | 경보·고객 현황·안내문 검토·연락 업무 화면 | 점수 계산, AI 서버 직접 호출 | REST `/api/**`, SSE |
-| Application | `api/` (FastAPI) | 인증·권한, 작업 접수(202), 진행 이벤트 중계, 결정 검증(403·422), 감사 기록 | LLM 호출 | Agent 런타임 호출, SQLAlchemy |
-| Orchestration | `agent/` + `harness/` | 상태 기계 실행, 모델 호출 통제, 승인 대기·재개 | 변경 도구를 모델이 선택, DB 직접 쓰기 | MCP, LLM API |
-| Tool | `mcp_servers/business`, `mcp_servers/rag` | 업무 기능을 도구로 노출(조회·규칙 계산·변경), 근거 문서 검색 | 모델 판단 | SQLAlchemy, Chroma |
-| Data | `data/` (SQLite, Chroma) | 업무 데이터, 감사 로그, Graph 체크포인트, 문서 임베딩 | — | — |
+| 경로 | 책임 |
+| --- | --- |
+| web/ | 로그인·대시보드·종목 상세·고객 현황·안내문 검토·연락 업무 |
+| api/ | JWT·권한, 작업 접수·조회, 기존 SSE, 승인·검토·수집 API |
+| agent/ | 공시 분석 Graph, 사실·텍스트 조건·근거 검증, 설명·안내문, 승인 대기·재개 |
+| agent/adapters/ | MCP·모델·실행기·저장 경계 연결 |
+| risk_engine/ | 단계·활성 위험 항목·변경·재무 정책 계산 |
+| shared/ | 설정·DB 모델·스키마·조직·작업 임대·입력 버전·사실 해시 |
+| collector/ | DART 목록·재무·항목 수집, 증분·백필·구조화 사실 저장·분석 준비 인계 |
+| mcp_servers/business/ | 공개 데이터 조회·규칙 계산·평가·위험 상태·업무 저장 도구 |
+| mcp_servers/rag/ | 공시·참고 자료 검색, 메모리/영구 색인·사용권·해제 |
+| harness/ | 문맥 예산·마스킹·금지 표현·모델/도구 복구·관측 |
+| migrations/ | DB 스키마 변경 이력 |
+| tests/·eval/·scripts/ | 테스트·사례 평가·데모·실행·유지보수 |
 
-**규칙 위치는 한 곳이다.** 위험 점수·등급·고객 영향도·우선순위는 business-mcp의 `rules.yaml`과 `risk_rules.py`·`impact_rules.py`에서만 계산한다. API와 Agent는 이를 복제하지 않고 도구 결과를 쓴다(고객 현황 화면의 우선순위도 같은 함수를 호출).
+규칙 위치는 risk_engine/이다. 이전 프로젝트의 고객 영향도·P1/P2 우선순위 계산은 현재 고객 대응의 기준이 아니며 보유 고객 전원이 대상이다. 보유 평가금액은 표시·정렬에 사용할 수 있다.
 
-## 4. 런타임 뷰
+## 4. README 데모 실행
 
-### 4-1. 두 경로 (동기·비동기)
+README는 Python 3.11·uv·Node.js에서 다음 구성을 실행한다.
 
-| 경로 | 거치는 일 | 응답 |
-| --- | --- | --- |
-| 동기(수백 ms) | 경보·고객·업무 조회, 승인·반려 기록, 로그인 | 바로 응답 |
-| 비동기(수 초~수십 초) | 공시 분석(LLM·MCP 호출), 승인 후 재개 | **202** 후 SSE 이벤트 |
+| 프로세스·저장소 | 설정 |
+| --- | --- |
+| 웹 | Vite :5173, /api 프록시를 http://127.0.0.1:8010으로 연결 |
+| API | Uvicorn api.main:app, 127.0.0.1:8010 |
+| Graph | GRAPH_ADAPTER=fake, 실제 모델 호출 없음 |
+| 새 worker·수집·큐 | PHASE1_RUNTIME_FACTORY 빈 값, COLLECT_DISPATCH_ENABLED=false, QUEUE_ENABLED=false |
+| 업무 DB | 기본 sqlite:///data/app.db |
+| 데모 데이터 | 회사 5개·공시 594건·가상 PB 2명·고객 20명·보유 42건 |
 
-진행 이벤트: `node_started` · `node_finished` · `waiting_approval` · `done` · `failed` (큐 모드에서는 `queued` 추가). 화면은 이를 받아 단계 표시를 그리고, SSE가 끊기면 `GET /runs/{rcept_no}`로 기록을 다시 받는다.
-
-### 4-2. 공시 1건 처리 (승인 대기까지)
+API의 일반 기본 포트와 run_stack.py는 8000을 사용하지만 README의 개별 실행은 포트 충돌을 피하도록 8010을 지정한다. 원본 run_stack.py에는 --api-port 옵션이 없다. 셸 문법은 Bash 기준이다.
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  participant U as 화면(Vue)
-  participant A as API(FastAPI)
-  participant G as Agent(LangGraph)
-  participant L as LLM
-  participant B as business-mcp
-  participant R as rag-mcp
-  U->>A: POST /runs {rcept_no}
-  A-->>U: 202 (바로 응답)
-  U->>A: GET /runs/{rcept_no}/events (SSE)
-  A->>G: start(thread_id = rcept_no)
-  G->>B: get_disclosure, get_company_profile
-  G->>R: search_disclosure_text (원문 조각 + 출처)
-  G->>L: 사실 추출 (구조화 출력, 마스킹된 입력)
-  Note over G: 인용이 원문 조각과 글자 그대로 일치하는지 검증
-  G->>B: calculate_risk_score (규칙 계산, 점수는 AI가 못 바꿈)
-  G->>L: 점수 내역별 설명 (검증된 근거만 인용)
-  alt High · Critical
-    G->>B: compute_customer_impact (P1·P2)
-    G->>L: 고객별 안내문 초안 ({고객명} 자리표시)
-    Note over G: 금지 표현 검사, 실패 시 재작성(최대 2회)
-    G->>B: save_assessment (WAITING_APPROVAL, upsert)
-    G-->>A: interrupt() — 상태를 checkpoints.db에 저장하고 멈춤
-    A-->>U: SSE waiting_approval
-  else Low · Medium
-    G->>B: save_assessment (DONE) — 일일 요약 대상
-    A-->>U: SSE done
-  end
+  participant PB as PB 화면
+  participant API as API :8010
+  participant FAKE as FakeGraphAdapter
+  participant DB as SQLite
+  PB->>API: POST /auth/login
+  API-->>PB: JWT · PB 정보
+  PB->>API: POST /runs {rcept_no}
+  API-->>PB: 202 · events_url
+  PB->>API: GET /runs/{rcept_no}/events
+  API->>FAKE: 처리 흐름 시작
+  FAKE->>DB: 데모 평가 저장
+  API-->>PB: SSE 진행 · waiting_approval
+  PB->>API: GET /alerts/{id}/drafts
+  API-->>PB: 담당 고객 초안
+  PB->>API: POST /alerts/{id}/decision
+  API->>FAKE: 승인 · 반려 · 재작성 반영
+  FAKE->>DB: 승인 고객의 데모 연락 업무 저장
+  PB->>API: GET /tasks
+  API-->>PB: 담당 연락 업무
 ```
 
-### 4-3. 승인과 재개 (변경 도구는 사람이 확인한 뒤에만)
+fake도 DB에 결과를 저장한다. Graph 상태는 프로세스 메모리에 있어 재시작 후 상세·초안의 복원이 보장되지 않는다. 같은 접수번호 재처리는 이력에 따라 409가 발생한다. 초기 seed만으로 새 /states의 경보가 모두 생성되는 것은 아니다.
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant P as PB(화면)
-  participant A as API
-  participant G as Agent
-  participant B as business-mcp
-  P->>A: POST /alerts/{id}/decision (승인·수정·반려)
-  Note over A: 담당 PB 확인(403), 반려 사유 필수(422), 수정 문장 금지 표현 검사
-  A->>G: resume(thread_id = rcept_no)
-  G->>B: create_contact_task (승인된 고객마다, 멱등)
-  B-->>G: task_id
-  G->>B: save_assessment (모두 결정되면 DONE)
-  A-->>P: SSE 진행 이벤트
-  Note over A: 결정은 audit_logs에 남김 (actor, action, target, trace_id)
-```
+## 5. 실제 분석의 두 경로
 
-서버를 껐다 켜도 같은 `thread_id`로 이어서 실행된다(체크포인터가 `data/checkpoints.db`에 상태를 저장한다).
+### 5.1 기존 직접 처리
 
-## 5. Agent 설계 (State와 Graph)
+GRAPH_ADAPTER=real이면 API의 RealGraphAdapter가 AgentRuntime과 MCP 도구·모델을 사용한다. /runs는 202 접수 후 기존 SSE로 진행을 알리고 /alerts/{id}/decision에서 승인·반려·수정·재작성을 전달한다. 승인 대기는 체크포인트에 저장하고 재개한다. 기존 실행은 접수번호 기반 thread를 사용하며 default 외 조직은 실행 경계에서 차단한다.
 
-State는 CLAUDE.md 4-5장, 노드는 4-6장에 정의했고 `agent/state.py`·`agent/graph.py`가 구현한다. **공시 1건 = 스레드 1개(`thread_id = rcept_no`)**.
+기존 Graph는 공시 분류→사실/조건 추출→규칙 계산→설명→대상 고객→안내문 검토→PB 결정→승인 고객의 업무 생성으로 이어진다. 위험 신호가 없는 공시는 정상 종료할 수 있으며 근거 부족·도구 오류와 구분한다. 내부 호환 level이 남아 있어 새 stage와 혼용하지 않는다.
+
+### 5.2 새 공개 분석·조직별 검토
+
+PHASE1_RUNTIME_FACTORY=agent.hosted:build_runtime을 선택하면 API가 공개 분석 worker와 조직별 review executor를 연결한다. QUEUE_ENABLED는 false여야 한다. 수집 dispatcher는 별도 COLLECT_DISPATCH_ENABLED 설정으로 연결한다.
 
 ```mermaid
 flowchart TD
-  S([시작]) --> receive --> classify
-  classify -- "해당 없음 (분류 안 됨·첨부 정정)" --> completed
-  classify --> extract_facts
-  extract_facts -- "근거 검증 실패: 재시도 (최대 2회)" --> extract_facts
-  extract_facts -- "신호 없음 (대량보유 등)" --> completed
-  extract_facts --> score_risk --> explain_risk --> route{"등급"}
-  route -- "Low · Medium" --> save_and_summarize --> completed
-  route -- "High · Critical" --> find_customers --> draft_messages --> guardrail_check
-  guardrail_check -- "금지 표현: 다시 쓰기 (최대 2회)" --> draft_messages
-  guardrail_check --> prepare_approval --> pb_approval
-  pb_approval["pb_approval — interrupt()<br/>PB 결정 대기 (승인·수정·반려)"] --> save_rejection --> create_tasks
-  create_tasks -- "승인 고객이 남음" --> create_tasks
-  create_tasks --> finalize
-  finalize -- "다시 쓰기 요청" --> draft_messages
-  finalize -- "미결정 고객이 남음" --> prepare_approval
-  finalize -- "모두 결정" --> completed
-  receive -. "오류·한도 초과" .-> handle_failure
-  extract_facts -. "오류" .-> handle_failure
-  score_risk -. "오류" .-> handle_failure
-  handle_failure --> E([MANUAL_CHECK 또는 FAILED로 저장하고 종료])
-  completed --> E2([종료])
+  C["수집 대상 보유 종목"] --> COL["collector / 목록 · 재무 · 항목 API"]
+  COL --> F["구조화 사실 · 스냅샷 저장 · mark_ready"]
+  F --> JOB["분석 작업 등록 /analysis/jobs 또는 worker의 준비 공시 인계"]
+  JOB --> CLAIM["DB 작업 선점 · 임대 · 누적 예산"]
+  CLAIM --> PUB["공개 Graph / 사실 · 근거 · 단일 규칙 계산 · 설명"]
+  PUB --> ASSESS["공개 판정 · 종목 위험 상태 저장"]
+  ASSESS --> REVIEW["조직별 검토 생성 /public-assessments/{id}/reviews"]
+  REVIEW --> DRAFT["/reviews/{id}/run / 보유 고객 · 초안 · 검사"]
+  DRAFT --> PB["PB 결정 /reviews/{id}/decisions"]
+  PB --> TX["조직 · 담당 고객 · 최신 판정 · version 검사"]
+  TX --> TASK["승인 고객 연락 업무와 결정 원자적 저장"]
 ```
 
-| Agentic 요소 | 설계 | 구현 |
+공개 판정은 입력·규칙·평가 기준일·버전으로 식별하고, 조직별 초안·결정은 별도 검토로 저장한다. 작업·검토의 누적 예산과 임대는 DB에서 관리한다. 새 검토 결정은 expected_version을 요구하고 오래된 판정의 승인을 제한한다.
+
+화면의 공시 직접 처리는 /runs이며 /analysis/jobs로 자동 전환되지 않는다. 작업이 등록됐다는 사실만으로 worker 연결·분석 완료를 의미하지 않는다. seed 계정은 PB이며 관리자 승격 API는 없다. 실제 DART·유료 모델·PostgreSQL 전체 검증 한계는 README와 동일하게 유지한다.
+
+## 6. 위험 상태와 설명
+
+| 값 | 의미 |
+| --- | --- |
+| RED | 즉시 경보 |
+| ORANGE | 사건 경보 |
+| YELLOW | 재무 경보 |
+| COMPOSITE | 복합 위험 |
+| WATCH | 관찰 중 |
+| NONE | 경보 없음 |
+
+RED·ORANGE·YELLOW·COMPOSITE는 경보 단계다. 여러 활성 단계와 대표 단계를 구분한다. 규칙 기본값은 ORANGE 4 이상·YELLOW 5 이상·복합비율 1.5 이상·관찰비율 0.75다. PB API에는 점수를 제한하고 단계·항목·검증 가능한 근거·빠진 값·타임라인·변경을 제공한다.
+
+문서 근거는 source·quote·rcept_no·location, API 근거는 API명·필드·원천 행·값·단위·기간·기준·데이터 버전으로 추적한다. 원문 해시와 구조화 사실 해시는 대상이 다르다. 안내문 모델 출력은 DraftsOutput의 drafts 사전이며 HTTP의 기존 초안 배열과 새 검토 사전을 구분한다.
+
+## 7. 검색과 원문 수명
+
+| 방식 | 색인·원천 | 수명 |
 | --- | --- | --- |
-| 목표 지향 다단계 실행 | 공시 → 사실 → 점수 → 설명 → 고객 → 초안 → 승인 → 업무까지 상태 기계로 진행 | `agent/graph.py` |
-| 분기 | 해당 없음·신호 없음·등급별·승인/반려/수정 | `route_by_level`, `branch()` |
-| 반복·자기 교정 | 근거 검증 실패 시 사실 추출 재시도, 금지 표현이 있으면 안내문 재작성(각 최대 2회) | `extract_facts`, `draft_messages`↔`guardrail_check` |
-| 사람 개입(HITL) | 변경 도구 앞 `interrupt()`, PB별 결정 묶음을 누적 | `pb_approval`, `finalize` |
-| 메모리·재개 | 체크포인터에 상태 저장, 재시작 후 같은 thread로 재개 | `agent/runtime.py`(`AsyncSqliteSaver`) |
-| 도구 사용 | MCP 도구 11개를 `MCPTools`로 호출. 기본 조회는 코드가 하고, 모델은 **읽기 전용 2개(`search_disclosure_text`, `search_reference`)만 직접 골라** 추가 조회한다. 결과를 본 뒤 한 번 더 고를 수 있고(최대 2회전, 회전당 2건, 같은 요청 반복 시 종료), 현재 공시로 고정하며 오류는 관찰로만 남긴다 | `agent/tool_loop.py`, `agent/prompts/select_tools.md`, `agent/execution.py` |
-| 안전한 실패 | 근거를 못 찾거나 한도를 넘으면 지어내지 않고 `MANUAL_CHECK` | `agent/nodes/handle_failure.py` |
+| persistent | rag_docs의 테스트 원문·참고 문서 → ingest → Chroma | 로컬 파일 색인 유지 |
+| ephemeral | 공시 원문을 DART에서 받아 정규화·메모리 색인. 참고 자료도 메모리 검색 | holder·진행 중 lease를 관리하고 release. 아직 다른 실행이 사용하면 해제 유예 |
 
-## 6. 배포 뷰 (실행 위치)
+청크는 800자·겹침 100자, 기본 검색 k=5·허용 1~10이다. persistent는 cosine 거리에서 score=1-distance를 반환하며 별도 최소 점수 컷오프는 없다. 새 경로는 검색 조각 전체를 계속 보관하지 않고 필요한 검증 인용·출처·해시·버전을 남긴다. 공시 메모리 색인에는 300청크 상한과 truncated 표시가 있다.
 
-데모는 한 대의 노트북에서 프로세스로 실행한다(`uv run python scripts/ops/run_stack.py`). **모든 서버는 `127.0.0.1`에만 연다**(외부에 노출되는 포트 없음).
+ephemeral의 메모리 해제와 저장소에 유지한 테스트 원문 6건은 다른 범위다. 운영용 원문 획득을 DB 본문→로컬 파일 fallback으로 설명하지 않는다. 공개 공시의 개인 식별 정보는 [출처 문서](../data/SOURCES.md)의 보관·검수 기준을 따른다.
 
-| 프로세스 | 포트 | 기술 | 접근하는 쪽 |
-| --- | --- | --- | --- |
-| web | 5173 | Vue 3 + Vite | 브라우저 |
-| api (Agent 런타임 포함) | 8000 | FastAPI + LangGraph | web(`/api` 프록시) |
-| business-mcp | 8001 | FastMCP (Streamable HTTP) | api의 MCP Client |
-| rag-mcp | 8002 | FastMCP (Streamable HTTP) | api의 MCP Client |
-| RabbitMQ(선택) | 5672·15672 | `docker compose up -d rabbitmq` | api (`QUEUE_ENABLED=true`) |
+## 8. 저장소·권한·안전장치
 
-저장소: `data/app.db`(SQLite, 업무 데이터·감사 로그), `data/checkpoints.db`(Graph 상태), `data/chroma/`(원문 임베딩). 비밀 키는 `.env`에만 둔다(git 제외).
+| 항목 | 구현·기본값 |
+| --- | --- |
+| 업무 DB | SQLAlchemy, 로컬 SQLite. PostgreSQL 지원·Alembic 마이그레이션 별도 |
+| 체크포인트 | SQLite data/checkpoints.db 또는 PostgreSQL. 새 실행은 R4가 생성한 체크포인터 주입 |
+| 문맥 | 6,000 추정 토큰 예산, 긴 도구 문자열 4,000자 제한 등 |
+| 실행 예산 | 기본 모델 8턴·120초·같은 도구 한도 3회, 승인 대기와 구분 |
+| 복구 | 모델 429·503 2회 재시도→fallback, MCP TIMEOUT 1회 재시도 |
+| 권한 | JWT·조직·담당 고객·보유 종목 검사. 권한 부족 403, 일부 자원 조회는 404 |
+| 문안 검사 | 매수·매도 권유·단정·점수 노출 검사, 실패 시 재작성·PB 직접 작성 |
+| 관측 | 실패·결정 감사 기록과 선택 LangSmith. 새 Graph·LLM 자동 원문 trace 제한 |
+| 큐 | 기존 /runs의 RabbitMQ 선택 기능. 새 DB 작업 실행과 동시 활성화 금지 |
 
-## 7. 연결 뷰 (MCP 연결과 문서 색인)
+README 예시는 로컬 127.0.0.1 API를 사용한다. MCP 기본 호스트는 설정으로 바뀔 수 있고 Compose는 컨테이너 내부 bind를 사용하므로 모든 배포가 127.0.0.1이라고 단정하지 않는다. DB·키·체크포인트·색인은 Git 제출 데이터와 분리한다. SQLite를 PostgreSQL로 선택 변경해도 기존 데이터가 자동 이관되지는 않는다.
 
-**MCP 도구** (모든 도구는 `{"ok": true, "data": …}` 또는 `{"ok": false, "error": {code, message}}`를 돌려주고 예외를 밖으로 던지지 않는다)
+## 9. 품질 특성과 확인 방법
 
-| 서버 | 도구 | 종류 |
-| --- | --- | --- |
-| business-mcp | `list_new_disclosures`, `get_disclosure`, `get_company_profile`, `get_signal_history`, `get_holders` | 조회 |
-| | `calculate_risk_score`, `compute_customer_impact` | 조회(규칙 계산) |
-| | `save_assessment`(rcept_no 기준 upsert), `create_contact_task`(평가·고객별 멱등, PB 승인 뒤에만), `update_task_status`(PB가 화면에서만) | 변경 |
-| rag-mcp | `search_disclosure_text`(공시 1건 안에서만 검색), `search_reference`(상장규정·공시해설·회계용어·안내문가이드) | 조회 |
+| 특성 | 설계·확인 방법 |
+| --- | --- |
+| 기능 적합성 | 규칙 엔진의 사례 평가, 사실·근거·판정·검토 계약 테스트 |
+| 성능 효율성 | 기존 처리의 202·SSE, 검색 조각·문맥·시간·모델 호출 예산. 처리시간·비용 실측과 구분 |
+| 호환성 | MCP Streamable HTTP, HTTP·JSON·SSE, 스키마·사실 해시·정규화 버전 검사 |
+| 사용성 | 단계·근거·수동 확인·변경 내역, 안내문 검토·연락 업무 화면 |
+| 신뢰성 | 체크포인트·DB 임대·재시도·멱등 키·누적 예산, 실제 저장소별 장애 시험 |
+| 보안성·AI 안전성 | JWT·조직 분리·담당 고객·최신 판정 검사, 마스킹·가드레일·승인 후 업무 생성 |
+| 유지보수성 | 규칙·프롬프트 버전·담당 모듈 분리, API·데이터 계약 |
+| 이식성 | uv.lock·npm 잠금 파일, SQLite 로컬 실행·PostgreSQL 선택, 환경 변수 |
 
-모델이 쓰는 변경 도구는 없다. `update_task_status`는 Agent 허용 목록(`ALLOWED_TOOLS`)에 없다. 도구 주석(annotations)으로 조회 도구는 `readOnlyHint`, 변경 도구 3개는 `destructiveHint`를 표시한다(수업 자료의 Harness 규칙).
+코드 검증 위치는 tests/agent·api·business·collector·rag·risk_engine·wiring·demo 등이다. 과거 테스트 개수·시연 비용을 현재 전체 검증 완료의 근거로 반복하지 않는다. 현재 README는 총 50개 저장 사례의 규칙 평가를 설명하며 단건 16/18과 기존 보고서 18/18 불일치, 금양 전체 경보 359일의 원본 검증 대기를 구분한다.
 
-**운영 모드(`RAG_INDEX_MODE=ephemeral`)**: 공시 1건을 처리할 때 그 원문만 임시로 색인하고(원문은 DB 본문 → rag_docs 파일 → DART 순서로 찾음), 경보를 저장한 직후 `release_disclosure_index`와 `purge_disclosure_text`로 색인 조각과 DB 본문을 지운다. 해시(`content_hash`)·처리 시각·삭제 시각, 신호와 근거 문장은 남는다. 실패(`MANUAL_CHECK`·`FAILED`) 공시는 해결될 때까지 지우지 않고, 정리가 실패해도 처리 결과는 바꾸지 않는다. 기본은 `persistent`(데모·평가)다.
+## 10. 알려진 한계
 
-**문서 색인 (오프라인, Pipe-and-Filter)**: `rag_docs/*.md`(실제 DART 공시 원문, 참고 문서) → 800자·겹침 100자 청킹 → 임베딩(`text-embedding-3-small`) → Chroma(코사인). 조각마다 `source`, `rcept_no`, `location`을 메타데이터로 남기고, 컬렉션에 임베딩 설정을 기록해 **질의 때 다른 임베딩이면 검색을 거부**한다. 실행: `uv run python -m mcp_servers.rag.ingest`.
+| 한계 | 다음 단계 |
+| --- | --- |
+| 기존 /runs와 새 /analysis/jobs·/reviews 공존 | 최종 시나리오·화면 연결 종단 검증 |
+| 구조화 사실·수치·검증 근거 누락 시 수동 확인 | R2·R3·R4 데이터·근거 계약 연결 |
+| DART·유료 모델·PostgreSQL 전체 실행 검증 범위 제한 | 실제 외부 시스템을 포함한 별도 검증 |
+| 현재 단건 16/18과 기존 보고서 18/18 차이 | 정책·기대값·코드 정본 대조 및 결과서 통일 |
+| 금양 전체 경보 359일 원본 검증 대기 | 당시 재무 원본 확인·재평가 |
+| 정상 회사 과경보 | 근거 제공·PB 판단, 정책 변경 시 동일 평가셋 비교 |
+| 공개 원문 개인 식별 정보 | 공개 제출 범위·마스킹 검수 |
 
-## 8. Harness (Microkernel: 모델을 감싸는 8개 구성 요소)
+## 참고
 
-| 구성 요소 | 구현 | 상태 |
-| --- | --- | --- |
-| Instructions | `agent/prompts/*.md` (맨 위 `version: vN`, trace 메타데이터에 버전 기록) | ✓ |
-| Tools | MCP Client로 도구를 가져오고 허용 목록으로 제한. 모델 입력의 긴 문자열은 4,000자로 자름 | ✓ (도구 오류는 모델이 아니라 코드가 받아 `MANUAL_CHECK`로 처리) |
-| Context | 입력 6,000토큰 예산 안으로 줄임(`prepare_input`), RAG는 상위 5개 조각, 도구 조회 이력이 예산(2,000토큰)을 넘으면 오래된 결과를 `trim_messages`로 요약 | ✓ |
-| State·Memory | `AsyncSqliteSaver`, `thread_id = rcept_no`, 승인 대기 후 그대로 재개 | ✓ |
-| Agent Loop | 모델 호출 최대 8회·작업 120초·같은 입력의 같은 도구 3회까지, 넘으면 `MANUAL_CHECK` | ✓ (한도 값은 `harness/loop_limits.py`가 단일 출처이고 `agent/ports.py`·`agent/execution.py`가 이를 가져와 시행한다. 모듈의 `LoopGuard`/`count_tool_call`은 단위 테스트용으로 남아 있다) |
-| Guardrails | 변경 도구 전 `interrupt()`, 고객 이름·연락처 마스킹, 안내문 금지 표현 검사와 재작성 | ✓ |
-| Recovery | LLM 429·503은 1초·3초 간격 2회 재시도 후 대체 모델, 실패하면 `FAILED`. MCP `TIMEOUT`은 1회 재시도 | ✓ |
-| Observability | LangSmith에서 trace 하나에 노드·도구·LLM·토큰·지연·비용, 메타데이터(rcept_no, corp_name, risk_level, prompt_version, model). 실패·결정은 `audit_logs`에 `trace_id`와 함께 기록 | ✓ |
-
-## 9. 레퍼런스 아키텍처와의 차이
-
-| 레퍼런스 | 우리 구현 | 이유와 영향 |
-| --- | --- | --- |
-| Spring Boot 업무 API + FastAPI Agent 서버 분리 | **FastAPI 하나**(API) 안에서 Agent 런타임 실행 | 4인 팀·2일 일정에서 서비스 수를 줄여 연결 비용을 낮춤. 규칙은 어차피 business-mcp 한 곳이라 분리 이득이 작다. 서비스를 나눠야 하면 `RealGraphAdapter` 경계에서 HTTP로 분리 가능 |
-| PostgreSQL | SQLite (+ 체크포인트 별도 파일) | 설치 없이 노트북 4대에서 같은 환경. 동시 쓰기가 많은 운영에는 부적합 |
-| docker compose 전체 구성(nginx 등) | `run_stack.py` 프로세스 실행, compose는 RabbitMQ만 | 데모 환경 통일. 배포 뷰는 §6의 포트 표로 대체 |
-| business-mcp가 Spring Boot `/internal/**` 호출 | business-mcp가 SQLAlchemy로 DB 접근 | Spring Boot를 두지 않았기 때문. 업무 규칙은 여전히 business-mcp 한 곳에만 있음 |
-| 이벤트 `TOKEN`·`TOOL_START`·`TOOL_END`·`APPROVAL_REQUIRED` | `node_started`·`node_finished`·`waiting_approval`·`done`·`failed` | Graph 노드 단위로 진행을 보여 줌. 토큰 스트리밍은 하지 않음 |
-
-## 10. ISO/IEC 25010 품질 특성별 설계
-
-ISO/IEC 25010 제품 품질 모델의 8개 특성(2011판)에 따라 정리했다. 2023판에서 추가된 안전성(Safety)은 AI 특성상 중요해서 "보안성" 아래 함께 적었다.
-
-### 10-1. 기능 적합성 (Functional suitability)
-| 하위 특성 | 설계 결정 | 구현 위치 | 검증 증거 |
-| --- | --- | --- | --- |
-| 기능 완전성 | 공시 접수 → 위험도 → 고객 영향 → 초안 → 승인 → 연락 업무까지 한 흐름 | `agent/graph.py` | `verify_all.py` 시나리오 A 9개 항목 |
-| 기능 정확성 | 점수·등급은 규칙 코드가 계산(AI는 변경 불가), 정정·자회사·행정적 거래정지 등 오탐 규칙 | `rules.yaml`, `risk_rules.py` | `tests/mcp_servers/test_rules.py` 40개, 데모 회사 5개가 기대 결과와 일치(`eval/results/scenario_b.md`) |
-| 기능 적절성 | 근거 인용을 원문과 글자 그대로 검증, 못 찾으면 추측하지 않고 수동 확인 | `agent/evidence.py` | 근거 검증 테스트, MANUAL_CHECK 경로 테스트 |
-
-### 10-2. 성능 효율성 (Performance efficiency)
-| 하위 특성 | 설계 결정 | 구현 위치 | 검증 증거 |
-| --- | --- | --- | --- |
-| 시간 반응성 | 느린 LLM 경로는 202 후 SSE로 비동기 처리, 조회 API는 DB만 읽음 | `api/routes/runs.py` | 동기 API 테스트, SSE 이벤트 순서 테스트 |
-| 자원 효율 | 입력 6,000토큰 예산, RAG 상위 5개 조각만, 공시 원문을 통째로 넣지 않음, 작은 모델(`gpt-5.4-mini`) | `agent/assembly.py`(`prepare_input`) | 금양 사건 공시 1건: LLM 5회(도구 선택 2회 포함), 약 0.023달러 (LangSmith 기록) |
-| 용량 | 큐로 일괄 처리(가산점) | `api/worker/` | 큐 단위 테스트(실제 RabbitMQ 연동은 미확인) |
-
-### 10-3. 호환성 (Compatibility)
-| 하위 특성 | 설계 결정 | 근거 |
-| --- | --- | --- |
-| 상호운용성 | 도구를 **MCP 표준 프로토콜(Streamable HTTP)**로 노출해 다른 MCP Client도 호출 가능 | `mcp_servers/*/server.py`, 도구는 이름·설명·입력 스키마를 공개 |
-| 공존성 | 서버마다 별도 프로세스·포트, 포트는 설정(`BUSINESS_MCP_URL` 등)으로 변경 가능 | 같은 노트북에서 시험용 서버를 다른 포트로 동시에 실행해 확인(`verify_all.py`) |
-
-### 10-4. 사용성 (Usability)
-| 하위 특성 | 설계 결정 | 구현 위치 |
-| --- | --- | --- |
-| 적절성 인식 | 경보 목록의 등급·상태 배지, 승인 대기 표시, 필터 | `web/src/views/AlertList.vue` |
-| 학습 용이성·운영 | 진행 단계 표시, 점수 내역 표(구분·계산 방식·근거 인용·DART 링크), 고객별 경보 노출·연락 이력 | `ScoreBreakdown.vue`, `CustomerList.vue` |
-| 사용자 오류 방지 | 금지 표현이 든 수정안은 승인 전에 거절(422), 반려 사유 필수, 확인 전 변경 없음 | `api/routes/approvals.py` |
-
-한계: 접근성(WCAG)과 사용성 테스트는 수행하지 않았다.
-
-### 10-5. 신뢰성 (Reliability)
-| 하위 특성 | 설계 결정 | 구현 위치 | 검증 증거 |
-| --- | --- | --- | --- |
-| 성숙성·결함 허용 | LLM 429·503은 2회 재시도 후 대체 모델, 계속 실패하면 `FAILED`. 안전하게 실패(`MANUAL_CHECK`) | `agent/assembly.py`(`recover_llm`) | `verify_all.py` 6단계: `FAKE_LLM_ERROR=503`에서도 완료, 재시도·대체 전환 기록 |
-| 복구성 | 승인 대기 상태를 체크포인트에 저장, **서버 재시작 후에도 이어서 실행** | `agent/runtime.py` | `verify_all.py` 5단계: 재시작 후 승인 대기 복원·승인 이어서 실행 |
-| 일관성(멱등) | `save_assessment`는 rcept_no 기준 upsert, 업무는 (평가, 고객)당 1건, 결정 감사 기록은 `idempotency_key`로 중복 방지 | `mcp_servers/business/tools/` | 멱등 테스트, 재시도 테스트 |
-| 가용성 | 화면 서버가 죽어도 API·MCP는 유지하고 화면만 다시 시작 | `scripts/ops/run_stack.py` | 신호를 보내 직접 시험 |
-
-한계: 단일 노트북 구성이라 이중화·장애 조치는 없다.
-
-### 10-6. 보안성 (Security) 과 AI 안전성
-| 하위 특성 | 설계 결정 | 구현 위치 | 검증 증거 |
-| --- | --- | --- | --- |
-| 인증성 | 로그인 시 JWT 발급, 비밀번호는 bcrypt 해시 | `api/auth.py` | `tests/api/test_auth.py` |
-| 권한(기밀성) | 담당 PB의 고객만 조회·승인, 다른 PB 고객 이름은 `고객 C002`로 가림, 모델에는 실명을 보내지 않음 | `api/routes/`, `harness/masking.py` | 타 PB 승인 403, 타 PB 이름·이력 누출 없음 테스트 |
-| 부인 방지 | 승인·수정·반려와 실패를 `audit_logs`에 행위자·대상·`trace_id`와 함께 기록 | `api/audit.py` | `verify_all.py`: 반려 사유 기록 |
-| 공격 표면 | 모든 서버를 `127.0.0.1`에만 열고, 키는 `.env`에만 둠 | `mcp_servers/*/server.py`, `.gitignore` | — |
-| AI 안전성 | 매수·매도 권유 금지 표현 차단, **PB 승인 전에는 연락 업무를 만들 수 없음**, 모델에 변경 도구 권한 없음 | `harness/guardrails.py`, `agent/nodes/pb_approval.py` | `verify_all.py`: 금지 표현 수정안 422, 거절된 요청으로 업무 0건 |
-
-한계: HTTPS와 비밀번호 정책이 없고(데모용 가짜 계정), `JWT_SECRET` 기본값은 개발용이다. 고객 조회 이력은 감사 로그에 남기지 않는다.
-
-### 10-7. 유지보수성 (Maintainability)
-| 하위 특성 | 설계 결정 | 근거 |
-| --- | --- | --- |
-| 모듈성 | 계층 분리, 도구는 파일 하나에 도구 하나, 노드는 파일 하나에 노드 하나 | `mcp_servers/business/tools/`, `agent/nodes/` |
-| 재사용성·수정 용이성 | 위험도 숫자·분류 키워드·예외 규칙을 `rules.yaml`에만 두고 코드에 숫자를 쓰지 않음, 프롬프트를 버전 파일로 관리 | `rules.yaml`, `agent/prompts/` |
-| 분석 용이성 | LangSmith trace와 `audit_logs`로 한 공시의 모든 단계를 추적 | `verify_all.py` 7단계 |
-| 시험 용이성 | 테스트 202개(규칙·도구·RAG·Agent 경계·API·Harness·조립), 한 번에 검증하는 `verify_all.py`(33개 항목) | `tests/`, `scripts/ops/verify_all.py` |
-
-### 10-8. 이식성 (Portability)
-| 하위 특성 | 설계 결정 | 근거 |
-| --- | --- | --- |
-| 설치 용이성 | `uv.lock`으로 의존성 고정, `scripts/ops/doctor.py`로 환경 점검, `run_stack.py`로 한 번에 실행 | `README.md` |
-| 적응성 | 모델 공급자·임베딩·DB 경로·포트를 `.env`로 교체(Anthropic/OpenAI, `EMBEDDING_PROVIDER`) | `shared/config.py`, `agent/assembly.py` |
-
-한계: SQLite 파일 하나를 여러 프로세스가 쓰므로 PB 여러 명의 동시 결정은 시험하지 않았다.
-
-## 11. 품질 시나리오 (측정 가능한 확인)
-
-| 품질 특성 | 자극 | 기대 응답 | 측정·확인 방법 |
-| --- | --- | --- | --- |
-| 신뢰성 | LLM이 계속 503을 돌려줌 | 1초·3초 간격으로 재시도한 뒤 대체 모델로 완료 | `audit_logs`의 `llm_retry`·`llm_fallback` (`verify_all.py` 6단계) |
-| 신뢰성 | 승인 대기 중에 서버를 껐다 켬 | 경보 상태·영향 고객이 복원되고 승인이 이어서 실행됨 | `graph_state_available`, 연락 업무 4건 생성 (`verify_all.py` 5단계) |
-| 보안성 | P01이 P02 담당 고객을 승인 | 거절(403), 업무 생성 없음 | HTTP 상태, `contact_tasks` |
-| AI 안전성 | 안내문 수정안에 "매도하세요" | 승인 전에 거절(422) | HTTP 상태, 업무 0건 |
-| 기능 정확성 | 금양 12개월 공시 타임라인 (평가 기간 2024-03-21~2025-03-21, 기준일 2025-03-21) | 최초 **사건 경보**(🔴·🟠)는 🟠 2024-10-31로 감사의견 거절 공시보다 **141일 앞선다**(확정). 기준일의 대표 단계는 🟠, 켜진 단계는 🟠·🟡. 최초 **전체 경보** 🟡 2024-03-27(359일)은 저장 데이터를 재생한 계산 결과이며 당시 원본 재무 값은 R3 검증 대기다(운영 실적이 아님). 이전 기준의 "Critical, P1 5·P2 2"는 폐기 ([위험 정책](risk_policy.md) 3-3~3-5) | `docs/verification.md` |
-| 성능 효율성 | 공시 1건 처리 | LLM 호출 5회 이내, 약 0.03달러 이내 | LangSmith trace |
-| 유지보수성 | 점수 기준을 바꾸고 싶음 | `rules.yaml`만 고치면 반영 | 코드 변경 없이 `RULES_PATH` 복사본으로 시험 |
-
-## 12. 알려진 한계와 다음 단계
-
-- **도구 선택**: 모델이 고르는 도구는 읽기 전용 2개뿐이고 변경 도구는 스키마에 없어 고를 수 없다. 조회는 노드(사실 추출, 설명 생성)마다 최대 2회전이며 모델 호출 8회 한도를 함께 쓰므로, 재시도가 겹치면 `MANUAL_CHECK`로 끝난다. 모델이 도구를 무한히 부르는 자유 루프는 일부러 두지 않았다(업무가 정해진 순서의 규칙 계산이라 루프보다 통제가 우선).
-- **Context 요약**: 요약은 모델 호출 없이 코드로 한 줄씩 줄이는 방식이다(호출 횟수를 쓰지 않으려고). 문서 전체를 LLM으로 요약하지는 않는다.
-- **평가**: `eval/run_eval.py`로 가드레일·자르기·조합 규칙·RAG k·모델 비교 결과표를 `eval/results/`에 만들었다. 조합 규칙은 실제 공시에서 한 번도 발동하지 않아 켬/끔 차이가 없었고(효과를 주장하지 않음), 모델 비교는 같은 회사의 두 모델(gpt-5.4-mini/nano)이다. 해석은 각 표 아래에 적었다.
-- **큐**: 실제 RabbitMQ(3.13)로 확인했다. 지연 재시도 테스트가 통과했고, 배치 접수 직후 API를 종료해도 메시지 5건이 브로커에 남았다가 재시작 후 소비되어 큐가 0이 됐다. 이 확인에서 발견한 문제(실행 중 프로세스가 죽으면 같은 공시가 다시 와도 이어서 실행되지 않고 조용히 끝남)는 `AgentRuntime.start`가 마지막 체크포인트부터 이어 실행하도록 고쳤다. 메시지 유실 방지는 ack 시점에 의존하며, 가장 바쁜 시간대의 처리량은 측정하지 않았다.
-- **운영 환경**: 단일 노트북, SQLite, HTTP 구성이다. 운영에는 DB 분리, HTTPS, 서비스 분리(§9)가 필요하다.
+Phase 1(Capstone) 종료 기준은 PR #23 병합 커밋 d6f3191(2026-10-21 11:50 KST)이며 phase1-end 태그가 가리킨다. 태그는 2026-10-25에 소급 생성됐고 Phase 2는 이 태그 이후의 변경을 대상으로 한다.
