@@ -13,7 +13,7 @@
 
 ```bash
 # 소스코드 내려받기
-git clone --branch Pre-merge-P01-v01 https://github.com/xxion30/disclosure-early-warning-agent.git
+git clone --branch main https://github.com/xxion30/disclosure-early-warning-agent.git
 cd disclosure-early-warning-agent
 
 # Python 가상환경 생성 및 의존성 설치
